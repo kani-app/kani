@@ -89,7 +89,7 @@ jobs:
           if (-not $found) { throw "nasm.exe not found after install; checked $($dirs -join ', ')" }
           $found.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: "Install node (kani-web build.rs runs esbuild + tailwind)"
-        uses: "actions/setup-node@v4"
+        uses: "actions/setup-node@v7"
         with:
           "node-version": "22"
       # Must match `dist build`'s profile, target and RUSTFLAGS; see the constraints register.
