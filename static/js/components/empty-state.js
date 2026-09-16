@@ -23,7 +23,7 @@ export function EmptyState({ icon, title, subtitle, action, compact = false }) {
     `;
   }
   return html`
-    <div class="flex flex-col items-center justify-center gap-4 py-16 text-center">
+    <div class="flex flex-col items-center justify-center gap-4 px-4 py-12 sm:px-6 sm:py-16 text-center">
       ${icon && html`<span class="text-text-muted icon-3xl" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: icon }} />`}
       <p class="text-base font-medium text-text">${title}</p>
       ${subtitle && html`<p class="text-sm text-text-muted">${subtitle}</p>`}
