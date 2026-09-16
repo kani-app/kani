@@ -2075,8 +2075,9 @@
     position: fixed;
     left: 0;
     right: 0;
-    /* Above the mobile tab bar (h-16), not underneath it. */
-    bottom: 4rem;
+    /* Clear of the mobile tab bar, not resting on it: the same nav height plus
+       gutter the page content reserves. */
+    bottom: calc(4rem + 1rem);
     @media (min-width: 768px) {
       left: var(--sidebar-w);
       bottom: 1.5rem;
