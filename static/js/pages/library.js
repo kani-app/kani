@@ -8,7 +8,7 @@ import { getState, setState, updateState, subscribe } from '../cache.js';
 import { navigate, scrollPageTop } from '../router.js';
 import { debounce, hasNextPage, deferredSkeleton, addPullToRefresh, withBusy } from '../utils.js';
 import { getTileSize, setTileSize } from '../tile-size.js';
-import { showConfirm } from '../components/modal.js';
+import { showConfirm, Modal, mountIntoModalRoot } from '../components/modal.js';
 import { TileSizeSelect } from '../components/tile-size-select.js';
 import { BulkBar } from '../components/bulk-bar.js';
 import { mountSavedSearches } from '../components/library/saved-searches.js';
@@ -272,21 +272,27 @@ export async function init(container) {
         <div class="js-display-mount shrink-0"></div>
       </div>
 
-      <!-- Filter panel (hidden on every breakpoint until toggled) -->
+      <!-- Parking spot for the filter panel while its sheet is closed. -->
+      <div class="js-filters-home hidden"></div>
+
+      <!-- Filter panel — moved into a sheet when open, never shown in flow -->
       <div id="library-filters" class="js-filters hidden flex-col gap-2">
-        <!-- Sort + page size (mobile only — inline in the controls row on desktop) -->
+        <!-- Sort + page size. Inline in the controls row on desktop, so these
+             mounts stay empty there. -->
         <div class="flex items-center gap-2 lg:hidden">
           <div class="js-sort-mount flex-1"></div>
           <div class="js-tile-size-mount w-28 shrink-0 sm:hidden"></div>
         </div>
-        <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-2">
-          <div class="js-status-mount w-full lg:w-auto shrink-0"></div>
-          <div class="js-reading-status-mount w-full lg:w-auto shrink-0"></div>
-          <div class="js-tags-combobox w-full lg:w-auto lg:min-w-36 lg:max-w-48"></div>
-          <div class="js-author-combobox w-full lg:w-auto lg:max-w-44"></div>
-          <div class="js-artist-combobox w-full lg:w-auto lg:max-w-44"></div>
-          <div class="js-source-combobox w-full lg:w-auto lg:max-w-44"></div>
-          <div class="js-saved-searches flex items-center gap-2 lg:ml-auto"></div>
+        <!-- One column, uniform widths. The ragged mix of intrinsic and
+             full-width pills had no edge to follow down either side. -->
+        <div class="flex flex-col gap-2">
+          <div class="js-status-mount w-full"></div>
+          <div class="js-reading-status-mount w-full"></div>
+          <div class="js-tags-combobox w-full"></div>
+          <div class="js-author-combobox w-full"></div>
+          <div class="js-artist-combobox w-full"></div>
+          <div class="js-source-combobox w-full"></div>
+          <div class="js-saved-searches flex items-center gap-2"></div>
         </div>
       </div>
 
@@ -404,19 +410,40 @@ export async function init(container) {
   _updateFilterCountFn = _updateFilterCount;
   _updateFilterCount();
 
-  // Mobile filter toggle
-  filterToggle?.addEventListener('click', () => {
-    const isExpanded = filterToggle.getAttribute('aria-expanded') === 'true';
-    if (isExpanded) {
-      filtersEl.classList.add('hidden');
-      filtersEl.classList.remove('flex');
-      filterChevronEl?.classList.remove('rotate-180');
-    } else {
+  // The panel opens as a sheet rather than expanding in flow: it overlays the
+  // grid instead of displacing it, so the results stay visible while you filter.
+  // Same surface at every breakpoint, per the design system.
+  const filtersHomeEl = /** @type {HTMLElement} */ (container.querySelector('.js-filters-home'));
+
+  function _setFiltersOpen(open) {
+    if (open) {
       filtersEl.classList.remove('hidden');
       filtersEl.classList.add('flex');
-      filterChevronEl?.classList.add('rotate-180');
+    } else {
+      // Re-parent before unmounting, or Preact takes the panel down with it.
+      filtersHomeEl?.appendChild(filtersEl);
+      filtersEl.classList.add('hidden');
+      filtersEl.classList.remove('flex');
     }
-    filterToggle.setAttribute('aria-expanded', String(!isExpanded));
+    filterChevronEl?.classList.toggle('rotate-180', open);
+    filterToggle?.setAttribute('aria-expanded', String(open));
+
+    mountIntoModalRoot(open
+      ? html`
+        <${Modal}
+          open=${true}
+          sheet=${true}
+          title=${t('library.filters')}
+          onClose=${() => _setFiltersOpen(false)}
+        >
+          <div class="flex flex-col gap-2" ref=${(el) => { if (el) el.appendChild(filtersEl); }}></div>
+        <//>
+      `
+      : null);
+  }
+
+  filterToggle?.addEventListener('click', () => {
+    _setFiltersOpen(filterToggle.getAttribute('aria-expanded') !== 'true');
   });
 
   // Show skeleton only if data takes > 150 ms
@@ -1185,6 +1212,9 @@ function _showBulkCategoryModal(mangaIds) {
 /** @param {HTMLElement} container */
 export function destroy(container) {
   clearPageHeader();
+  // The filter panel may be parented into the sheet; take the sheet down first
+  // so it is not left mounted over the next page.
+  mountIntoModalRoot(null);
   _abort?.abort();
   _abort = null;
   _removePullToRefresh?.();
