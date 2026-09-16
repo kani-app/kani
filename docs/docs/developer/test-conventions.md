@@ -83,6 +83,27 @@ node scripts/verify-permission-matrix.mjs http://127.0.0.1:8299 admin '<password
 
 Install Playwright in a scratch environment and raise development rate limits for the sweep.
 
+## Mobile layout
+
+The design system's responsive rules are rendered-geometry properties — a touch-target floor,
+tables that scroll inside a wrapper rather than widening the page, content that clears the bottom
+nav. None can be checked from source. The layout script drives every route at several narrow
+widths and asserts them:
+
+```bash
+node scripts/verify-mobile-layout.mjs http://127.0.0.1:8299 admin '<password>'
+```
+
+It reads the touch floor out of `design-system.md` and the route list out of `router.js`, so a
+rule or a route that changes changes what it asserts. Useful flags: `--widths=320,390`,
+`--only=<slug>`, `--min-gutter=<px>`, `--verbose`.
+
+Like the permission matrix it is local only — it needs a live server and a password, so it is not
+wired into CI. Same scratch-directory Playwright install, and the same reason to raise the rate
+limits. Read `engineering-constraints.md` under "Browser-driven layout checks" before changing it;
+a rendered box is not proof the user can see it, and four browser behaviours make naive checks
+report defects that do not exist.
+
 ## Commands
 
 ```bash

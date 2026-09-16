@@ -476,3 +476,49 @@ facts that bound it, rather than asserting single-threadedness the harness does 
 
 **Revalidate when.** A third environment-mutating test appears, a test starts reading the
 environment concurrently, or the crates adopt a serialisation guard.
+
+## Browser-driven layout checks
+
+### A rendered box is not proof the user can see it
+
+**Constraint.** Four browser behaviours make `getBoundingClientRect` disagree with what is on
+screen. Content inside a closed `<details>` keeps a non-zero rect and is not `display: none`. A box
+clipped by an `overflow: hidden` ancestor still measures at full size. Playwright's `fullPage`
+capture is sized to `documentElement.scrollWidth`, so a document wider than its viewport yields an
+image with dead space even when nothing scrolls. And this app scrolls inside
+`div.flex-1.min-w-0[overflow-y:auto]`, not on the document, so `fullPage` captures one screenful
+and `document.scrollingElement` is the wrong thing to scroll or to test for end-of-list.
+
+**Evidence.** The 2026-09 mobile audit produced four confident false findings from these: a 379px
+`<pre>` inside a collapsed disclosure reported as 362px of content under the bottom nav; a
+sources-health page reported as horizontally broken when `body.scrollWidth` was correct and only
+`documentElement.scrollWidth` differed; nine controls reported as unreachable because the probe
+settled `scrollers[0]` rather than each element's own scroller; and lazy lists reporting
+`atEnd: true` while still mid-list for the same reason.
+
+**Consequence.** A layout check that trusts a rect alone reports defects that do not exist, and
+misses real ones by settling the wrong container. Each false finding cost a round of investigation.
+
+**Enforcement.** `scripts/verify-mobile-layout.mjs` excludes `details:not([open])` and
+overflow-clipped boxes, resolves each element's own scrollable ancestor before asserting
+end-of-scroll, and asserts horizontal scrolling by moving `scrollLeft` rather than comparing
+widths.
+
+**Revalidate when.** The scroll container moves out of `div.flex-1.min-w-0`, or Playwright changes
+how `fullPage` sizes a capture.
+
+### Long-press cannot be driven with synthetic mouse events
+
+**Constraint.** The select-mode handlers in `static/js/pages/library.js` and
+`components/virtual-chapter-list.js` start a 400ms timer on `pointerdown` and cancel it on
+`pointermove`. Playwright's `page.mouse` emits a move, so the timer never fires and select mode
+cannot be entered.
+
+**Evidence.** Repeated attempts to enter bulk selection with `mouse.move`/`down`/`up` produced no
+bulk bar; a CDP `Input.dispatchTouchEvent` sequence held 800ms with no movement entered it on both
+the library grid and a chapter row.
+
+**Consequence.** Any check covering bulk selection must use CDP touch events. A mouse-driven
+attempt fails silently and looks like the feature being absent.
+
+**Revalidate when.** The long-press threshold or its cancel conditions change.
