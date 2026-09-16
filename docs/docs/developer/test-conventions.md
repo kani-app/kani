@@ -91,8 +91,13 @@ nav. None can be checked from source. The layout script drives every route at se
 widths and asserts them:
 
 ```bash
-node scripts/verify-mobile-layout.mjs http://127.0.0.1:8299 admin '<password>'
+node scripts/verify-mobile-layout.mjs http://127.0.0.1:8299 admin '<password>' \
+  --min-gutter=16 --widths=320,390,412
 ```
+
+Pass `--min-gutter=16`. It defaults to 0, which only catches content running
+*under* the nav; 16px is the gutter the design system reserves above it, so the
+default passes layouts the rule does not.
 
 It reads the touch floor out of `design-system.md` and the route list out of `router.js`, so a
 rule or a route that changes changes what it asserts. Useful flags: `--widths=320,390`,
