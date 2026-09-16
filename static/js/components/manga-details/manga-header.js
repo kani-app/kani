@@ -360,6 +360,13 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
       meta.classList.toggle('hidden', on);
       toggle.textContent = on ? t('manga.header.show_less') : t('manga.header.show_more');
       toggle.setAttribute('aria-expanded', String(on));
+
+      // Without the fit-to-viewport shell the synopsis sits under a tall hero,
+      // so expanding it pushed the chapter list off the bottom. Bring the
+      // synopsis to the top instead: both it and the list stay in view.
+      if (on && !getComputedStyle(document.documentElement).getPropertyValue('--grid-fit').trim()) {
+        requestAnimationFrame(() => desc.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      }
     };
 
     // Only offer it when there is more than the three lines already showing.

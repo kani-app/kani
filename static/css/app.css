@@ -1954,6 +1954,15 @@
     mask-image: none;
     -webkit-mask-image: none;
   }
+  /* Below the fit-to-viewport shell nothing bounds the expanded synopsis, so
+     it displaces the chapter list the page exists for. Cap it and let it
+     scroll inside itself instead. */
+  @media (max-width: 1023px) {
+    .rail--reading .rail-desc {
+      max-height: 40vh;
+      max-height: 40svh;
+    }
+  }
 
 
   @media (min-width: 1024px) {
