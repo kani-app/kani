@@ -157,11 +157,16 @@ async function measure(floor) {
   // rule means; a standalone one is.
   const inlineInProse = (el) => el.tagName === 'A'
     && [...(el.parentElement?.childNodes ?? [])].some((n) => n.nodeType === 3 && n.textContent.trim());
+  // Taken out of the tab order and wrapped in something that is itself the
+  // control — a chapter link inside a role="option" row. The row is what the
+  // finger hits, so measure that instead of the label it contains.
+  const deferredToAncestor = (el) => el.getAttribute('tabindex') === '-1'
+    && !!el.closest('[role="option"],[role="row"],[role="menuitem"],label');
   const small = [];
   for (const el of document.querySelectorAll(CTRL)) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    if (!shown(el) || inlineInProse(el)) continue;
+    if (!shown(el) || inlineInProse(el) || deferredToAncestor(el)) continue;
     // A visually hidden input whose styled label is the real target.
     if (r.width <= 2 && r.height <= 2) continue;
     if (r.width >= floor && r.height >= floor) continue;

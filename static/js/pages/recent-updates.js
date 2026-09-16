@@ -206,7 +206,7 @@ async function _fetch(listEl, paginEl) {
           <img src="${escapeHtml(coverUrl)}" alt="${escapeHtml(group.manga_title)}" class="w-full h-full object-cover" loading="lazy" />
         </a>`;
       const titleHtml = `
-        <a href="${escapeHtml(mangaHref)}" class="text-base font-semibold text-text hover:underline truncate focus-visible:outline-none focus-visible:underline">
+        <a href="${escapeHtml(mangaHref)}" class="touch-min-h inline-flex items-center text-base font-semibold text-text hover:underline truncate focus-visible:outline-none focus-visible:underline">
           ${escapeHtml(group.manga_title)}
         </a>`;
 

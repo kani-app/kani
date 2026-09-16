@@ -264,7 +264,7 @@ function ChapterRowInner({ chapter, readerHref, inLibrary, mangaId, onAssignVolu
     <div class="relative">
       <button
         ref=${btnRef}
-        class="inline-flex items-center justify-center w-9 h-9 text-text-muted hover:text-text rounded-md cursor-pointer select-none transition-colors"
+        class="touch-min inline-flex items-center justify-center w-9 h-9 text-text-muted hover:text-text rounded-md cursor-pointer select-none transition-colors"
         aria-label=${t('chapter.list.more_actions')}
         aria-haspopup="menu"
         aria-expanded=${menuOpen}

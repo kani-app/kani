@@ -171,7 +171,7 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
   const meta = document.createElement('div');
   meta.className = 'rail-meta flex flex-col gap-3';
 
-  const META_LINK_CLS = 'text-text hover:text-accent hover:underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:text-accent';
+  const META_LINK_CLS = 'touch-min-h inline-flex items-center text-text hover:text-accent hover:underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:text-accent';
 
   /**
    * Splits the two credit lists into the rows a cover would print.

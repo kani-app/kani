@@ -682,8 +682,8 @@
     width: 1rem;
     height: 1rem;
   }
-  /* Hover-driven reveal only on devices that actually hover. On touch,
-     the button is always visible and sized for a 36px+ tap target. */
+  /* Hover-driven reveal only on devices that actually hover. On touch it is
+     always visible and sized to the floor. */
   @media (hover: hover) {
     .manga-card:hover .manga-card__menu-btn,
     .manga-card__menu-btn:focus-visible {
@@ -696,8 +696,8 @@
   @media (hover: none) {
     .manga-card__menu-btn {
       opacity: 1;
-      width: 2.25rem;
-      height: 2.25rem;
+      width: var(--touch-target);
+      height: var(--touch-target);
     }
     .manga-card__menu-btn [data-svg], .manga-card__menu-btn svg {
       width: 1.125rem;
