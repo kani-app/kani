@@ -1411,6 +1411,14 @@
 
   @media (min-width: 768px) and (max-width: 1023px) { :root { --sidebar-w: 200px; } }
   html[data-sidebar="collapsed"] { --sidebar-w: 60px; }
+  /* Tab-bar clearance: its height, a gutter, and the gesture area. Nav height
+     alone leaves content flush against the bar. Goes on whatever scrolls —
+     padding an ancestor of the scroller reserves nothing. */
+  .pb-nav-safe {
+    @media (max-width: 767px) {
+      padding-bottom: calc(4rem + 1rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
   #page-content {
     flex: 1;
     min-height: 0;
@@ -1422,7 +1430,7 @@
        pages opt into filling via flex-1 basis-0 which is unaffected. */
     & > * { flex-shrink: 0; }
     @media (max-width: 767px) {
-      padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(4rem + 1rem + env(safe-area-inset-bottom, 0px));
     }
   }
 

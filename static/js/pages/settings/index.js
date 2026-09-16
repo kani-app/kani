@@ -407,7 +407,7 @@ function SettingsPage({ settings, categories, bootId }) {
           <div>${desktopNav()}</div>
         </div>
       </aside>
-      <div class="flex-1 min-w-0 flex flex-col overflow-y-auto">
+      <div class="flex-1 min-w-0 flex flex-col overflow-y-auto pb-nav-safe">
         <div class="px-4 md:px-8 pt-4">
           <${RestartTray}
             currentBootId=${bootId}

@@ -60,7 +60,7 @@ export async function init(container) {
       <div class="flex-1 min-w-0">
 
         <!-- Mobile source list (hidden on lg+) — same component as the sidebar -->
-        <div class="js-mobile-sources lg:hidden max-w-page mx-auto w-full px-2 sm:px-4 md:px-6 py-2 md:pt-4" aria-live="polite"></div>
+        <div class="js-mobile-sources lg:hidden max-w-page mx-auto w-full px-4 md:px-6 py-4 md:pt-6" aria-live="polite"></div>
 
         <!-- Desktop "select a source" prompt -->
         <div class="hidden lg:flex flex-col items-center justify-center min-h-96 gap-3 text-text-muted">
