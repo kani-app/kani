@@ -26,31 +26,38 @@ function DegradedBanner({ count, onDismiss }) {
     onDismiss();
   };
 
+  // Stacked below sm. As one row the message wrapped to about two words a
+  // line and the dismiss button laid out past the right edge of a 320px
+  // screen, with no horizontal scroll to reach it.
   return html`
     <div
-      class="flex items-center gap-3 px-4 py-2 border-b border-danger/30 bg-danger/10 text-sm"
+      class="flex flex-col gap-2 px-4 py-2 border-b border-danger/30 bg-danger/10 text-sm sm:flex-row sm:items-center sm:gap-3"
       role="status"
     >
-      <span class="text-danger font-semibold shrink-0">${t('degraded_banner.label')}</span>
-      <span class="text-text flex-1">${t('degraded_banner.message', { count })}</span>
-      <button
-        type="button"
-        class="text-accent underline shrink-0"
-        onClick=${() => {
-          dismiss();
-          navigate('/settings?section=diagnostics');
-        }}
-      >
-        ${t('degraded_banner.action')}
-      </button>
-      <button
-        type="button"
-        class="btn-ghost btn-sm shrink-0"
-        aria-label=${t('degraded_banner.dismiss')}
-        onClick=${dismiss}
-      >
-        ${t('degraded_banner.dismiss')}
-      </button>
+      <p class="min-w-0">
+        <span class="text-danger font-semibold">${t('degraded_banner.label')}</span>${' '}
+        <span class="text-text">${t('degraded_banner.message', { count })}</span>
+      </p>
+      <div class="flex items-center gap-3 shrink-0 sm:ml-auto">
+        <button
+          type="button"
+          class="touch-min-h inline-flex items-center text-accent underline"
+          onClick=${() => {
+            dismiss();
+            navigate('/settings?section=diagnostics');
+          }}
+        >
+          ${t('degraded_banner.action')}
+        </button>
+        <button
+          type="button"
+          class="btn-ghost btn-sm"
+          aria-label=${t('degraded_banner.dismiss')}
+          onClick=${dismiss}
+        >
+          ${t('degraded_banner.dismiss')}
+        </button>
+      </div>
     </div>
   `;
 }
