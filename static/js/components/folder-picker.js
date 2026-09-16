@@ -121,7 +121,7 @@ export function FolderPicker({ open, onClose, onSelect, initialPath = '/' }) {
             `}
             <button
               type="button"
-              class=${'font-mono px-1 py-0.5 rounded ' + (i === segments.length - 1
+              class=${'touch-min-h font-mono px-2 py-0.5 rounded ' + (i === segments.length - 1
                 ? 'text-text font-medium'
                 : 'text-text-muted hover:text-text hover:bg-surface-2')}
               aria-current=${i === segments.length - 1 ? 'location' : undefined}

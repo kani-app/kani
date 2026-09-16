@@ -77,6 +77,10 @@
   --btn-h-md: 2.25rem;
   --btn-h-lg: 2.75rem;
 
+  /* The design system's touch floor. One definition, so a control that
+     bumps to it cannot drift from the rule. */
+  --touch-target: 2.5rem;
+
   /* Shadows (overrides Tailwind defaults) */
   --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md:         0 4px 12px rgba(0, 0, 0, 0.5);
@@ -596,10 +600,14 @@
   /* Touch targets expand without changing the visual size of text buttons. */
   @media (hover: none) {
     .btn-sm {
-      min-height: 2.5rem;
+      min-height: var(--touch-target);
     }
     .btn-sm.btn-icon {
-      min-width: 2.5rem;
+      min-width: var(--touch-target);
+    }
+    .btn-icon {
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
     }
   }
   .manga-grid {
@@ -1150,6 +1158,14 @@
     & svg, & [data-svg] { width: 0.85rem; height: 0.85rem; }
   }
   .search-input input:placeholder-shown ~ .search-input__clear { display: none; }
+  @media (hover: none) {
+    .search-input__clear {
+      width: var(--touch-target);
+      height: var(--touch-target);
+    }
+    /* Widened with it, so the text never runs under the larger target. */
+    .search-input input { padding-right: 2.9rem; }
+  }
 
 
   .kani-checkbox {
@@ -1334,7 +1350,7 @@
   }
   @media (hover: none) {
     .btn-xs {
-      min-height: 2.25rem;
+      min-height: var(--touch-target);
       padding: 0 0.75rem;
     }
   }
@@ -2048,7 +2064,20 @@
     flex-shrink: 0;
   }
   @media (hover: none) {
-    .tile-btn { min-width: 2.5rem; height: 2.5rem; }
+    .tile-btn { min-width: var(--touch-target); height: var(--touch-target); }
+  }
+
+  /* Every tab bar renders through components/tabs.js, so one bump reaches all
+     ten consumers. The pill variant is the short one, at 31px. */
+  @media (hover: none) {
+    .tab-btn { min-height: var(--touch-target); }
+  }
+
+  /* Opt-in floor: the hit box grows on touch, the rendered control does not.
+     Height-only for controls in a text row, where squaring each one wraps it. */
+  @media (hover: none) {
+    .touch-min { min-width: var(--touch-target); min-height: var(--touch-target); }
+    .touch-min-h { min-height: var(--touch-target); }
   }
 }
 

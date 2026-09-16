@@ -28,7 +28,7 @@ export function Tabs({ tabs, activeId, onSelect, variant = 'underline', stretch 
     <div class=${barClass} role="tablist">
       ${tabs.map(tab => {
         const isActive = tab.id === activeId;
-        let cls = 'flex items-center gap-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+        let cls = 'tab-btn flex items-center gap-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
         if (variant === 'pill') {
           cls += ' px-3 py-1.5 rounded-md flex-1 justify-center'
             + (isActive ? ' bg-surface text-text shadow-sm' : ' text-text-muted hover:text-text');
