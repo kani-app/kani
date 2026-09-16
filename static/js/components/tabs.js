@@ -20,8 +20,11 @@ const html = htm.bind(h);
  * }} props
  */
 export function Tabs({ tabs, activeId, onSelect, variant = 'underline', stretch = false }) {
+  // Pills wrap rather than scroll. The underline bar can scroll because its
+  // edge cue is visible, but a bordered segmented control that overflows just
+  // clips — and a tab nobody can see is a section nobody can reach.
   const barClass = variant === 'pill'
-    ? 'flex gap-1 p-1 rounded-lg bg-surface-2 border border-border'
+    ? 'flex flex-wrap gap-1 p-1 rounded-lg bg-surface-2 border border-border'
     : 'flex gap-1 overflow-x-auto [scrollbar-width:none] border-b border-border';
 
   return html`
