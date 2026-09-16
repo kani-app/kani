@@ -47,7 +47,7 @@
   --radius-full: 9999px;
 
   --header-h: 60px;
-  --header-h-mobile: 44px;
+  --header-h-mobile: 48px;
   --sidebar-w: 234px;
 
   --color-surface-alt: var(--color-surface-2);
@@ -1595,17 +1595,6 @@
     @media (max-width: 767px) { height: var(--header-h-mobile); padding: 0 16px; }
   }
 
-  @media (max-width: 767px) {
-    .header-actions .btn-primary,
-    .header-actions .btn-secondary,
-    .header-actions .btn-ghost,
-    .header-actions .btn-danger {
-      height: 2rem;
-      padding: 0 0.7rem;
-      font-size: var(--text-xs);
-    }
-  }
-
   .breadcrumb {
     display: flex; align-items: center; gap: 6px;
     font-size: var(--text-sm); color: var(--color-text-muted);
@@ -1619,12 +1608,41 @@
     & .sep { color: var(--color-text-faint); font-size: var(--text-xs); flex-shrink: 0; }
     & .cur { color: var(--color-text); font-weight: 500; flex-shrink: 1; min-width: 0;
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* Narrow screens: ancestors collapse so the current page never truncates
-       behind the header actions. */
-    @media (max-width: 480px) {
-      & a, & .sep { display: none; }
-    }
   }
+  /* Page actions on a phone. A row in the document rather than a menu: the
+     kebab it replaces obscured whatever it held. */
+  .page-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 6px 16px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border-subtle);
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    @media (min-width: 768px) { display: none; }
+  }
+  .page-action-bar[hidden] { display: none; }
+
+  .breadcrumb__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: -6px;
+    padding-inline: 6px;
+    border-radius: var(--radius-md);
+    @media (hover: none) { min-height: var(--touch-target); }
+  }
+  .breadcrumb__back-label {
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: relative; }
   .header-overflow-panel {
     position: absolute;

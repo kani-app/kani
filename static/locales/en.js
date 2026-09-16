@@ -2329,8 +2329,9 @@ export default {
   'app_header.aria': 'Page header',
 
 
-  'app_header.more_actions': 'More actions',
   'app_header.breadcrumb_aria': 'Breadcrumb',
+  'app_header.back': 'Back to {label}',
+  'app_header.actions_aria': 'Page actions',
 
   'activity_feed.empty': 'No recent activity.',
   'activity_feed.load_more': 'Load more',

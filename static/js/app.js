@@ -394,9 +394,11 @@ function _hideChrome() {
   const nav    = document.getElementById('nav');
   const tabNav = document.getElementById('bottom-nav');
   const hdr    = document.querySelector('.app-header');
+  const bar    = document.querySelector('.page-action-bar');
   if (nav)    nav.style.display = 'none';
   if (tabNav) tabNav.style.display = 'none';
   if (hdr)    /** @type {HTMLElement} */ (hdr).style.display = 'none';
+  if (bar)    /** @type {HTMLElement} */ (bar).style.display = 'none';
   const app = document.getElementById('app');
   if (app) app.classList.remove('shell-main');
 }
@@ -405,9 +407,13 @@ function _showChrome() {
   const nav    = document.getElementById('nav');
   const tabNav = document.getElementById('bottom-nav');
   const hdr    = document.querySelector('.app-header');
+  const bar    = document.querySelector('.page-action-bar');
   if (nav)    nav.style.display = '';
   if (tabNav) tabNav.style.display = '';
   if (hdr)    /** @type {HTMLElement} */ (hdr).style.display = '';
+  // Cleared, not shown: the bar's own `hidden` decides, since a page with no
+  // actions must not leave an empty strip under the header.
+  if (bar)    /** @type {HTMLElement} */ (bar).style.display = '';
   const app = document.getElementById('app');
   if (app) app.classList.add('shell-main');
 }
