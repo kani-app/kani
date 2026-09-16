@@ -337,7 +337,7 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
 
     const toggle = document.createElement('button');
     toggle.type = 'button';
-    toggle.className = 'text-xs text-text-muted underline underline-offset-2 decoration-border hover:text-accent text-center self-center shrink-0 py-1';
+    toggle.className = 'touch-min-h inline-flex items-center justify-center text-xs text-text-muted underline underline-offset-2 decoration-border hover:text-accent text-center self-center shrink-0 py-1';
     toggle.textContent = t('manga.header.show_more');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-controls', 'manga-description');
