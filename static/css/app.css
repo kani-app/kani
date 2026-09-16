@@ -599,6 +599,10 @@
   }
   /* Touch targets expand without changing the visual size of text buttons. */
   @media (hover: none) {
+    .btn-primary,
+    .btn-ghost,
+    .btn-secondary,
+    .btn-danger,
     .btn-sm {
       min-height: var(--touch-target);
     }
@@ -1374,6 +1378,10 @@
     font-size: var(--text-sm);
     padding-left: 0.625rem;
     padding-right: 0.625rem;
+  }
+  @media (hover: none) {
+    .input-sm { height: var(--touch-target); }
+    .chip { min-height: var(--touch-target); }
   }
 
 

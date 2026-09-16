@@ -96,7 +96,7 @@ function NotificationsPanel() {
     <div class="relative" ref=${wrapRef}>
       <button
         type="button"
-        class=${'relative inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:outline-none ' + (badgeCount === 0 && activeDownloads === 0 ? 'text-text-muted hover:bg-surface-2' : 'text-accent hover:bg-accent/10')}
+        class=${'touch-min relative inline-flex items-center justify-center w-9 h-9 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg focus-visible:outline-none ' + (badgeCount === 0 && activeDownloads === 0 ? 'text-text-muted hover:bg-surface-2' : 'text-accent hover:bg-accent/10')}
         aria-label=${badgeCount > 0 ? t('notifications.btn.unread', { count: badgeCount }) : t('notifications.btn.label')}
         aria-expanded=${open}
         onClick=${() => setOpen(v => !v)}

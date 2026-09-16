@@ -93,7 +93,7 @@ function LoginPage() {
       </form>
       ${canReset && html`
         <p class="text-center text-sm text-text-muted">
-          <a href="/forgot-password" class="text-text-muted underline hover:text-text">${t('auth.login.forgot_password')}</a>
+          <a href="/forgot-password" class="touch-min-h inline-flex items-center text-text-muted underline hover:text-text">${t('auth.login.forgot_password')}</a>
         </p>
       `}
       ${canRegister && html`

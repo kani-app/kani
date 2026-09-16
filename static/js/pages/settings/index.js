@@ -397,7 +397,7 @@ function SettingsPage({ settings, categories, bootId }) {
               type="search"
               placeholder=${t('settings.search.placeholder')}
               autocomplete="off"
-              class="w-full text-xs bg-surface-2 border border-border-subtle rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-accent/50 placeholder:text-text-faint text-text"
+              class="touch-min-h w-full text-xs bg-surface-2 border border-border-subtle rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-accent/50 placeholder:text-text-faint text-text"
               aria-label=${t('settings.search.placeholder')}
               value=${query}
               onInput=${(e) => applySearch(e.target.value)}
@@ -426,7 +426,7 @@ function SettingsPage({ settings, categories, bootId }) {
               type="search"
               placeholder=${t('settings.search.placeholder_mobile')}
               autocomplete="off"
-              class="w-full text-sm bg-surface-2 border border-border-subtle rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-accent/50 placeholder:text-text-faint text-text"
+              class="touch-min-h w-full text-sm bg-surface-2 border border-border-subtle rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-accent/50 placeholder:text-text-faint text-text"
               aria-label=${t('settings.search.placeholder_mobile')}
               value=${query}
               onInput=${(e) => applySearch(e.target.value)}
