@@ -218,6 +218,9 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    /* The app has its own pull-to-refresh. Without this the browser's fires
+       instead, and which one you get depends on where the gesture starts. */
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -1442,6 +1445,7 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     scroll-behavior: smooth;
     /* Page roots must overflow (and scroll), not shrink to fit. Full-height
        pages opt into filling via flex-1 basis-0 which is unaffected. */
