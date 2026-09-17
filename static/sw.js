@@ -1,7 +1,7 @@
 // @ts-check
 // Kani service worker — shell caching + page-image caching.
 
-const SHELL_CACHE  = 'kani-shell-v3';
+const SHELL_CACHE  = 'kani-shell-v4';
 const PAGE_CACHE   = 'kani-pages-v1';
 const KNOWN_CACHES = [SHELL_CACHE, PAGE_CACHE];
 
@@ -21,6 +21,12 @@ const OFFLINE_HTML = `<!doctype html><meta charset="utf-8">
 </style>
 <div class="box"><h1>You're offline</h1><p>Reconnect to load Kani.</p></div>`;
 
+/**
+ * Precached so the app boots offline. Precaching is not permission to serve
+ * these from cache first — most are rebuilt on every frontend change while
+ * keeping the same path, so see the fetch handler for what is actually
+ * cache-first. Bump SHELL_CACHE whenever this list or that routing changes.
+ */
 const SHELL_URLS = [
   '/',
   '/css/main.css',
@@ -80,18 +86,17 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Pre-cached shell assets (app entry, vendors, CSS, icons) — cache-first for
-  // offline PWA support. Explicitly-listed files only; the set is small and
-  // known-stable so stale-cache risk is acceptable.
-  if (SHELL_URLS.includes(path) || path.startsWith('/css/') || path.startsWith('/icons/')) {
+  // Icons — cache-first. Immutable by construction: a change ships under a new
+  // filename, so a cached copy can never be the wrong one.
+  if (path.startsWith('/icons/')) {
     e.respondWith(_cacheFirst(SHELL_CACHE, request));
     return;
   }
 
-  // Dynamic JS modules (page chunks, components, etc.) — network-first so that
-  // updates are always picked up without requiring a hard refresh. Falls back to
-  // cache only when the network is unavailable.
-  if (path.startsWith('/js/')) {
+  // Everything the app is built from — network-first, so a deploy is picked up
+  // whole. Serving one of these from cache while its siblings update leaves the
+  // entry module importing chunk hashes the server no longer has.
+  if (path.startsWith('/css/') || path.startsWith('/js/') || path === '/manifest.webmanifest') {
     e.respondWith(_networkFirst(SHELL_CACHE, request));
     return;
   }
