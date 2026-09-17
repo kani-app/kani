@@ -2106,10 +2106,28 @@
 
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+  .pull-refresh-indicator {
+    position: fixed;
+    left: 0; right: 0;
+    top: var(--header-h);
+    z-index: var(--z-header);
+    display: flex; align-items: center; justify-content: center;
+    height: 2.5rem;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    pointer-events: none;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: opacity var(--motion-base) ease;
+    }
+    @media (max-width: 767px) { top: var(--header-h-mobile); }
+  }
+
   /* Diagnostic readout for KANI-44; remove with it. */
   .debug-panel {
     position: fixed;
-    left: 0; bottom: 0;
+    left: 0; top: 0;
     z-index: var(--z-toast);
     max-height: 9rem; max-width: 100%;
     overflow: auto;
