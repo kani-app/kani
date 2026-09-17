@@ -310,7 +310,7 @@ function _updateDesktopActive(el, path) {
 
 /** @param {HTMLElement} el */
 function _renderBottomNav(el) {
-  el.className = 'md:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-surface border-t border-border pb-safe';
+  el.className = 'md:hidden fixed bottom-0 inset-x-0 z-30 tab-bar bg-surface border-t border-border';
 
   // Four permanent slots; everything else lives behind "More". Without the sheet,
   // Downloads / Statistics / Accounts / Logs / Jobs have no route on a phone at all.

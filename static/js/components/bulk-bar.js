@@ -77,7 +77,7 @@ export function BulkBar({ countLabel, statLine = null, helpers = [], actions, on
       `);
 
   return html`
-    <div class="bulk-bar-dock z-40 bg-surface border border-border-subtle rounded-none md:rounded-2xl shadow-xl flex items-center gap-x-3 gap-y-2 px-4 py-2.5 flex-wrap pb-safe md:pb-2.5">
+    <div class="bulk-bar-dock z-40 bg-surface border border-border-subtle rounded-none md:rounded-2xl shadow-xl flex items-center gap-x-3 gap-y-2 px-4 py-2.5 flex-wrap">
       <div class="flex flex-col min-w-0 mr-auto">
         <span class="text-sm font-medium text-text-muted whitespace-nowrap">${countLabel}</span>
         ${statLine && html`<span class="text-xs text-text-faint whitespace-nowrap">${statLine}</span>`}
