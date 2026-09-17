@@ -80,24 +80,58 @@ fn script_src(assets: &kani_web::assets::Assets, index_name: &str) -> Result<Str
 /// Debug builds get `no-cache` so the browser always revalidates raw source files.
 /// Without an explicit header the browser applies heuristic caching and can serve a
 /// stale module after an edit, which surfaces as confusing parse errors.
+/// Whether an asset's filename carries a content hash, and so can never change
+/// meaning.
+///
+/// esbuild emits `name-HASH.js` with an uppercase base32 hash. Everything else
+/// under `/js/` and `/css/` — the entry module, the stylesheet, the vendored
+/// modules — keeps its path across rebuilds and must be revalidated.
+pub(crate) fn is_content_hashed(path: &str) -> bool {
+    let Some(file) = path.rsplit('/').next() else {
+        return false;
+    };
+    let Some((stem, _ext)) = file.rsplit_once('.') else {
+        return false;
+    };
+    let Some((_, hash)) = stem.rsplit_once('-') else {
+        return false;
+    };
+    hash.len() >= 8
+        && hash
+            .chars()
+            .all(|c| c.is_ascii_digit() || c.is_ascii_uppercase())
+}
+
 async fn cache_control_middleware(
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     use rquest::header;
 
+    // `immutable` is only true of a hashed name. Applied to a stable path it
+    // tells the browser never to revalidate, which strands a client on a build
+    // it can no longer escape without clearing site data.
     #[cfg(not(debug_assertions))]
-    const CACHE_VALUE: &str = "public, max-age=31536000, immutable";
+    const IMMUTABLE: &str = "public, max-age=31536000, immutable";
     #[cfg(debug_assertions)]
-    const CACHE_VALUE: &str = "no-cache";
+    const IMMUTABLE: &str = "no-cache";
+    const REVALIDATE: &str = "no-cache";
 
-    let is_static =
-        request.uri().path().starts_with("/js/") || request.uri().path().starts_with("/css/");
+    let path = request.uri().path();
+    let is_static = path.starts_with("/js/") || path.starts_with("/css/");
+    // The worker is the only way to recover a client, so it can never be held.
+    let is_worker = path == "/sw.js";
+    let value = if is_content_hashed(path) {
+        IMMUTABLE
+    } else {
+        REVALIDATE
+    };
+
     let mut response = next.run(request).await;
-    if is_static {
+    if is_static || is_worker {
         response.headers_mut().insert(
             header::CACHE_CONTROL,
-            header::HeaderValue::from_static(CACHE_VALUE),
+            header::HeaderValue::from_static(value),
         );
     }
     response
@@ -986,5 +1020,23 @@ mod rate_limit_config_tests {
         assert!(
             replenish_period(super::PROXY_RATE_RELEASE) < replenish_period(super::API_RATE_RELEASE)
         );
+    }
+
+    #[test]
+    fn only_hashed_filenames_are_immutable() {
+        // esbuild's output: the hash is what makes the name safe to pin.
+        assert!(super::is_content_hashed("/js/dist/chunk-5M4XVRNJ.js"));
+        assert!(super::is_content_hashed("/js/dist/settings-QDVWL77B.js"));
+
+        // Rebuilt in place on every frontend change. Pinning these is what
+        // stranded clients on a build they could not escape.
+        assert!(!super::is_content_hashed("/js/dist/app.js"));
+        assert!(!super::is_content_hashed("/css/main.css"));
+        assert!(!super::is_content_hashed("/js/vendor/preact.module.js"));
+        assert!(!super::is_content_hashed("/js/app.js"));
+
+        // A hyphen alone is not a hash.
+        assert!(!super::is_content_hashed("/js/dist/some-widget.js"));
+        assert!(!super::is_content_hashed("/js/dist/a-BC12.js"));
     }
 }
