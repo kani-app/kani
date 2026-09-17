@@ -113,6 +113,27 @@ let _scanInProgress = false;
 /** @type {Map<number, { id: number, title: string, cover_url: string | null }>} */
 const _mangaById = new Map();
 /** @type {IntersectionObserver|null} */ let _sentinelObserver = null;
+
+/** @type {HTMLElement|null} */ let _traceEl = null;
+
+/**
+ * One line per library response, behind `?debug=pagination`. KANI-44 does not
+ * reproduce off-device, so the trace has to run where it does.
+ * Remove with KANI-44.
+ * @param {string} line
+ */
+function _tracePagination(line) {
+  if (new URLSearchParams(location.search).get('debug') !== 'pagination') return;
+  if (!_traceEl) {
+    _traceEl = document.createElement('div');
+    _traceEl.className = 'pagination-trace';
+    document.body.appendChild(_traceEl);
+  }
+  const row = document.createElement('div');
+  row.textContent = line;
+  _traceEl.appendChild(row);
+  _traceEl.scrollTop = _traceEl.scrollHeight;
+}
 /** @type {HTMLElement|null} */    let _authorContainer = null;
 /** @type {HTMLElement|null} */    let _artistContainer = null;
 /** @type {HTMLElement|null} */    let _tagsContainer = null;
@@ -877,6 +898,13 @@ function _fetchLibrary() {
     _gridEl.classList.remove('opacity-50', 'pointer-events-none');
 
     const hasNext = hasNextPage(result, items.length, _pageSize);
+    const rendered = [...(_gridEl?.querySelectorAll('[data-manga-id]') ?? [])]
+      .map((el) => /** @type {HTMLElement} */ (el).dataset.mangaId);
+    _tracePagination(
+      `p${_page} size${_pageSize} got${items.length} next=${hasNext}`
+      + ` cards=${rendered.length} dup=${rendered.length - new Set(rendered).size}`
+      + ` first=${items[0]?.id ?? '-'} last=${items[items.length - 1]?.id ?? '-'}`,
+    );
     if (infinite) {
       _setupSentinel(hasNext);
     } else if (_page > 1 || hasNext) {
