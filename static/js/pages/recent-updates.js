@@ -78,7 +78,10 @@ export async function init(container) {
 
   await _fetch(_listEl, paginEl);
 
-  _removePullToRefresh = addPullToRefresh(document.documentElement, () => _fetch(_listEl, paginEl));
+  _removePullToRefresh = addPullToRefresh(
+    document.getElementById('page-content') ?? document.documentElement,
+    () => { _page = 1; _fetch(_listEl, paginEl); },
+  );
 }
 
 

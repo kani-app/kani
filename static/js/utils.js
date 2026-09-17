@@ -278,13 +278,14 @@ export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
   /** @type {HTMLElement | null} */
   let indicator = null;
 
+  // Overlaid rather than inserted into the flow: a 2.5rem block appearing above
+  // the scroller shifts the whole list down mid-gesture.
   function _ensureIndicator() {
     if (indicator) return indicator;
     indicator = document.createElement('div');
-    indicator.className = 'flex items-center justify-center h-10 text-text-muted text-sm opacity-0 transition-opacity duration-200';
+    indicator.className = 'pull-refresh-indicator';
     indicator.setAttribute('aria-hidden', 'true');
-    indicator.textContent = t('pull_refresh.release');
-    el.insertAdjacentElement('beforebegin', indicator);
+    document.body.appendChild(indicator);
     return indicator;
   }
 
@@ -293,22 +294,33 @@ export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
     indicator = null;
   }
 
+  /**
+   * `el` must be the element that actually scrolls. Given one that does not,
+   * `scrollTop` is pinned at 0, so the at-the-top test always passes and every
+   * upward flick anywhere in the list reads as a pull. Testing the overflow
+   * makes a mis-wired caller inert, and unlike comparing heights it still works
+   * on a list shorter than the viewport.
+   */
+  const scrolls = () => /auto|scroll/.test(getComputedStyle(el).overflowY);
+  const atTop = () => scrolls() && el.scrollTop <= 0;
+
   function onTouchStart(/** @type {TouchEvent} */ e) {
-    if (el.scrollTop > 0) return;
+    if (!atTop()) return;
     if (e.touches.length !== 1) return;
     startY = e.touches[0].clientY;
     pulling = false;
   }
 
   function onTouchMove(/** @type {TouchEvent} */ e) {
-    if (el.scrollTop > 0) return;
+    if (!atTop()) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) return;
     pulling = dy >= threshold;
-    if (!reduced) {
-      const ind = _ensureIndicator();
-      ind.style.opacity = pulling ? '1' : String(dy / threshold);
-    }
+    // Shown from the first pixel, not only once armed: the gesture was
+    // undiscoverable while its only label appeared at the threshold.
+    const ind = _ensureIndicator();
+    ind.textContent = pulling ? t('pull_refresh.release') : t('pull_refresh.pull');
+    ind.style.opacity = reduced ? '1' : String(Math.min(1, 0.35 + (dy / threshold) * 0.65));
   }
 
   async function onTouchEnd() {

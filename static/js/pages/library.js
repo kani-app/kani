@@ -781,7 +781,12 @@ export async function init(container) {
 
   _fetchLibrary();
 
-  _removePullToRefresh = addPullToRefresh(document.documentElement, _fetchLibrary);
+  // Refreshing has to reset the page: _fetchLibrary appends while _page > 1, so
+  // calling it bare re-appends whatever page the list happens to be on.
+  _removePullToRefresh = addPullToRefresh(
+    document.getElementById('page-content') ?? document.documentElement,
+    () => { _page = 1; _fetchLibrary(); },
+  );
 }
 
 
