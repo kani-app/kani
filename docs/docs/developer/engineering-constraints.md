@@ -522,3 +522,43 @@ the library grid and a chapter row.
 attempt fails silently and looks like the feature being absent.
 
 **Revalidate when.** The long-press threshold or its cancel conditions change.
+
+## Container image build
+
+### A changed `ENV` invalidates every layer beneath it
+
+**Constraint.** Docker caches by layer, and an `ENV` whose value differs produces a different
+layer, discarding the cache for everything after it. `GIT_SHA` changes on every commit, so
+declaring it above `cargo chef cook` rebuilt every dependency on every build — defeating the only
+reason cargo-chef is in the Dockerfile. Anything that varies per build belongs below the expensive
+layers, not above them.
+
+**Evidence.** Two consecutive image builds of the same branch during the 2026-09 mobile work each
+recompiled the full dependency graph, roughly twenty minutes apiece, while `Cargo.lock` and every
+manifest were untouched. The comment on the cook step claimed the layer "is reused for as long as
+Cargo.lock and the manifests are unchanged", which could not be true while the commit sat above it.
+
+**Consequence.** Every release and every test image pays a full dependency rebuild.
+
+**Enforcement.** None automated. `ARG GIT_SHA` / `ENV GIT_SHA` sit immediately below the cook step
+and above `COPY . .`.
+
+**Revalidate.** When the builder stage gains another `ARG` or `ENV`, or if a build of an unchanged
+dependency set stops reporting `CACHED` for the cook layer.
+
+### The runtime image starts as root on purpose
+
+**Constraint.** There is no `USER` instruction in the runtime stage. The container starts as root
+so `entrypoint.sh` can `chown` a freshly created bind mount, then drops to the unprivileged `kani`
+user with `setpriv` before exec'ing the server. `kani-web` itself never runs as root. Adding a
+`USER kani` line looks like a hardening win and silently breaks host-owned bind mounts.
+
+**Evidence.** `/data` and `/library` are chowned at build time for named volumes, but a bind mount
+supplied by the host arrives with the host's ownership and can only be corrected at runtime.
+
+**Consequence.** A user-supplied bind mount is unwritable and the server fails to start.
+
+**Enforcement.** None automated.
+
+**Revalidate.** If the entrypoint stops dropping privileges, or the image moves to rootless volumes
+only.
