@@ -492,26 +492,40 @@ function _traceLayout() {
   const rawInset = Math.round(probe.getBoundingClientRect().height);
   probe.remove();
 
-  const nav = document.getElementById('bottom-nav');
-  const pc = document.getElementById('page-content');
-  const navBox = nav?.getBoundingClientRect();
   const modes = ['standalone', 'fullscreen', 'minimal-ui', 'browser']
     .filter(m => matchMedia(`(display-mode: ${m})`).matches).join(',') || 'unknown';
 
   const panel = document.createElement('div');
   panel.className = 'debug-panel';
-  for (const line of [
-    `display-mode=${modes}`,
-    `env(inset-bottom)=${rawInset} --nav-inset=${getComputedStyle(document.documentElement).getPropertyValue('--nav-inset').trim()}`,
-    `nav h=${navBox ? Math.round(navBox.height) : '-'} top=${navBox ? Math.round(navBox.top) : '-'} pad=${nav ? getComputedStyle(nav).paddingBottom : '-'}`,
-    `page-content pad-bottom=${pc ? getComputedStyle(pc).paddingBottom : '-'}`,
-    `innerHeight=${window.innerHeight} dpr=${window.devicePixelRatio}`,
-  ]) {
-    const row = document.createElement('div');
-    row.textContent = line;
-    panel.appendChild(row);
-  }
   document.body.appendChild(panel);
+
+  const render = () => {
+    const pc = document.getElementById('page-content');
+    const nav = document.getElementById('bottom-nav');
+    if (!pc || !nav) return;
+    const navBox = nav.getBoundingClientRect();
+    const content = pc.lastElementChild?.getBoundingClientRect();
+    const atEnd = Math.abs(pc.scrollTop + pc.clientHeight - pc.scrollHeight) < 2;
+    const vv = window.visualViewport;
+    panel.textContent = [
+      `dm=${modes} env=${rawInset} --nav-inset=${getComputedStyle(document.documentElement).getPropertyValue('--nav-inset').trim()}`,
+      `nav h=${Math.round(navBox.height)} top=${Math.round(navBox.top)} bottom=${Math.round(navBox.bottom)}`,
+      `pc pad=${getComputedStyle(pc).paddingBottom} top=${Math.round(pc.scrollTop)} ch=${pc.clientHeight} sh=${pc.scrollHeight} atEnd=${atEnd}`,
+      `content bottom=${content ? Math.round(content.bottom) : '-'} GAP=${content ? Math.round(navBox.top - content.bottom) : '-'}`,
+      `innerH=${window.innerHeight} visualH=${vv ? Math.round(vv.height) : '-'} offTop=${vv ? Math.round(vv.offsetTop) : '-'}`,
+    ].join('\n');
+  };
+
+  render();
+  let queued = false;
+  const onScroll = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; render(); });
+  };
+  document.getElementById('page-content')?.addEventListener('scroll', onScroll, { passive: true });
+  window.visualViewport?.addEventListener('resize', onScroll);
+  window.addEventListener('resize', onScroll);
 }
 
 

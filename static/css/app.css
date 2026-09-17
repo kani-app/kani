@@ -2137,6 +2137,7 @@
     overflow: auto;
     padding: 4px 6px;
     font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
+    white-space: pre;
     background: rgba(0, 0, 0, 0.82); color: #7CFFB2;
     pointer-events: none;
   }
