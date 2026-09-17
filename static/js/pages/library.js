@@ -126,7 +126,7 @@ function _tracePagination(line) {
   if (new URLSearchParams(location.search).get('debug') !== 'pagination') return;
   if (!_traceEl) {
     _traceEl = document.createElement('div');
-    _traceEl.className = 'pagination-trace';
+    _traceEl.className = 'debug-panel';
     document.body.appendChild(_traceEl);
   }
   const row = document.createElement('div');

@@ -81,6 +81,11 @@
      bumps to it cannot drift from the rule. */
   --touch-target: 2.5rem;
 
+  /* Zero in a browser tab: the page sits above the browser's own UI, so there
+     is no system gesture area beneath it and reserving for one just steals
+     screen. Real only once the app is installed. */
+  --nav-inset: 0px;
+
   /* Shadows (overrides Tailwind defaults) */
   --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md:         0 4px 12px rgba(0, 0, 0, 0.5);
@@ -263,6 +268,10 @@
   }
 }
 
+
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  :root { --nav-inset: env(safe-area-inset-bottom, 0px); }
+}
 
 @layer components {
 
@@ -1424,7 +1433,7 @@
      padding an ancestor of the scroller reserves nothing. */
   .pb-nav-safe {
     @media (max-width: 767px) {
-      padding-bottom: calc(4rem + 1rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(4rem + 1rem + var(--nav-inset));
     }
   }
   #page-content {
@@ -1438,7 +1447,7 @@
        pages opt into filling via flex-1 basis-0 which is unaffected. */
     & > * { flex-shrink: 0; }
     @media (max-width: 767px) {
-      padding-bottom: calc(4rem + 1rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(4rem + 1rem + var(--nav-inset));
     }
   }
 
@@ -2077,7 +2086,7 @@
     right: 0;
     /* Clear of the mobile tab bar, not resting on it: the same nav height plus
        gutter the page content reserves. */
-    bottom: calc(4rem + 1rem + env(safe-area-inset-bottom, 0px));
+    bottom: calc(4rem + 1rem + var(--nav-inset));
     @media (min-width: 768px) {
       left: var(--sidebar-w);
       bottom: 1.5rem;
@@ -2098,7 +2107,7 @@
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
   /* Diagnostic readout for KANI-44; remove with it. */
-  .pagination-trace {
+  .debug-panel {
     position: fixed;
     left: 0; bottom: 0;
     z-index: var(--z-toast);
@@ -2114,8 +2123,8 @@
      eats the icons' own height, because border-box counts it inside the
      fixed height. */
   .tab-bar {
-    height: calc(4rem + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(4rem + var(--nav-inset));
+    padding-bottom: var(--nav-inset);
   }
 
 

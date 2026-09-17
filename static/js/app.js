@@ -70,6 +70,7 @@ import { openCommandPalette } from './components/command-palette.js';
     appEl.appendChild(pageContent);
 
     initRouter(pageContent);
+    _traceLayout();
     _maybeRedirectFirstRun();
     _maybeShowWhatsNew(appEl);
   }
@@ -474,6 +475,43 @@ function _mountConnectionBanner() {
     if (_graceTimer) { clearTimeout(_graceTimer); _graceTimer = null; }
     if (_banner) { _banner.remove(); _banner = null; }
   });
+}
+
+
+/**
+ * Chrome geometry readout behind `?debug=layout`, for KANI-29 and the tab bar.
+ * Safe-area insets cannot be read off-device, so this reads them where they
+ * resolve. Remove with KANI-44.
+ */
+function _traceLayout() {
+  if (new URLSearchParams(location.search).get('debug') !== 'layout') return;
+
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-bottom,0px)';
+  document.body.appendChild(probe);
+  const rawInset = Math.round(probe.getBoundingClientRect().height);
+  probe.remove();
+
+  const nav = document.getElementById('bottom-nav');
+  const pc = document.getElementById('page-content');
+  const navBox = nav?.getBoundingClientRect();
+  const modes = ['standalone', 'fullscreen', 'minimal-ui', 'browser']
+    .filter(m => matchMedia(`(display-mode: ${m})`).matches).join(',') || 'unknown';
+
+  const panel = document.createElement('div');
+  panel.className = 'debug-panel';
+  for (const line of [
+    `display-mode=${modes}`,
+    `env(inset-bottom)=${rawInset} --nav-inset=${getComputedStyle(document.documentElement).getPropertyValue('--nav-inset').trim()}`,
+    `nav h=${navBox ? Math.round(navBox.height) : '-'} top=${navBox ? Math.round(navBox.top) : '-'} pad=${nav ? getComputedStyle(nav).paddingBottom : '-'}`,
+    `page-content pad-bottom=${pc ? getComputedStyle(pc).paddingBottom : '-'}`,
+    `innerHeight=${window.innerHeight} dpr=${window.devicePixelRatio}`,
+  ]) {
+    const row = document.createElement('div');
+    row.textContent = line;
+    panel.appendChild(row);
+  }
+  document.body.appendChild(panel);
 }
 
 
