@@ -1,7 +1,7 @@
 // @ts-check
 // Kani service worker — shell caching + page-image caching.
 
-const SHELL_CACHE  = 'kani-shell-v4';
+const SHELL_CACHE  = 'kani-shell-v5';
 const PAGE_CACHE   = 'kani-pages-v1';
 const KNOWN_CACHES = [SHELL_CACHE, PAGE_CACHE];
 
@@ -151,10 +151,16 @@ async function _navigate(request) {
   }
 }
 
+/**
+ * `cache: 'no-cache'` revalidates with the server rather than trusting the HTTP
+ * cache. Releases once sent `immutable` for a year on these paths, so a plain
+ * fetch would be answered from that entry and a stranded client could never
+ * reach a newer build. The revalidation costs a 304.
+ */
 async function _networkFirst(cacheName, request) {
   const cache = await caches.open(cacheName);
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { cache: 'no-cache' });
     if (response.ok) cache.put(request, response.clone());
     return response;
   } catch {
