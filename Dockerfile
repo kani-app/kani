@@ -25,12 +25,6 @@ COPY --from=planner /build/recipe.json recipe.json
 # The cook stage inherits the workspace linker config; see the constraints register.
 COPY scripts/fast-linker.sh scripts/fast-linker.sh
 
-# .dockerignore excludes .git/, so the build cannot derive the commit itself.
-# Pass it in (docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD))
-# or diagnostics and support bundles report an empty build id.
-ARG GIT_SHA=""
-ENV GIT_SHA=$GIT_SHA
-
 # Use SQLx offline mode — the committed .sqlx/ directory contains pre-generated
 # query metadata so the build does not need a live database.
 # Run `cargo sqlx prepare --workspace` locally to regenerate after schema changes.
@@ -39,6 +33,14 @@ ENV SQLX_OFFLINE=true
 # Compile every dependency. This is the expensive layer and it is reused for as
 # long as Cargo.lock and the manifests are unchanged.
 RUN cargo chef cook --release --recipe-path recipe.json
+
+# After the cook, never before: a changed ENV invalidates every layer below it,
+# so declaring the commit above it rebuilt every dependency on every build.
+
+# .dockerignore excludes .git/, so pass the commit in or the build id is empty:
+# docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD)
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
 
 COPY . .
 
