@@ -1428,6 +1428,14 @@
     @media (max-width: 767px) { margin-left: 0; }
   }
 
+  /* Authored, not a utility: Tailwind does not scan the shells, so a class
+     written there generates no rule. Bare vh is the URL-bar-hidden viewport,
+     which makes the scroller taller than the window. */
+  #app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
 
   @media (min-width: 768px) and (max-width: 1023px) { :root { --sidebar-w: 200px; } }
   html[data-sidebar="collapsed"] { --sidebar-w: 60px; }

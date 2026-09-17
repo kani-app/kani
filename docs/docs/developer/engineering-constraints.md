@@ -562,3 +562,26 @@ supplied by the host arrives with the host's ownership and can only be corrected
 
 **Revalidate.** If the entrypoint stops dropping privileges, or the image moves to rootless volumes
 only.
+
+### Tailwind does not scan the HTML shells
+
+**Constraint.** `static/css/app.css` declares `@source "../js"` and nothing else, so utility
+classes written in `static/index.html` or `static/index.prod.html` generate no rule. A class there
+is inert unless some file under `static/js` happens to use the same one. Shell-level layout must be
+authored CSS, not utilities.
+
+**Evidence.** `#app` carried `class="shell-main pb-20 md:pb-0 min-h-screen"`. `pb-20` and
+`md:pb-0` had no rule in the built stylesheet at all — a bottom reserve that looked present in the
+markup and did not exist. `min-h-screen` did have one, but only because
+`static/js/components/auth-card.js` uses it, which made it apply to `#app` by coincidence rather
+than intent.
+
+**Consequence.** Markup that reads as styled is not, and whether it is depends on unrelated files.
+Adding the shells to `@source` is not a free fix either: it would activate the inert classes and
+change the layout.
+
+**Enforcement.** None automated. `scripts/check-shell-parity.mjs` compares ids and meta tags, not
+classes.
+
+**Revalidate.** If `@source` gains the HTML shells, audit every utility class in both for what it
+would start doing.
