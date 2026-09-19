@@ -2154,20 +2154,6 @@
     @media (max-width: 767px) { top: var(--header-h-mobile); }
   }
 
-  /* Diagnostic readout for KANI-44; remove with it. */
-  .debug-panel {
-    position: fixed;
-    left: 0; top: 0;
-    z-index: var(--z-toast);
-    max-height: 9rem; max-width: 100%;
-    overflow: auto;
-    padding: 4px 6px;
-    font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
-    white-space: pre;
-    background: rgba(0, 0, 0, 0.82); color: #7CFFB2;
-    pointer-events: none;
-  }
-
   /* 4rem of controls *plus* the gesture area, not 4rem total. Padding alone
      eats the icons' own height, because border-box counts it inside the
      fixed height. */
