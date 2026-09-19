@@ -411,9 +411,11 @@ export async function init(container) {
   _updateFilterCountFn = _updateFilterCount;
   _updateFilterCount();
 
-  // The panel opens as a sheet rather than expanding in flow: it overlays the
-  // grid instead of displacing it, so the results stay visible while you filter.
-  // Same surface at every breakpoint, per the design system.
+  // The panel overlays the grid rather than expanding in flow, so the results
+  // stay visible while you filter. It takes modal.js's default presentation,
+  // which the design system defines as a bottom sheet on mobile and a centred
+  // card from sm: upward — `sheet` forces the sheet at every width, which on a
+  // desktop is a full-width strip pinned to the bottom edge of the window.
   const filtersHomeEl = /** @type {HTMLElement} */ (container.querySelector('.js-filters-home'));
 
   function _setFiltersOpen(open) {
@@ -433,7 +435,6 @@ export async function init(container) {
       ? html`
         <${Modal}
           open=${true}
-          sheet=${true}
           title=${t('library.filters')}
           onClose=${() => _setFiltersOpen(false)}
         >
