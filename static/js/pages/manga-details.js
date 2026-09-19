@@ -315,7 +315,7 @@ export async function init(container, params) {
   const _mangaTitle = info?.title ?? 'Manga';
   let crumbs;
   if (!_fromSourceId && _isLocal) {
-    crumbs = [{ label: t('library.crumb'), href: '/library' }, { label: _mangaTitle }];
+    crumbs = [{ label: t('library.crumb'), href: '/' }, { label: _mangaTitle }];
   } else if (source) {
     crumbs = [
       { label: t('sources.crumb'), href: '/sources' },
