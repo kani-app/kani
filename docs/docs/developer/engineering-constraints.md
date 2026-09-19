@@ -585,3 +585,29 @@ classes.
 
 **Revalidate.** If `@source` gains the HTML shells, audit every utility class in both for what it
 would start doing.
+
+### The mobile-layout harness measures whatever `static/js/dist` was last built from
+
+**Constraint.** `scripts/verify-mobile-layout.mjs` asserts rendered geometry against a running
+instance. A release binary serves `index.prod.html`, which loads the bundle from
+`static/js/dist` — not the modules under `static/js`. `kani-web/build.rs` regenerates that bundle,
+so an instance started from an unrebuilt `target/release/kani-web` serves whatever the last
+`cargo build` produced, however old.
+
+**Evidence.** Run against a stale bundle at 412x883, the harness reported four controls below the
+touch floor: the scanlator mode buttons at 72x31 and 84x31, the manga-details tabs at 188x37, and
+the header's Notifications button at 36x36. Every one of those is the pre-`c5704937` size. The
+telling symptom was `document.querySelector('.tab-btn')` returning `null` while
+`components/tabs.js` plainly puts `tab-btn` first in the class list — source and DOM disagreeing.
+After `tools/esbuild` rebuilt `dist`, the same run reported all four at 40px and left exactly one
+real failure, the 16x16 checkbox of KANI-42.
+
+**Consequence.** Four phantom defects that reproduce reliably, look exactly like regressions of
+tickets already closed, and are invisible to any check reading the source.
+
+**Enforcement.** None automated. A debug build sidesteps it — `main.rs` serves `index.html` and
+raw modules under `cfg!(debug_assertions)` — but the release path is the one people run.
+
+**Revalidate.** Before trusting a harness failure, confirm the DOM carries a class the source
+emits. If it does not, rebuild `static/js/dist` (or `cargo build -p kani-web`) and re-run before
+filing anything.
