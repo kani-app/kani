@@ -258,7 +258,7 @@ function ScanlatorPrefsPanel({
       <label class="flex items-start gap-3 pt-3 mt-1 border-t border-border-subtle cursor-pointer">
         <input
           type="checkbox"
-          class="mt-0.5"
+          class="mt-0.5 touch-min"
           checked=${autoReplace}
           disabled=${autoReplaceBusy}
           onChange=${(/** @type {any} */ e) => handleAutoReplaceChange(e.currentTarget.checked)}
