@@ -24,6 +24,8 @@ export function mountSourcesViewTabs(container, { onTab }) {
       { id: /** @type {const} */ ('repos'), name: t('repo.tab') },
     ],
     activeId: 'extensions',
+    // Fills the sidebar column it heads, as the Users/Roles bar fills its pane.
+    stretch: true,
     onSelect: onTab,
   });
 }

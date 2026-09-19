@@ -48,8 +48,13 @@ export async function init(container) {
   setPageHeader({ crumbs: [{ label: t('sources.crumb') }], actions: _actions });
 
   container.innerHTML = `
-    <!-- View switcher. In the body, not the header: it is navigation. -->
-    <div class="js-view-tabs max-w-page mx-auto w-full px-4 md:px-6 pt-4"></div>
+    <!-- View switcher. In the body, not the header: it is navigation. Above
+         lg it heads the sidebar column and is sized to it, the way the
+         Users/Roles bar heads the list pane on /accounts — a bar spanning the
+         whole content width reads as titling the detail pane, which it does
+         not. Below lg there is no sidebar, so it spans the page as before. -->
+    <div class="js-view-tabs max-w-page mx-auto w-full px-4 md:px-6 pt-4
+                lg:max-w-none lg:mx-0 lg:w-72 lg:shrink-0 lg:px-3.5 lg:pt-3 lg:pb-0"></div>
 
     <!-- Sources view -->
     <div class="js-sources-view flex">
