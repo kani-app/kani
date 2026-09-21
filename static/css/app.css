@@ -1181,9 +1181,20 @@
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
     @media (hover: hover) {
-      &:hover { color: var(--color-text); background: var(--color-surface-2); }
+      &:hover { color: var(--color-text); }
+      &:hover::before { background: var(--color-surface-2); }
     }
-    & svg, & [data-svg] { width: 0.85rem; height: 0.85rem; }
+    /* The button is the hit area; this is the paint. At the touch size both
+       boxes are 2.5rem, so a background on the button itself would cover the
+       field's border and square off its rounded end. */
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: var(--radius-sm);
+      transition: background var(--motion-fast) ease;
+    }
+    & svg, & [data-svg] { position: relative; width: 0.85rem; height: 0.85rem; }
   }
   .search-input input:placeholder-shown ~ .search-input__clear { display: none; }
   @media (hover: none) {
