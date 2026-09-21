@@ -78,10 +78,8 @@ async function resolveRoutes(ctx) {
   };
   const lib = await get('/rest/library?page=1');
   if (lib?.items?.length) ids.manga = lib.items[0].id;
-  // The first manga in the library need not have any chapters, and a manga
-  // without them resolves no chapter id, which skips /reader/:id. Prefer one
-  // that does, so the reader is actually measured rather than reported as
-  // skipped while the run still says every check passed.
+  // A manga with no chapters resolves no chapter id, which skips /reader/:id
+  // while the run still reports every check passed. Prefer one that has them.
   for (const item of (lib?.items ?? []).slice(0, 8)) {
     const c = await get(`/rest/manga/${item.id}/chapters?page=1`);
     const l = Array.isArray(c) ? c : c?.chapters ?? c?.items;
@@ -134,11 +132,9 @@ async function measure(floor) {
     await new Promise((r) => setTimeout(r, 300));
   };
 
-  // Content inside a closed <details> keeps a live rect while being invisible,
-  // and an overflow:hidden ancestor can clip a box that still measures.
-  // A closed slide-out drawer is translated off-canvas and still reports a
-  // rect. The reader's menu is the live example; without this it contributes
-  // six controls "clipped" outside the viewport that nobody can reach.
+  // Content in a closed <details>, a box clipped by an overflow:hidden
+  // ancestor, and a drawer translated off-canvas all keep a live rect. The
+  // reader's closed menu is the drawer case.
   const offCanvas = (el) => {
     for (let a = el; a && a !== document.documentElement; a = a.parentElement) {
       const t = getComputedStyle(a).transform;

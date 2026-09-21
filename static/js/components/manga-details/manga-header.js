@@ -357,28 +357,16 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
       const fitShell = !!getComputedStyle(document.documentElement)
         .getPropertyValue('--grid-fit').trim();
 
-      // Reading mode swaps the rail's panel, which only exists on the bounded
-      // two-column layout. Below it there is no panel to swap and nothing is
-      // bought: measured at 412x883, hiding the facts moves the synopsis up
-      // three pixels, because the hero's height comes from the cover. It cost
-      // the reader every fact about the manga to save those three pixels.
-      //
-      // Tailwind's own utility rather than a descendant rule: the utilities
-      // layer wins on order, so `.rail--reading .rail-meta { display:none }`
-      // never beat the `flex` class already on this element.
+      // Reading mode swaps a panel that exists only on the bounded two-column
+      // layout; below it the swap hides every fact to save three pixels.
+      // Utility class, not a descendant rule: the utilities layer wins.
       meta.classList.toggle('hidden', on && fitShell);
       toggle.textContent = on ? t('manga.header.show_less') : t('manga.header.show_more');
       toggle.setAttribute('aria-expanded', String(on));
 
-      // Without the fit-to-viewport shell the synopsis sits under a tall hero,
-      // so expanding it pushed the chapter list off the bottom. Bring the
-      // synopsis to the top instead: both it and the list stay in view.
-      //
-      // The hero does scroll off the top, and it has to: the first chapter row
-      // ends at 1097 in an 883 viewport, so any fix that keeps it in view costs
-      // at least 214px of scroll, while the title leaves the viewport past 161.
-      // Scrolled past is fine — scrolled past and deleted is not, which is why
-      // the facts above stay in the document.
+      // Without the fit shell the synopsis sits under a tall hero, so expanding
+      // it pushed the chapter list off the bottom. The hero scrolls away and
+      // has to; what matters is that it stays recoverable by scrolling back.
       if (on && !fitShell) {
         requestAnimationFrame(() => desc.scrollIntoView({ block: 'start', behavior: 'smooth' }));
       }

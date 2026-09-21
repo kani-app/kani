@@ -84,10 +84,8 @@ async function resolveRoutes(ctx) {
   const ids = { manga: null, source: null, chapter: null };
   const lib = await get('/rest/library?page=1');
   if (lib?.items?.length) ids.manga = lib.items[0].id;
-  // The first manga in the library need not have any chapters, and a manga
-  // without them resolves no chapter id, which skips /reader/:id. Prefer one
-  // that does, so the reader is actually measured rather than reported as
-  // skipped while the run still says every check passed.
+  // A manga with no chapters resolves no chapter id, which skips /reader/:id
+  // while the run still reports every check passed. Prefer one that has them.
   for (const item of (lib?.items ?? []).slice(0, 8)) {
     const c = await get(`/rest/manga/${item.id}/chapters?page=1`);
     const l = Array.isArray(c) ? c : c?.chapters ?? c?.items;

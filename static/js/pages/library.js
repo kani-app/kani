@@ -411,11 +411,9 @@ export async function init(container) {
   _updateFilterCountFn = _updateFilterCount;
   _updateFilterCount();
 
-  // The panel overlays the grid rather than expanding in flow, so the results
-  // stay visible while you filter. It takes modal.js's default presentation,
-  // which the design system defines as a bottom sheet on mobile and a centred
-  // card from sm: upward — `sheet` forces the sheet at every width, which on a
-  // desktop is a full-width strip pinned to the bottom edge of the window.
+  // Overlays the grid rather than expanding in flow, so results stay visible.
+  // modal.js's default is the design system's rule — sheet on mobile, centred
+  // card from sm: up. `sheet` would force the sheet at every width.
   const filtersHomeEl = /** @type {HTMLElement} */ (container.querySelector('.js-filters-home'));
 
   function _setFiltersOpen(open) {
