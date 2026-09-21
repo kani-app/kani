@@ -78,13 +78,18 @@ async function resolveRoutes(ctx) {
   };
   const lib = await get('/rest/library?page=1');
   if (lib?.items?.length) ids.manga = lib.items[0].id;
+  // The first manga in the library need not have any chapters, and a manga
+  // without them resolves no chapter id, which skips /reader/:id. Prefer one
+  // that does, so the reader is actually measured rather than reported as
+  // skipped while the run still says every check passed.
+  for (const item of (lib?.items ?? []).slice(0, 8)) {
+    const c = await get(`/rest/manga/${item.id}/chapters?page=1`);
+    const l = Array.isArray(c) ? c : c?.chapters ?? c?.items;
+    if (l?.length) { ids.manga = item.id; ids.chapter = l[0].id; break; }
+  }
   const srcs = await get('/rest/sources');
   if (Array.isArray(srcs) && srcs.length) ids.source = srcs[0].id;
-  if (ids.manga) {
-    const chs = await get(`/rest/manga/${ids.manga}/chapters?page=1`);
-    const list = Array.isArray(chs) ? chs : chs?.items;
-    if (list?.length) ids.chapter = list[0].id;
-  }
+
 
   const skipped = [];
   const resolved = [];
@@ -131,10 +136,24 @@ async function measure(floor) {
 
   // Content inside a closed <details> keeps a live rect while being invisible,
   // and an overflow:hidden ancestor can clip a box that still measures.
+  // A closed slide-out drawer is translated off-canvas and still reports a
+  // rect. The reader's menu is the live example; without this it contributes
+  // six controls "clipped" outside the viewport that nobody can reach.
+  const offCanvas = (el) => {
+    for (let a = el; a && a !== document.documentElement; a = a.parentElement) {
+      const t = getComputedStyle(a).transform;
+      if (t && t !== 'none') {
+        const m = new DOMMatrixReadOnly(t);
+        if (Math.abs(m.m41) > 1 || Math.abs(m.m42) > 1) return true;
+      }
+    }
+    return false;
+  };
   const shown = (el) => {
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return false;
     if (el.closest('details:not([open])')) return false;
+    if (offCanvas(el)) return false;
     const r = el.getBoundingClientRect();
     for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
       const acs = getComputedStyle(a);
@@ -166,7 +185,13 @@ async function measure(floor) {
   for (const el of document.querySelectorAll(CTRL)) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
-    if (!shown(el) || inlineInProse(el) || deferredToAncestor(el)) continue;
+    // `shown` minus the off-canvas test: a closed drawer's controls are the
+    // right size or the wrong size whether it is open or shut, and measuring
+    // them only when it happens to be open is how the reader went unchecked.
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
+    if (el.closest('details:not([open])')) continue;
+    if (inlineInProse(el) || deferredToAncestor(el)) continue;
     // A visually hidden input whose styled label is the real target.
     if (r.width <= 2 && r.height <= 2) continue;
     if (r.width >= floor && r.height >= floor) continue;

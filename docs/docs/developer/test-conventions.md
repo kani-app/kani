@@ -109,6 +109,24 @@ limits. Read `engineering-constraints.md` under "Browser-driven layout checks" b
 a rendered box is not proof the user can see it, and four browser behaviours make naive checks
 report defects that do not exist.
 
+Seed a manga that has chapters before running either harness. Both resolve `/reader/:id` from the
+library, and a library whose first entries have none resolves no chapter id — the route is then
+listed under `skipped` while the run still reports that every check passed.
+
+### Desktop layout
+
+```bash
+node scripts/verify-desktop-layout.mjs http://127.0.0.1:8299 admin '<password>' \
+  --widths=1280,1440,1920
+```
+
+The counterpart, and the same rules about being local-only. The mobile work of 2026-09 was measured
+at 320–430px and shipped two defects at widths it never looked at, so this asserts what those broke:
+the page body does not scroll sideways, no control is clipped outside the viewport, the mobile
+bottom nav is gone, a tab bar that heads a list pane is sized to that pane rather than to the page,
+and a modal is a centred card rather than the mobile sheet. Flags: `--widths`, `--only=<slug>`,
+`--verbose`.
+
 ## Commands
 
 ```bash
