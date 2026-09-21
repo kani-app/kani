@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1789379307885,
+  "lastUpdate": 1789984530289,
   "repoUrl": "https://github.com/ArloB/kani",
   "entries": {
     "Benchmark": [
@@ -203,6 +203,40 @@ window.BENCHMARK_DATA = {
             "name": "blueprint_eval/json_200_rows",
             "value": 914295,
             "range": "± 2222",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Arlo Burke",
+            "username": "ArloB",
+            "email": "arlo.burke2@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "9045c8482fdf15e80c8e2e6f6a8e309544054f49",
+          "message": "Ci/release setup dist profile (#22)\n\nImproved the release pipeline by reducing build time",
+          "timestamp": "2026-09-14T14:49:14Z",
+          "url": "https://github.com/ArloB/kani/commit/9045c8482fdf15e80c8e2e6f6a8e309544054f49"
+        },
+        "date": 1789984529216,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "blueprint_eval/html_200_rows",
+            "value": 3691988,
+            "range": "± 98237",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "blueprint_eval/json_200_rows",
+            "value": 1242720,
+            "range": "± 19681",
             "unit": "ns/iter"
           }
         ]
