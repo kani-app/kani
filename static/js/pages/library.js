@@ -766,7 +766,8 @@ export async function init(container) {
   // calling it bare re-appends whatever page the list happens to be on.
   _removePullToRefresh = addPullToRefresh(
     document.getElementById('page-content') ?? document.documentElement,
-    () => { _page = 1; _fetchLibrary(); },
+    () => { _page = 1; return _fetchLibrary(); },
+    { subject: t('library.crumb') },
   );
 }
 

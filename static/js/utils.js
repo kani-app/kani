@@ -1,6 +1,7 @@
 // @ts-check
 
 import { t } from './i18n.js';
+import { iconCheck } from './icons.js';
 
 /**
  * Returns a debounced version of `fn` that delays invocation by `ms`.
@@ -263,23 +264,30 @@ export function errorCountAriaLabel(count) {
 
 /**
  * Attaches a pull-to-refresh handler to `el`.
- * Fires `onRefresh` when the user pulls down past `threshold` px while at the
- * top of the scroll container. Respects `prefers-reduced-motion`.
- * @param {HTMLElement} el
+ *
+ * Opt-in per page, and deliberately so. The gesture says only that something
+ * reloaded; on a page whose subject is not obvious from the page itself, a
+ * spinner reads as fetching from the sources, which this does not do. `subject`
+ * names what was refreshed for the announcement, and is the hook a page that
+ * really does reach the sources would extend.
+ *
+ * @param {HTMLElement} el the element that actually scrolls
  * @param {() => Promise<void> | void} onRefresh
- * @param {{ threshold?: number }} opts
+ * @param {{ subject: string, threshold?: number, minSpin?: number }} opts
  * @returns {() => void} cleanup
  */
-export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
+export function addPullToRefresh(el, onRefresh, { subject, threshold = 60, minSpin = 400 } = {}) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let startY = 0;
   let pulling = false;
+  let busy = false;
 
   /** @type {HTMLElement | null} */
   let indicator = null;
 
-  // Overlaid rather than inserted into the flow: a 2.5rem block appearing above
-  // the scroller shifts the whole list down mid-gesture.
+  // Overlaid rather than inserted into the flow: a block appearing above the
+  // scroller shifts the whole list down mid-gesture. Sized to its contents, so
+  // it covers a strip of one cover rather than a band across every one.
   function _ensureIndicator() {
     if (indicator) return indicator;
     indicator = document.createElement('div');
@@ -294,6 +302,18 @@ export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
     indicator = null;
   }
 
+  /** @param {string} text @param {'spin' | 'done' | null} glyph */
+  function _setState(text, glyph) {
+    const ind = _ensureIndicator();
+    ind.dataset.state = glyph ?? '';
+    ind.innerHTML = glyph === 'spin'
+      ? `<span class="pull-refresh-spinner"></span><span>${escapeHtml(text)}</span>`
+      : glyph === 'done'
+        ? `<span class="icon-sm">${iconCheck}</span><span>${escapeHtml(text)}</span>`
+        : `<span>${escapeHtml(text)}</span>`;
+    return ind;
+  }
+
   /**
    * `el` must be the element that actually scrolls. Given one that does not,
    * `scrollTop` is pinned at 0, so the at-the-top test always passes and every
@@ -305,29 +325,52 @@ export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
   const atTop = () => scrolls() && el.scrollTop <= 0;
 
   function onTouchStart(/** @type {TouchEvent} */ e) {
-    if (!atTop()) return;
+    if (busy || !atTop()) return;
     if (e.touches.length !== 1) return;
     startY = e.touches[0].clientY;
     pulling = false;
   }
 
   function onTouchMove(/** @type {TouchEvent} */ e) {
-    if (!atTop()) return;
+    if (busy || !atTop()) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) return;
     pulling = dy >= threshold;
     // Shown from the first pixel, not only once armed: the gesture was
     // undiscoverable while its only label appeared at the threshold.
-    const ind = _ensureIndicator();
-    ind.textContent = pulling ? t('pull_refresh.release') : t('pull_refresh.pull');
+    const ind = _setState(pulling ? t('pull_refresh.release') : t('pull_refresh.pull'), null);
     ind.style.opacity = reduced ? '1' : String(Math.min(1, 0.35 + (dy / threshold) * 0.65));
   }
 
   async function onTouchEnd() {
+    if (busy) return;
     if (!pulling) { _removeIndicator(); return; }
     pulling = false;
-    _removeIndicator();
-    await onRefresh();
+    busy = true;
+
+    const ind = _setState(t('pull_refresh.refreshing'), 'spin');
+    ind.style.opacity = '1';
+    const started = Date.now();
+    try {
+      await onRefresh();
+    } catch {
+      // Swallowed deliberately: this runs from a passive listener, where a
+      // rejection would escape and strand the indicator on screen. The page's
+      // own fetch reports its failure.
+    } finally {
+      // A refresh that returns in 80ms would otherwise flash and vanish, which
+      // reads as the gesture not having fired at all.
+      const spun = Date.now() - started;
+      if (spun < minSpin) await new Promise((r) => setTimeout(r, minSpin - spun));
+
+      _setState(t('pull_refresh.done'), 'done').style.opacity = '1';
+      announce(t('pull_refresh.done.announce', { subject }));
+      setTimeout(() => {
+        if (indicator) indicator.style.opacity = '0';
+        setTimeout(_removeIndicator, reduced ? 0 : 200);
+        busy = false;
+      }, 700);
+    }
   }
 
   el.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -340,6 +383,7 @@ export function addPullToRefresh(el, onRefresh, { threshold = 60 } = {}) {
     _removeIndicator();
   };
 }
+
 
 /** @type {HTMLElement | null} */
 let _liveRegion = null;

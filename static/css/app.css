@@ -2147,23 +2147,45 @@
 
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+  /* Sized to its contents. The full-width band this replaced was built to hold
+     a sentence; painted opaque, it hid a strip of every cover in the top row
+     to show one spinner. */
   .pull-refresh-indicator {
     position: fixed;
-    left: 0; right: 0;
-    top: var(--header-h);
+    left: 50%;
+    translate: -50% 0;
+    top: calc(var(--header-h) + 0.5rem);
     z-index: var(--z-header);
-    display: flex; align-items: center; justify-content: center;
-    height: 2.5rem;
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    height: 1.75rem;
+    padding-inline: 0.7rem;
+    border-radius: var(--radius-full);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
-    background: var(--color-bg);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    white-space: nowrap;
     pointer-events: none;
     opacity: 0;
     @media (prefers-reduced-motion: no-preference) {
       transition: opacity var(--motion-base) ease;
     }
-    @media (max-width: 767px) { top: var(--header-h-mobile); }
+    @media (max-width: 767px) { top: calc(var(--header-h-mobile) + 0.5rem); }
   }
+  .pull-refresh-indicator[data-state="done"] { color: var(--color-success); }
+  .pull-refresh-indicator .icon-sm { display: flex; }
+  .pull-refresh-spinner {
+    width: 0.875rem; height: 0.875rem;
+    flex: none;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-text-muted);
+    border-radius: var(--radius-full);
+    @media (prefers-reduced-motion: no-preference) {
+      animation: pull-refresh-spin 700ms linear infinite;
+    }
+  }
+  @keyframes pull-refresh-spin { to { rotate: 360deg; } }
 
   /* 4rem of controls *plus* the gesture area, not 4rem total. Padding alone
      eats the icons' own height, because border-box counts it inside the

@@ -8,7 +8,7 @@ import { getParam, replaceState as urlReplaceState } from '../url-params.js';
 import { scrollPageTop } from '../router.js';
 import { getMangaCoverUrl } from '../api.js';
 import { applyCoverQuality } from '../cover-quality.js';
-import { formatChapterTitle, hasNextPage, escapeHtml, deferredSkeleton, addPullToRefresh } from '../utils.js';
+import { formatChapterTitle, hasNextPage, escapeHtml, deferredSkeleton } from '../utils.js';
 import { skeletonUpdateList } from '../components/skeletons.js';
 import { startLoading, finishLoading } from '../components/page-loading-bar.js';
 import { createErrorState } from '../components/error-state.js';
@@ -48,8 +48,6 @@ let _abort = null;
 let _destroyPagination = null;
 /** @type {(() => void) | null} */
 let _unsubProgress = null;
-/** @type {(() => void) | null} */
-let _removePullToRefresh = null;
 /** @type {HTMLElement | null} */
 let _listEl = null;
 
@@ -78,10 +76,6 @@ export async function init(container) {
 
   await _fetch(_listEl, paginEl);
 
-  _removePullToRefresh = addPullToRefresh(
-    document.getElementById('page-content') ?? document.documentElement,
-    () => { _page = 1; _fetch(_listEl, paginEl); },
-  );
 }
 
 
@@ -348,8 +342,6 @@ export function destroy(container) {
   clearPageHeader();
   _abort?.abort();
   _abort = null;
-  _removePullToRefresh?.();
-  _removePullToRefresh = null;
   _destroyPagination?.();
   _destroyPagination = null;
   _unsubProgress?.();
