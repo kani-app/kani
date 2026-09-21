@@ -73,7 +73,7 @@ export function createChapterNav(container, { onBack, onPrev, onNext, onSelect }
     return html`
       <${Fragment}>
         <div class="px-3 py-3 flex gap-1.5 border-b border-border shrink-0 items-center">
-          <button class="btn-ghost flex items-center justify-center gap-0.5 shrink-0 px-2"
+          <button class="btn-ghost touch-min flex items-center justify-center gap-0.5 shrink-0 px-2"
                   disabled=${!hasPrev} onClick=${onPrev}
                   dangerouslySetInnerHTML=${{ __html: iconChevronLeft }}></button>
           <select class="input text-sm flex-1 min-w-0 text-center h-9 py-0"
@@ -81,7 +81,7 @@ export function createChapterNav(container, { onBack, onPrev, onNext, onSelect }
                   onChange=${(/** @type {any} */ e) => onSelect(Number(e.currentTarget.value))}>
             ${options}
           </select>
-          <button class="btn-ghost flex items-center justify-center gap-0.5 shrink-0 px-2"
+          <button class="btn-ghost touch-min flex items-center justify-center gap-0.5 shrink-0 px-2"
                   disabled=${!hasNext} onClick=${onNext}
                   dangerouslySetInnerHTML=${{ __html: iconChevronRight }}></button>
         </div>

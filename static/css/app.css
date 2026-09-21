@@ -2199,6 +2199,32 @@
     .touch-min { min-width: var(--touch-target); min-height: var(--touch-target); }
     .touch-min-h { min-height: var(--touch-target); }
   }
+
+  /* The floor without the growth: `.touch-min` would square a 1rem checkbox
+     into a different-looking control, so an overlay carries it instead.
+     `select` takes no pseudo-element and raises its own height. */
+  @media (hover: none) {
+    input[type="checkbox"]:not(.kani-toggle__input),
+    .kani-checkbox__box,
+    .touch-area {
+      position: relative;
+    }
+    input[type="checkbox"]:not(.kani-toggle__input)::after,
+    .kani-checkbox__box::after,
+    .touch-area::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 50%;
+      translate: -50% -50%;
+      width: max(100%, var(--touch-target));
+      height: max(100%, var(--touch-target));
+    }
+    /* The component hides its input at 1x1 and paints `__box`, which carries
+       the floor above. Specificity ties the rule it overrides, so order wins. */
+    .kani-checkbox input[type="checkbox"]::after { content: none; }
+
+    select:not([size]):not([multiple]) { min-height: var(--touch-target); }
+  }
 }
 
 @layer utilities {

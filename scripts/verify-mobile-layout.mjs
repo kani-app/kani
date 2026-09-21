@@ -181,6 +181,18 @@ async function measure(floor) {
   // finger hits, so measure that instead of the label it contains.
   const deferredToAncestor = (el) => el.getAttribute('tabindex') === '-1'
     && !!el.closest('[role="option"],[role="row"],[role="menuitem"],label');
+  // A control may carry the floor on an overlay rather than its own box, so a
+  // checkbox stays a 1rem mark while the finger gets 2.5rem. Measuring only
+  // getBoundingClientRect would report every one of those as a failure.
+  const hitBox = (el, r) => {
+    const a = getComputedStyle(el, '::after');
+    if (!a || a.content === 'none' || a.position !== 'absolute') return r;
+    const w = parseFloat(a.width);
+    const h = parseFloat(a.height);
+    if (!Number.isFinite(w) || !Number.isFinite(h)) return r;
+    return { width: Math.max(r.width, w), height: Math.max(r.height, h) };
+  };
+
   const small = [];
   for (const el of document.querySelectorAll(CTRL)) {
     const r = el.getBoundingClientRect();
@@ -194,8 +206,11 @@ async function measure(floor) {
     if (inlineInProse(el) || deferredToAncestor(el)) continue;
     // A visually hidden input whose styled label is the real target.
     if (r.width <= 2 && r.height <= 2) continue;
-    if (r.width >= floor && r.height >= floor) continue;
-    small.push(`${desc(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+    const hit = hitBox(el, r);
+    if (hit.width >= floor && hit.height >= floor) continue;
+    const via = hit.width !== r.width || hit.height !== r.height
+      ? ` (hit ${Math.round(hit.width)}x${Math.round(hit.height)})` : '';
+    small.push(`${desc(el)} ${Math.round(r.width)}x${Math.round(r.height)}${via}`);
   }
 
   const de = document.documentElement;
