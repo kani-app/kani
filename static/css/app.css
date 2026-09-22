@@ -1692,25 +1692,6 @@
   }
 
   .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: relative; }
-  .header-overflow-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: var(--z-popover);
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    min-width: 10rem;
-    padding: 8px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-popover);
-  }
-  .header-overflow-panel[hidden] { display: none; }
-
-
 
   .avatar {
     width: 28px; height: 28px;
@@ -2227,13 +2208,11 @@
      `select` takes no pseudo-element and raises its own height. */
   @media (hover: none) {
     input[type="checkbox"]:not(.kani-toggle__input),
-    .kani-checkbox__box,
-    .touch-area {
+    .kani-checkbox__box {
       position: relative;
     }
     input[type="checkbox"]:not(.kani-toggle__input)::after,
-    .kani-checkbox__box::after,
-    .touch-area::after {
+    .kani-checkbox__box::after {
       content: '';
       position: absolute;
       left: 50%; top: 50%;
