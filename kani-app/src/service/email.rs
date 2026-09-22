@@ -56,6 +56,107 @@ impl EmailService {
             .send(&self.from_address, to, subject, html)
             .await
     }
+
+    /// Builds a service over a capturing transport, for tests.
+    ///
+    /// `from_settings` is the only other constructor and it always builds SMTP,
+    /// so without this the trait has one implementation and no way to reach the
+    /// boundary at all. Takes the concrete type rather than `dyn EmailTransport`
+    /// because the trait is crate-private and an integration test is not.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn with_capture(from_address: String, transport: Arc<CapturingEmailTransport>) -> Self {
+        Self {
+            transport,
+            from_address,
+        }
+    }
+}
+
+/// An `EmailTransport` that records what it was asked to send.
+#[cfg(any(test, feature = "test-util"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentEmail {
+    pub from: String,
+    pub to: String,
+    pub subject: String,
+    pub html_body: String,
+}
+
+#[cfg(any(test, feature = "test-util"))]
+#[derive(Default)]
+pub struct CapturingEmailTransport {
+    sent: std::sync::Mutex<Vec<SentEmail>>,
+    fail_with: Option<String>,
+    notify: tokio::sync::Notify,
+}
+
+#[cfg(any(test, feature = "test-util"))]
+impl CapturingEmailTransport {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records the send as usual, then reports the given error to the caller.
+    pub fn failing(message: impl Into<String>) -> Self {
+        Self {
+            fail_with: Some(message.into()),
+            ..Self::default()
+        }
+    }
+
+    pub fn sent(&self) -> Vec<SentEmail> {
+        self.sent.lock().expect("capture lock poisoned").clone()
+    }
+
+    /// Waits until at least `n` messages have been recorded.
+    ///
+    /// `send_email_bg` dispatches from a spawned task, so a test that reads
+    /// `sent()` straight after the call races the runtime and passes or fails
+    /// on timing.
+    pub async fn wait_for(&self, n: usize, within: std::time::Duration) -> Vec<SentEmail> {
+        let deadline = tokio::time::Instant::now() + within;
+        loop {
+            let got = self.sent();
+            if got.len() >= n {
+                return got;
+            }
+            let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if left.is_zero()
+                || tokio::time::timeout(left, self.notify.notified())
+                    .await
+                    .is_err()
+            {
+                return self.sent();
+            }
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
+#[async_trait]
+impl EmailTransport for CapturingEmailTransport {
+    async fn send(
+        &self,
+        from: &str,
+        to: &str,
+        subject: &str,
+        html_body: &str,
+    ) -> Result<(), String> {
+        self.sent
+            .lock()
+            .expect("capture lock poisoned")
+            .push(SentEmail {
+                from: from.to_owned(),
+                to: to.to_owned(),
+                subject: subject.to_owned(),
+                html_body: html_body.to_owned(),
+            });
+        self.notify.notify_waiters();
+        match &self.fail_with {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
+        }
+    }
 }
 
 struct SmtpEmailTransport {
@@ -190,6 +291,45 @@ mod tests {
         build_message(from, to, subject, html)
             .expect("message should build")
             .formatted()
+    }
+
+    #[tokio::test]
+    async fn service_passes_every_field_through_to_the_transport() {
+        let transport = Arc::new(CapturingEmailTransport::new());
+        let svc = EmailService::with_capture(FROM.to_owned(), Arc::clone(&transport));
+
+        svc.send(TO, "Reset your password", "<p>link</p>")
+            .await
+            .expect("capturing transport accepts");
+
+        assert_eq!(
+            transport.sent(),
+            vec![SentEmail {
+                from: FROM.to_owned(),
+                to: TO.to_owned(),
+                subject: "Reset your password".to_owned(),
+                html_body: "<p>link</p>".to_owned(),
+            }],
+            "the service must forward its from-address and all three arguments unchanged"
+        );
+    }
+
+    #[tokio::test]
+    async fn service_propagates_a_transport_failure() {
+        let transport = Arc::new(CapturingEmailTransport::failing("relay refused"));
+        let svc = EmailService::with_capture(FROM.to_owned(), Arc::clone(&transport));
+
+        let err = svc
+            .send(TO, "Verify your email", "<p>code</p>")
+            .await
+            .expect_err("a failing transport must surface its error");
+
+        assert_eq!(err, "relay refused");
+        assert_eq!(
+            transport.sent().len(),
+            1,
+            "the attempt still reaches the transport"
+        );
     }
 
     fn header_block(raw: &[u8]) -> Vec<u8> {
