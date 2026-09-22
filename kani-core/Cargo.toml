@@ -71,7 +71,7 @@ url = "2.5.8"
 urlencoding.workspace = true
 time = { workspace = true, features = ["parsing"] }
 regex = "1.12.3"
-rand = "0.10.0"
+rand = "0.9.5"
 blake3 = "1.8.5"
 stacker = "0.1"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

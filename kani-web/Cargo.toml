@@ -45,7 +45,7 @@ chacha20poly1305 = "0.10.1"
 sha2.workspace = true
 hmac = "0.12.1"
 secrecy = { version = "0.8", features = ["alloc", "serde"] }
-rand = "0.10.0"
+rand = "0.9.5"
 base64.workspace = true
 hex = "0.4.3"
 uuid = { version = "1", features = ["v4"] }
@@ -81,7 +81,7 @@ quick-xml = "0.39.2"
 moka = { workspace = true }
 async-trait = "0.1"
 ed25519-dalek.workspace = true
-rand = "0.10"
+rand = "0.9"
 
 [package.metadata.cargo-machete]
 ignored = ["workspace-hack"]
