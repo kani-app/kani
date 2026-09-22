@@ -1238,7 +1238,6 @@ endpoints:
       - endpoint: manga_details    # Name of another declared endpoint; its blueprint is used.
         url_expr: "dom('.link').attr('href')"  # DSL expression (evaluated per-element for for_each).
         merge_as: details          # Output field / binding name.
-        concurrency: 1             # Max parallel sub-fetches (1–5, default 1).
         on_failure: skip           # "skip" | "fail" | "<dsl fallback expr>" (default: "fail").
     then:
       - endpoint: manga_details
@@ -1252,11 +1251,17 @@ endpoints:
 - `fail` — propagate the error (default).
 - `"<dsl expr>"` — any other string is treated as a DSL expression evaluated as a fallback value.
 
+Sub-fetch parallelism is not configurable per step. Every request a source makes,
+including sub-fetches, is bounded by `metadata.rate_limit.max_concurrent` (default 4).
+A `concurrency:` key on a `for_each` step is accepted and ignored: it was
+documented and range-checked before 1.0 but never read, so honouring it now would
+change behaviour for anyone who set it. Remove it from your source; use
+`max_concurrent` to be gentle on a fragile host.
+
 **Validation rules:**
 - `endpoint` must name one of `popular`, `search`, `manga_details`, `chapter_list`, or `pages` declared in the same YAML.
 - `merge_as` must be non-empty.
 - `url_expr` must parse as a valid DSL expression.
-- `concurrency` must be between 1 and 5 (inclusive).
 - `deduplicate_by` (optional) must parse as a DSL expression.
 - Nested chaining (a referenced endpoint that itself has `then`/`for_each` steps) is not evaluated — the sub-blueprint is built from the referenced endpoint's fields only.
 
