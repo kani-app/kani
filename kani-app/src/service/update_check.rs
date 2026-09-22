@@ -1,6 +1,6 @@
 use crate::service::AppService;
 
-const RELEASES_URL: &str = "https://api.github.com/repos/ArloB/kani/releases/latest";
+const RELEASES_URL: &str = "https://api.github.com/repos/kani-app/kani/releases/latest";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct UpdateInfo {
@@ -65,7 +65,7 @@ async fn check_for_update_impl(
     let url = body
         .get("html_url")
         .and_then(|v| v.as_str())
-        .unwrap_or("https://github.com/ArloB/kani/releases/latest")
+        .unwrap_or("https://github.com/kani-app/kani/releases/latest")
         .to_string();
 
     Some(UpdateInfo {

@@ -5,19 +5,19 @@
 The default Compose file pulls the published image:
 
 ```bash
-git clone https://github.com/ArloB/kani.git
+git clone https://github.com/kani-app/kani.git
 cd kani
 docker compose pull
 docker compose up -d
 ```
 
 The release pipeline builds a signed, multi-arch (`amd64`/`arm64`) image and publishes it to
-`ghcr.io/arlob/kani`, tagged with its version and, only for an actual release (never a
+`ghcr.io/kani-app/kani`, tagged with its version and, only for an actual release (never a
 prerelease), `latest`. Verify a pulled image's signature before trusting it in production:
 
 ```bash
-cosign verify ghcr.io/arlob/kani:latest \
-  --certificate-identity-regexp "^https://github.com/ArloB/kani/" \
+cosign verify ghcr.io/kani-app/kani:latest \
+  --certificate-identity-regexp "^https://github.com/kani-app/kani/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 ```
 
@@ -37,7 +37,7 @@ The essential shape of the included Compose service is:
 ```yaml
 services:
   kani:
-    image: ghcr.io/arlob/kani:latest
+    image: ghcr.io/kani-app/kani:latest
     ports:
       - "8242:8242"
     volumes:

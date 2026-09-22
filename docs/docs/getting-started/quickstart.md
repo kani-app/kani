@@ -13,7 +13,7 @@ before replacing the build with an image reference.
 ## 1. Get Kani
 
 ```bash
-git clone https://github.com/ArloB/kani.git
+git clone https://github.com/kani-app/kani.git
 cd kani
 ```
 

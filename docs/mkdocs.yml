@@ -1,8 +1,8 @@
 site_name: Kani
 site_description: Self-hosted manga and comics server
 site_author: Arlo Burke
-repo_url: https://github.com/ArloB/kani
-repo_name: ArloB/kani
+repo_url: https://github.com/kani-app/kani
+repo_name: kani-app/kani
 edit_uri: edit/develop/docs/docs/
 
 theme:

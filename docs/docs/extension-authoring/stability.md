@@ -17,7 +17,7 @@ is what `min_kani_version` exists to express.
 ## WIT world
 
 The world is `kani-extension` in package `kani:extension`
-([`kani-core/wit/kani.wit`](https://github.com/ArloB/kani/blob/develop/kani-core/wit/kani.wit)).
+([`kani-core/wit/kani.wit`](https://github.com/kani-app/kani/blob/develop/kani-core/wit/kani.wit)).
 The host imports `http`, `html`, `json`, `utility`, `prefs`, `extraction`, `cache` and
 `scripting`; the guest exports `manga-provider`.
 
