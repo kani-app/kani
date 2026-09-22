@@ -139,8 +139,8 @@ These are the starting points for extraction chains:
 | `.slice(start, end)` | String | String | Substring by character index (0-based, exclusive end). Negative values count from the end. `end` is optional; omitting it slices to the end of the string. |
 | `.to_string()` | Int/Number/Bool | String | Convert a numeric or boolean value to its string representation. `Null` propagates as `Null`. |
 | `.string_len()` | String | Int | Number of Unicode characters (not bytes) in the string. |
-| `.url_encode()` | String | String | Percent-encode a string for use as a URL query parameter value (e.g. `"hello world"` → `"hello%20world"`). |
-| `.url_decode()` | String | String | Decode a percent-encoded string. Invalid `%`-sequences are passed through unchanged. |
+| `.url_encode()` | String | String | Percent-encode a string for use as a URL query parameter value (e.g. `"hello world"` → `"hello%20world"`). Also accepted as `.urlencode()`. |
+| `.url_decode()` | String | String | Decode a percent-encoded string. Invalid `%`-sequences are passed through unchanged. Also accepted as `.urldecode()`. |
 | `.format_padded(width, fill, align)` | String | String | Pad or align a string to at least `width` Unicode characters using `fill` (a single character) and `align` (`"left"`, `"right"`, or `"center"`). If the string is already at least `width` characters, it is returned unchanged. |
 | `format("template {}", arg1, arg2, ...)` | — | String | Interpolate `{}` placeholders in the template string with the evaluated arguments in order. Each `{}` is replaced by the corresponding argument's string value. Returns `String`. |
 
@@ -1937,9 +1937,12 @@ Each hook body is a Rhai expression body (not a function declaration) evaluated 
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `req` | `ScriptableRequest` | Mutable HTTP request: `req.url`, `req.method`, `req.set_header(k,v)`, `req.set_query(k,v)`, `req.set_body(s)`. |
-| `ctx` | `ScriptableCtx` | Read-only context: `ctx.filters`, `ctx.prefs`, and `ctx.cache` (see Cache below). |
+| `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`, `req.set_body(s)`. |
+| `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(...)`. |
 | `response` | `ScriptableResponse` | Available in `on_status` only: `response.status` (integer), `response.header(k)`. |
+
+`set_query` replaces any existing parameter of that name; `push_query` appends, so a
+source that expects a repeated key (`?tag=a&tag=b`) needs `push_query`.
 
 The body must return a `HookAction` value:
 
@@ -1948,18 +1951,50 @@ The body must return a `HookAction` value:
 | `proceed()` | Continue with the (possibly mutated) request/response as-is. |
 | `retry()` | Re-send the request immediately (counts against `max_hook_requests`). |
 | `retry_after(seconds)` | Re-send after a delay (counts against `max_hook_requests`). |
-| `fail(reason)` | Abort with a `ExtensionError::Network` error. |
+| `fail(kind, reason)` | Abort with an `ExtensionError` of the named kind. |
+| `refresh_auth(endpoint_id)` | Re-run the named endpoint's auth flow, then retry (counts against `max_hook_requests`). |
 
 #### Cache in hook scripts
 
-Inside `ctx.cache`, the following methods are available:
+The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-object.
 
 | Method | Description |
 |--------|-------------|
-| `ctx.cache.get(namespace, key)` | Retrieve a string value. Returns `""` if absent. |
-| `ctx.cache.put(namespace, key, value, ttl_seconds)` | Store a string value with a TTL. |
+| `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `""` if absent. |
+| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value with a TTL. A TTL below zero is clamped to zero. |
+| `ctx.cache_delete(namespace, key)` | Remove an entry. |
 
-The host uses `get_or_insert` internally for caching auth tokens; scripts express the same pattern via `get` + `put`.
+`namespace` is prefixed with the extension's own namespace before it reaches the
+backend, so two sources using the same namespace string cannot read each other's
+entries.
+
+The host uses `get_or_insert` internally for caching auth tokens; scripts express the
+same pattern with `cache_get` + `cache_put`.
+
+#### Byte primitives in hook scripts
+
+Rhai arrays are capped by `KANI_RHAI_MAX_ARRAY`, so payloads cross the boundary as an
+opaque `Bytes` value rather than an array of integers. These are registered as free
+functions, not methods.
+
+| Function | Description |
+|----------|-------------|
+| `bytes_from_utf8(text)` | `Bytes` from a string's UTF-8 encoding. |
+| `bytes_to_utf8(data)` | String from `Bytes`. Fails if the bytes are not valid UTF-8. |
+| `bytes_from_base64url(text)` | `Bytes` from base64url **without padding**. Fails on invalid input. |
+| `bytes_to_base64url(data)` | base64url without padding. |
+| `bytes_len(data)` | Length in bytes. |
+| `bytes_substitute(data, table, key, seed, inverse)` | One round of keyed substitution with output feedback (below). |
+
+`bytes_substitute` computes `out[i] = table[data[i] ^ key[i % key.len] ^ prev]`, where
+`prev` is the previous output byte and starts at `seed`. With `inverse: true` it runs the
+round backwards, which requires `table` to be a permutation of `0..=255`. `table` and
+`key` may be Rhai arrays of integers `0..=255`, or `Bytes` — the latter is the shape
+`bytes_from_base64url` returns, so material harvested from a page needs no JSON parser
+to reach this call.
+
+This exists for sources that obfuscate page URLs or identifiers behind a substitution
+table shipped in their own JavaScript. It is not a general cryptography facility.
 
 #### Retry composition
 
@@ -1980,7 +2015,7 @@ credentials after a `401`. Do not retry exhausted `429` or `5xx` responses in ho
 
 `eval` and module `import`/`export` are disabled. Closures and `FnPtr` are not available to scripts.
 
-`RefreshAuth { endpoint_id }` dispatch invokes a named YAML endpoint (one of `popular`, `search`, `manga_details`, `chapter_list`, `pages`) from within a hook via `ValidatedExtension::endpoint_by_name`, then retries the original request. Scripts can also refresh auth imperatively via `ctx.cache.put` and return `retry()` when a dedicated endpoint isn't needed.
+`RefreshAuth { endpoint_id }` dispatch invokes a named YAML endpoint (one of `popular`, `search`, `manga_details`, `chapter_list`, `pages`) from within a hook via `ValidatedExtension::endpoint_by_name`, then retries the original request. Scripts can also refresh auth imperatively via `ctx.cache_put` and return `retry()` when a dedicated endpoint isn't needed.
 
 #### Example
 
@@ -1990,7 +2025,7 @@ metadata:
     max_hook_requests: 2
 
 pre_request: |
-  let token = ctx.cache.get("auth", "token");
+  let token = ctx.cache_get("auth", "token");
   if token != "" {
     req.set_header("Authorization", "Bearer " + token);
   }
@@ -1998,8 +2033,8 @@ pre_request: |
 
 on_status:
   "401": |
-    let new_token = ctx.cache.get("auth", "pending_token");
-    ctx.cache.put("auth", "token", new_token, 3600);
+    let new_token = ctx.cache_get("auth", "pending_token");
+    ctx.cache_put("auth", "token", new_token, 3600);
     retry()
   "5xx": |
     retry_after(5)
@@ -2026,7 +2061,7 @@ Extensions can store and retrieve values across invocations using the host-provi
 | `cache::delete(key)` | `string → ()` | Remove a specific key immediately. |
 | `cache::clear_namespace()` | `→ ()` | Remove all keys for this extension's namespace. |
 
-**`get_or_insert`** is a host-side convenience provided by the `CacheBackend` trait that composes `get` + `put`: retrieve a value if present, otherwise compute it and store it with a TTL. This is used internally by the hook runtime (§3.10) for auth-token caching. It is not exposed as a separate WIT export — scripts in §3.10 express the same pattern via `ctx.cache.get` + `ctx.cache.put`.
+**`get_or_insert`** is a host-side convenience provided by the `CacheBackend` trait that composes `get` + `put`: retrieve a value if present, otherwise compute it and store it with a TTL. This is used internally by the hook runtime (§3.10) for auth-token caching. It is not exposed as a separate WIT export — scripts in §3.10 express the same pattern via `ctx.cache_get` + `ctx.cache_put`.
 
 All values are serialized as strings at the boundary. Extensions are responsible for encoding/decoding structured values (e.g. JSON).
 
