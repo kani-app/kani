@@ -101,6 +101,7 @@ export default {
   'chapter.bulk.flip': 'Flip',
   'chapter.bulk.undownloaded': 'Undownloaded',
   'bulk.select': 'Select',
+  'bulk.more': 'More ({count})',
   'chapter.bulk.orphaned': 'Orphaned',
   'chapter.bulk.orphaned.title': 'Select the {count} chapter(s) kept from a previous source',
   'chapter.bulk.orphaned.none': 'No chapters were kept from a previous source',
@@ -707,7 +708,11 @@ export default {
   'stats.chart_unavailable_suffix': 'to download vendor files.',
   'shortcuts.cheatsheet.title': 'Keyboard shortcuts',
   'shortcuts.cheatsheet.empty': 'No shortcuts active.',
-  'pull_refresh.release': '↓ Release to refresh',
+  'pull_refresh.pull': '↓ Pull to refresh',
+  'pull_refresh.release': '↑ Release to refresh',
+  'pull_refresh.refreshing': 'Refreshing',
+  'pull_refresh.done': 'Updated',
+  'pull_refresh.done.announce': '{subject} updated',
   'pwstrength.score.very_weak': 'Very weak',
   'pwstrength.score.weak': 'Weak',
   'pwstrength.score.fair': 'Fair',
@@ -2329,8 +2334,9 @@ export default {
   'app_header.aria': 'Page header',
 
 
-  'app_header.more_actions': 'More actions',
   'app_header.breadcrumb_aria': 'Breadcrumb',
+  'app_header.back': 'Back to {label}',
+  'app_header.actions_aria': 'Page actions',
 
   'activity_feed.empty': 'No recent activity.',
   'activity_feed.load_more': 'Load more',

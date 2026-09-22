@@ -46,7 +46,7 @@ function VerifyEmailPage() {
           ${resendMsg && html`<p class="text-xs text-text-muted" role="status">${resendMsg}</p>`}
         </div>
       `}
-      <a href="/" class="text-sm text-text-muted underline hover:text-text">${t('auth.verify.go_library')}</a>
+      <a href="/" class="touch-min-h inline-flex items-center text-sm text-text-muted underline hover:text-text">${t('auth.verify.go_library')}</a>
     </${AuthCard}>
   `;
 }

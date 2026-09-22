@@ -121,18 +121,33 @@ Breakpoints: `sm` 480 / `md` 768 / `lg` 1024 / `xl` 1400 (Tailwind screens,
 overridden in `@theme`).
 
 - **Shell**: fixed sidebar (234px, 200px on md–lg tablets, hidden < md);
-  mobile gets the bottom tab nav — `#page-content` reserves
-  `4rem + env(safe-area-inset-bottom)` under md.
+  mobile gets the bottom tab nav. The header is `--header-h-mobile` (48px) under
+  md, sized so a 40px touch target fits inside it.
+- **Bottom reserve**: `.pb-nav-safe` reserves
+  `4rem + 1rem + env(safe-area-inset-bottom)` under md — nav height, a gutter,
+  and the gesture area. Put it on the element that *scrolls*: several surfaces
+  scroll inside `#page-content` rather than being it, and padding an ancestor of
+  the scroller reserves nothing. The 1rem is not decoration; nav height alone
+  leaves content flush against the bar.
+- **Page actions**: under md a page's header actions render in the
+  `.page-action-bar` beneath the header, not in the bar itself. Do not hide
+  actions behind an unlabelled trigger, and never put navigation in them.
 - **Viewport units**: use `dvh`/`svh`, never bare `vh`, for anything sized to
   the viewport (mobile URL-bar collapse). Pattern: `max-height: 90vh;` fallback
   line followed by `max-height: 90dvh;` in CSS; plain `dvh` is fine in inline
   styles.
 - **Tables**: every `<table>` is wrapped in a `div.overflow-x-auto`. The page
   body never scrolls horizontally.
-- **Touch targets**: interactive controls reach ≥ 40px on touch via
-  `@media (hover: none)` bumps (`.btn-sm`, `.btn-xs`, `.dl-btn`, `.tile-btn`
-  already do this). Hover-only affordances (card menu reveal, row nav arrows)
-  must have an always-visible touch equivalent.
+- **Shells**: `static/index.html` and `static/index.prod.html` must state the
+  same `<meta>` tags. `viewport-fit=cover` is required or every
+  `env(safe-area-inset-*)` silently resolves to zero.
+- **Touch targets**: interactive controls reach ≥ 40px on touch — `--touch-target`
+  — via `@media (hover: none)` bumps. The base button block, `.btn-sm`, `.btn-xs`,
+  `.btn-icon`, `.dl-btn`, `.tile-btn`, `.tab-btn`, `.chip` and `.input-sm` carry
+  one. A control whose visual size must stay smaller takes `.touch-min` (both
+  axes) or `.touch-min-h` (height only, for controls sitting in a text row).
+  Hover-only affordances (card menu reveal, row nav arrows) must have an
+  always-visible touch equivalent.
 - **Hover**: wrap all hover styles in `@media (hover: hover)`.
 - **Modals**: use `components/modal.js` for a bottom sheet on mobile
   (`items-end rounded-t-2xl`) and a centred card from `sm:` upward.

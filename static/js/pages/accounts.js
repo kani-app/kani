@@ -300,13 +300,15 @@ function _renderUserDetail(el, user) {
   el.innerHTML = `
     <div class="p-6 flex flex-col gap-5 min-h-0 md:h-full">
       <!-- User header -->
-      <div class="flex items-start gap-4 shrink-0">
-        <span class="avatar xl" aria-hidden="true">${escapeHtml((user.username ?? '?')[0].toUpperCase())}</span>
-        <div class="flex flex-col gap-1 flex-1 min-w-0">
-          <h2 class="text-lg font-semibold text-text truncate">${escapeHtml(user.username)}</h2>
-          <p class="meta">${escapeHtml(user.email ?? '')} · ${t('accounts.user.created_meta', { date: formatDate(user.created_at) || t('accounts.user.unknown_date') })}</p>
+      <div class="flex flex-col gap-3 shrink-0 md:flex-row md:items-start md:gap-4">
+        <div class="flex items-start gap-4 min-w-0">
+          <span class="avatar xl" aria-hidden="true">${escapeHtml((user.username ?? '?')[0].toUpperCase())}</span>
+          <div class="flex flex-col gap-1 min-w-0">
+            <h2 class="text-lg font-semibold text-text truncate">${escapeHtml(user.username)}</h2>
+            <p class="meta break-words">${escapeHtml(user.email ?? '')} · ${t('accounts.user.created_meta', { date: formatDate(user.created_at) || t('accounts.user.unknown_date') })}</p>
+          </div>
         </div>
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex items-center gap-1 flex-wrap md:ml-auto md:shrink-0">
           <button type="button" class="btn-ghost btn-sm js-edit-user">${t('accounts.action.edit')}</button>
           <button type="button" class="btn-ghost btn-sm js-reset-pw">${t('accounts.action.reset_password')}</button>
           <button type="button" class="btn-danger btn-sm js-delete-user">${t('common.delete')}</button>
@@ -475,8 +477,8 @@ function _renderRoleDetail(el, role) {
   el.innerHTML = `
     <div class="p-6 flex flex-col gap-5 min-h-0">
       <!-- Role header -->
-      <div class="flex items-start gap-4">
-        <div class="flex flex-col gap-1 flex-1 min-w-0">
+      <div class="flex flex-col gap-3 md:flex-row md:items-start md:gap-4">
+        <div class="flex flex-col gap-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <h2 class="text-lg font-semibold text-text font-mono">${escapeHtml(role.slug)}</h2>
             ${isProtected ? `<span class="badge badge-muted text-2xs">${t('accounts.role.system_label')}</span>` : ''}
@@ -484,7 +486,7 @@ function _renderRoleDetail(el, role) {
           <p class="meta">${t('accounts.role.perm_count', { count: role.permissions?.length ?? 0 })}${role.parent ? ` · ${t('accounts.role.inherits', { parent: escapeHtml(role.parent) })}` : ''}</p>
           ${role.description ? `<p class="text-sm text-text-muted mt-0.5">${escapeHtml(role.description)}</p>` : ''}
         </div>
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex items-center gap-1 flex-wrap md:ml-auto md:shrink-0">
           <button type="button" class="btn-ghost btn-sm js-edit-role">${t('accounts.action.edit')}</button>
           ${!isProtected ? `<button type="button" class="btn-danger btn-sm js-delete-role">${t('common.delete')}</button>` : ''}
         </div>

@@ -92,11 +92,11 @@ function ResetPasswordPage() {
       `}
       ${phase === 'invalid' && html`
         <p class="text-center text-sm">
-          <a href="/forgot-password" class="text-text-muted underline hover:text-text">${t('auth.reset.request_link')}</a>
+          <a href="/forgot-password" class="touch-min-h inline-flex items-center text-text-muted underline hover:text-text">${t('auth.reset.request_link')}</a>
         </p>
       `}
       <p class="text-center text-sm text-text-muted">
-        <a href="/login" class="text-text-muted underline hover:text-text">${t('auth.reset.back')}</a>
+        <a href="/login" class="touch-min-h inline-flex items-center text-text-muted underline hover:text-text">${t('auth.reset.back')}</a>
       </p>
     </${AuthCard}>
   `;

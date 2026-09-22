@@ -73,7 +73,7 @@ export async function init(container) {
       </div>
 
       <!-- Results -->
-      <div id="search-results" class="page-body" aria-live="polite" aria-busy="false"></div>
+      <div id="search-results" class="page-body pb-nav-safe" aria-live="polite" aria-busy="false"></div>
     </div>
   `;
 

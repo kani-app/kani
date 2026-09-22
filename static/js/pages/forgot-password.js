@@ -56,7 +56,7 @@ function ForgotPasswordPage() {
           </form>
         `}
       <p class="text-center text-sm text-text-muted">
-        <a href="/login" class="text-text-muted underline hover:text-text">${t('auth.forgot.back')}</a>
+        <a href="/login" class="touch-min-h inline-flex items-center text-text-muted underline hover:text-text">${t('auth.forgot.back')}</a>
       </p>
     </${AuthCard}>
   `;

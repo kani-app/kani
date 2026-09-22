@@ -522,3 +522,138 @@ facts that bound it, rather than asserting single-threadedness the harness does 
 
 **Revalidate when.** A third environment-mutating test appears, a test starts reading the
 environment concurrently, or the crates adopt a serialisation guard.
+
+## Browser-driven layout checks
+
+### A rendered box is not proof the user can see it
+
+**Constraint.** Four browser behaviours make `getBoundingClientRect` disagree with what is on
+screen. Content inside a closed `<details>` keeps a non-zero rect and is not `display: none`. A box
+clipped by an `overflow: hidden` ancestor still measures at full size. Playwright's `fullPage`
+capture is sized to `documentElement.scrollWidth`, so a document wider than its viewport yields an
+image with dead space even when nothing scrolls. And this app scrolls inside
+`div.flex-1.min-w-0[overflow-y:auto]`, not on the document, so `fullPage` captures one screenful
+and `document.scrollingElement` is the wrong thing to scroll or to test for end-of-list.
+
+**Evidence.** The 2026-09 mobile audit produced four confident false findings from these: a 379px
+`<pre>` inside a collapsed disclosure reported as 362px of content under the bottom nav; a
+sources-health page reported as horizontally broken when `body.scrollWidth` was correct and only
+`documentElement.scrollWidth` differed; nine controls reported as unreachable because the probe
+settled `scrollers[0]` rather than each element's own scroller; and lazy lists reporting
+`atEnd: true` while still mid-list for the same reason.
+
+**Consequence.** A layout check that trusts a rect alone reports defects that do not exist, and
+misses real ones by settling the wrong container. Each false finding cost a round of investigation.
+
+**Enforcement.** `scripts/verify-mobile-layout.mjs` excludes `details:not([open])` and
+overflow-clipped boxes, resolves each element's own scrollable ancestor before asserting
+end-of-scroll, and asserts horizontal scrolling by moving `scrollLeft` rather than comparing
+widths.
+
+**Revalidate when.** The scroll container moves out of `div.flex-1.min-w-0`, or Playwright changes
+how `fullPage` sizes a capture.
+
+### Long-press cannot be driven with synthetic mouse events
+
+**Constraint.** The select-mode handlers in `static/js/pages/library.js` and
+`components/virtual-chapter-list.js` start a 400ms timer on `pointerdown` and cancel it on
+`pointermove`. Playwright's `page.mouse` emits a move, so the timer never fires and select mode
+cannot be entered.
+
+**Evidence.** Repeated attempts to enter bulk selection with `mouse.move`/`down`/`up` produced no
+bulk bar; a CDP `Input.dispatchTouchEvent` sequence held 800ms with no movement entered it on both
+the library grid and a chapter row.
+
+**Consequence.** Any check covering bulk selection must use CDP touch events. A mouse-driven
+attempt fails silently and looks like the feature being absent.
+
+**Revalidate when.** The long-press threshold or its cancel conditions change.
+
+## Container image build
+
+### A changed `ENV` invalidates every layer beneath it
+
+**Constraint.** Docker caches by layer, and an `ENV` whose value differs produces a different
+layer, discarding the cache for everything after it. `GIT_SHA` changes on every commit, so
+declaring it above `cargo chef cook` rebuilt every dependency on every build — defeating the only
+reason cargo-chef is in the Dockerfile. Anything that varies per build belongs below the expensive
+layers, not above them.
+
+**Evidence.** Two consecutive image builds of the same branch during the 2026-09 mobile work each
+recompiled the full dependency graph, roughly twenty minutes apiece, while `Cargo.lock` and every
+manifest were untouched. The comment on the cook step claimed the layer "is reused for as long as
+Cargo.lock and the manifests are unchanged", which could not be true while the commit sat above it.
+
+**Consequence.** Every release and every test image pays a full dependency rebuild.
+
+**Enforcement.** None automated. `ARG GIT_SHA` / `ENV GIT_SHA` sit immediately below the cook step
+and above `COPY . .`.
+
+**Revalidate.** When the builder stage gains another `ARG` or `ENV`, or if a build of an unchanged
+dependency set stops reporting `CACHED` for the cook layer.
+
+### The runtime image starts as root on purpose
+
+**Constraint.** There is no `USER` instruction in the runtime stage. The container starts as root
+so `entrypoint.sh` can `chown` a freshly created bind mount, then drops to the unprivileged `kani`
+user with `setpriv` before exec'ing the server. `kani-web` itself never runs as root. Adding a
+`USER kani` line looks like a hardening win and silently breaks host-owned bind mounts.
+
+**Evidence.** `/data` and `/library` are chowned at build time for named volumes, but a bind mount
+supplied by the host arrives with the host's ownership and can only be corrected at runtime.
+
+**Consequence.** A user-supplied bind mount is unwritable and the server fails to start.
+
+**Enforcement.** None automated.
+
+**Revalidate.** If the entrypoint stops dropping privileges, or the image moves to rootless volumes
+only.
+
+### Tailwind does not scan the HTML shells
+
+**Constraint.** `static/css/app.css` declares `@source "../js"` and nothing else, so utility
+classes written in `static/index.html` or `static/index.prod.html` generate no rule. A class there
+is inert unless some file under `static/js` happens to use the same one. Shell-level layout must be
+authored CSS, not utilities.
+
+**Evidence.** `#app` carried `class="shell-main pb-20 md:pb-0 min-h-screen"`. `pb-20` and
+`md:pb-0` had no rule in the built stylesheet at all — a bottom reserve that looked present in the
+markup and did not exist. `min-h-screen` did have one, but only because
+`static/js/components/auth-card.js` uses it, which made it apply to `#app` by coincidence rather
+than intent.
+
+**Consequence.** Markup that reads as styled is not, and whether it is depends on unrelated files.
+Adding the shells to `@source` is not a free fix either: it would activate the inert classes and
+change the layout.
+
+**Enforcement.** None automated. `scripts/check-shell-parity.mjs` compares ids and meta tags, not
+classes.
+
+**Revalidate.** If `@source` gains the HTML shells, audit every utility class in both for what it
+would start doing.
+
+### The mobile-layout harness measures whatever `static/js/dist` was last built from
+
+**Constraint.** `scripts/verify-mobile-layout.mjs` asserts rendered geometry against a running
+instance. A release binary serves `index.prod.html`, which loads the bundle from
+`static/js/dist` — not the modules under `static/js`. `kani-web/build.rs` regenerates that bundle,
+so an instance started from an unrebuilt `target/release/kani-web` serves whatever the last
+`cargo build` produced, however old.
+
+**Evidence.** Run against a stale bundle at 412x883, the harness reported four controls below the
+touch floor: the scanlator mode buttons at 72x31 and 84x31, the manga-details tabs at 188x37, and
+the header's Notifications button at 36x36. Every one of those is the pre-`c5704937` size. The
+telling symptom was `document.querySelector('.tab-btn')` returning `null` while
+`components/tabs.js` plainly puts `tab-btn` first in the class list — source and DOM disagreeing.
+After `tools/esbuild` rebuilt `dist`, the same run reported all four at 40px and left exactly one
+real failure, the 16x16 checkbox of KANI-42.
+
+**Consequence.** Four phantom defects that reproduce reliably, look exactly like regressions of
+tickets already closed, and are invisible to any check reading the source.
+
+**Enforcement.** None automated. A debug build sidesteps it — `main.rs` serves `index.html` and
+raw modules under `cfg!(debug_assertions)` — but the release path is the one people run.
+
+**Revalidate.** Before trusting a harness failure, confirm the DOM carries a class the source
+emits. If it does not, rebuild `static/js/dist` (or `cargo build -p kani-web`) and re-run before
+filing anything.

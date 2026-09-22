@@ -83,6 +83,50 @@ node scripts/verify-permission-matrix.mjs http://127.0.0.1:8299 admin '<password
 
 Install Playwright in a scratch environment and raise development rate limits for the sweep.
 
+## Mobile layout
+
+The design system's responsive rules are rendered-geometry properties — a touch-target floor,
+tables that scroll inside a wrapper rather than widening the page, content that clears the bottom
+nav. None can be checked from source. The layout script drives every route at several narrow
+widths and asserts them:
+
+```bash
+node scripts/verify-mobile-layout.mjs http://127.0.0.1:8299 admin '<password>' \
+  --min-gutter=16 --widths=320,390,412
+```
+
+Pass `--min-gutter=16`. It defaults to 0, which only catches content running
+*under* the nav; 16px is the gutter the design system reserves above it, so the
+default passes layouts the rule does not.
+
+It reads the touch floor out of `design-system.md` and the route list out of `router.js`, so a
+rule or a route that changes changes what it asserts. Useful flags: `--widths=320,390`,
+`--only=<slug>`, `--min-gutter=<px>`, `--verbose`.
+
+Like the permission matrix it is local only — it needs a live server and a password, so it is not
+wired into CI. Same scratch-directory Playwright install, and the same reason to raise the rate
+limits. Read `engineering-constraints.md` under "Browser-driven layout checks" before changing it;
+a rendered box is not proof the user can see it, and four browser behaviours make naive checks
+report defects that do not exist.
+
+Seed a manga that has chapters before running either harness. Both resolve `/reader/:id` from the
+library, and a library whose first entries have none resolves no chapter id — the route is then
+listed under `skipped` while the run still reports that every check passed.
+
+### Desktop layout
+
+```bash
+node scripts/verify-desktop-layout.mjs http://127.0.0.1:8299 admin '<password>' \
+  --widths=1280,1440,1920
+```
+
+The counterpart, and the same rules about being local-only. The mobile work of 2026-09 was measured
+at 320–430px and shipped two defects at widths it never looked at, so this asserts what those broke:
+the page body does not scroll sideways, no control is clipped outside the viewport, the mobile
+bottom nav is gone, a tab bar that heads a list pane is sized to that pane rather than to the page,
+and a modal is a centred card rather than the mobile sheet. Flags: `--widths`, `--only=<slug>`,
+`--verbose`.
+
 ## Commands
 
 ```bash

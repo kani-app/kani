@@ -198,7 +198,7 @@ function DownloadsPage() {
         type="button"
         role="tab"
         aria-selected=${isActive}
-        class=${'px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t-md'
+        class=${'tab-btn px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-t-md'
           + (isActive ? ' text-accent border-b-2 border-accent' : ' text-text-muted hover:text-text')}
         onClick=${() => setActiveTab(id)}
       >

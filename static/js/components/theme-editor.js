@@ -110,7 +110,7 @@ function ColorRow({ tokenKey, label, value, onChange }) {
   return html`
     <div class="flex items-center gap-3 px-4 py-2.5">
       <label
-        class="w-8 h-8 rounded-md cursor-pointer shrink-0 shadow-sm overflow-hidden relative border border-border-subtle"
+        class="touch-min w-8 h-8 rounded-md cursor-pointer shrink-0 shadow-sm overflow-hidden relative border border-border-subtle"
         style=${{ background: value || DEFAULT_SWATCH_COLOR }}
         aria-label=${label}
       >
@@ -127,7 +127,7 @@ function ColorRow({ tokenKey, label, value, onChange }) {
         type="text"
         value=${text}
         placeholder="#rrggbb"
-        class="input w-28 text-xs font-mono py-1 h-8 shrink-0"
+        class="input touch-min w-28 text-xs font-mono py-1 h-8 shrink-0"
         maxLength="7"
         onInput=${(/** @type {Event} */ e) => setText(/** @type {HTMLInputElement} */ (e.target).value)}
         onBlur=${handleTextBlur}

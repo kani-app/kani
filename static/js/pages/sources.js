@@ -13,7 +13,7 @@ import { mountIntoModalRoot } from '../components/modal.js';
 import { SourcesSidebar, AddSourceModal, consumePendingSourceId } from '../components/sources-sidebar.js';
 import { setPageHeader, clearPageHeader } from '../components/app-header.js';
 import { mountRepoManager } from '../components/repo-manager.js';
-import { createSourcesHeaderActions } from '../components/sources-header.js';
+import { createSourcesHeaderActions, mountSourcesViewTabs } from '../components/sources-header.js';
 import { t } from '../i18n.js';
 import { subscribe as subscribeCache } from '../cache.js';
 const html = htm.bind(h);
@@ -26,6 +26,8 @@ let _asideEl = null;
 let _mobileEl = null;
 /** @type {{ destroy: () => void } | null} */
 let _repoManager = null;
+/** @type {{ update: (tab: 'extensions' | 'repos') => void, destroy: () => void } | null} */
+let _viewTabs = null;
 
 /** @param {HTMLElement} container */
 export async function init(container) {
@@ -41,11 +43,19 @@ export async function init(container) {
   const canInstall = hasPermission('source:install');
 
   const { actions: _actions, addSourceBtn: _addSourceBtn, setActive: _setActiveTab } =
-    createSourcesHeaderActions({ canInstall, onTab: (tab) => _switchTab(tab) });
+    createSourcesHeaderActions({ canInstall });
 
   setPageHeader({ crumbs: [{ label: t('sources.crumb') }], actions: _actions });
 
   container.innerHTML = `
+    <!-- View switcher. In the body, not the header: it is navigation. Above
+         lg it heads the sidebar column and is sized to it, the way the
+         Users/Roles bar heads the list pane on /accounts — a bar spanning the
+         whole content width reads as titling the detail pane, which it does
+         not. Below lg there is no sidebar, so it spans the page as before. -->
+    <div class="js-view-tabs max-w-page mx-auto w-full px-4 md:px-6 pt-4
+                lg:max-w-none lg:mx-0 lg:w-72 lg:shrink-0 lg:px-3.5 lg:pt-3 lg:pb-0"></div>
+
     <!-- Sources view -->
     <div class="js-sources-view flex">
 
@@ -60,7 +70,7 @@ export async function init(container) {
       <div class="flex-1 min-w-0">
 
         <!-- Mobile source list (hidden on lg+) — same component as the sidebar -->
-        <div class="js-mobile-sources lg:hidden max-w-page mx-auto w-full px-2 sm:px-4 md:px-6 py-2 md:pt-4" aria-live="polite"></div>
+        <div class="js-mobile-sources lg:hidden max-w-page mx-auto w-full px-4 md:px-6 py-4 md:pt-6" aria-live="polite"></div>
 
         <!-- Desktop "select a source" prompt -->
         <div class="hidden lg:flex flex-col items-center justify-center min-h-96 gap-3 text-text-muted">
@@ -82,6 +92,7 @@ export async function init(container) {
   /** @param {'extensions' | 'repos'} tab */
   function _switchTab(tab) {
     _setActiveTab(tab);
+    _viewTabs?.update(tab);
 
     if (tab === 'repos') {
       sourcesView.classList.add('hidden');
@@ -98,6 +109,11 @@ export async function init(container) {
     else url.searchParams.delete('tab');
     history.replaceState(history.state, '', url.pathname + url.search);
   }
+
+  _viewTabs = mountSourcesViewTabs(
+    /** @type {HTMLElement} */ (container.querySelector('.js-view-tabs')),
+    { onTab: (tab) => _switchTab(tab) },
+  );
 
   _switchTab(new URLSearchParams(location.search).get('tab') === 'repos' ? 'repos' : 'extensions');
 
@@ -180,6 +196,8 @@ export function destroy(container) {
   _mobileEl = null;
   _repoManager?.destroy();
   _repoManager = null;
+  _viewTabs?.destroy();
+  _viewTabs = null;
   mountIntoModalRoot(null);
   container.innerHTML = '';
 }

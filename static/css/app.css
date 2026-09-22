@@ -47,7 +47,7 @@
   --radius-full: 9999px;
 
   --header-h: 60px;
-  --header-h-mobile: 44px;
+  --header-h-mobile: 48px;
   --sidebar-w: 234px;
 
   --color-surface-alt: var(--color-surface-2);
@@ -76,6 +76,15 @@
   --btn-h-sm: 1.75rem;
   --btn-h-md: 2.25rem;
   --btn-h-lg: 2.75rem;
+
+  /* The design system's touch floor. One definition, so a control that
+     bumps to it cannot drift from the rule. */
+  --touch-target: 2.5rem;
+
+  /* Zero in a browser tab: the page sits above the browser's own UI, so there
+     is no system gesture area beneath it and reserving for one just steals
+     screen. Real only once the app is installed. */
+  --nav-inset: 0px;
 
   /* Shadows (overrides Tailwind defaults) */
   --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.4);
@@ -209,6 +218,9 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    /* The app has its own pull-to-refresh. Without this the browser's fires
+       instead, and which one you get depends on where the gesture starts. */
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -259,6 +271,10 @@
   }
 }
 
+
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  :root { --nav-inset: env(safe-area-inset-bottom, 0px); }
+}
 
 @layer components {
 
@@ -595,11 +611,19 @@
   }
   /* Touch targets expand without changing the visual size of text buttons. */
   @media (hover: none) {
+    .btn-primary,
+    .btn-ghost,
+    .btn-secondary,
+    .btn-danger,
     .btn-sm {
-      min-height: 2.5rem;
+      min-height: var(--touch-target);
     }
     .btn-sm.btn-icon {
-      min-width: 2.5rem;
+      min-width: var(--touch-target);
+    }
+    .btn-icon {
+      min-width: var(--touch-target);
+      min-height: var(--touch-target);
     }
   }
   .manga-grid {
@@ -670,8 +694,8 @@
     width: 1rem;
     height: 1rem;
   }
-  /* Hover-driven reveal only on devices that actually hover. On touch,
-     the button is always visible and sized for a 36px+ tap target. */
+  /* Hover-driven reveal only on devices that actually hover. On touch it is
+     always visible and sized to the floor. */
   @media (hover: hover) {
     .manga-card:hover .manga-card__menu-btn,
     .manga-card__menu-btn:focus-visible {
@@ -684,8 +708,8 @@
   @media (hover: none) {
     .manga-card__menu-btn {
       opacity: 1;
-      width: 2.25rem;
-      height: 2.25rem;
+      width: var(--touch-target);
+      height: var(--touch-target);
     }
     .manga-card__menu-btn [data-svg], .manga-card__menu-btn svg {
       width: 1.125rem;
@@ -756,7 +780,9 @@
       &::-webkit-scrollbar-thumb {
         background: var(--color-border);
         border-radius: 99px;
-        &:hover { background: var(--color-border-subtle); }
+        @media (hover: hover) {
+          &:hover { background: var(--color-border-subtle); }
+        }
       }
     }
   }
@@ -810,7 +836,9 @@
     cursor: pointer;
     transition: background var(--motion-fast);
     font-size: 1.25rem;
-    &:hover { background: color-mix(in srgb, var(--color-surface) 70%, transparent); }
+    @media (hover: hover) {
+      &:hover { background: color-mix(in srgb, var(--color-surface) 70%, transparent); }
+    }
     &:disabled { opacity: 0; pointer-events: none; cursor: default; }
     &[data-dir="left"]  { left: 0; }
     &[data-dir="right"] { right: 0; }
@@ -998,7 +1026,9 @@
     text-decoration: underline;
     text-decoration-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
   }
-  .prose-kani a:hover { text-decoration-color: var(--color-accent); }
+  @media (hover: hover) {
+    .prose-kani a:hover { text-decoration-color: var(--color-accent); }
+  }
   .prose-kani code {
     font-family: var(--font-mono);
     font-size: 0.9em;
@@ -1051,8 +1081,10 @@
   .data-table tbody tr:last-child td {
     border-bottom: 0;
   }
-  .data-table tbody tr:hover td {
-    background: var(--color-surface-2);
+  @media (hover: hover) {
+    .data-table tbody tr:hover td {
+      background: var(--color-surface-2);
+    }
   }
   .data-table .num {
     text-align: right;
@@ -1078,7 +1110,9 @@
       &::-webkit-scrollbar-thumb {
         background: var(--color-border);
         border-radius: 99px;
-        &:hover { background: var(--color-border-subtle); }
+        @media (hover: hover) {
+          &:hover { background: var(--color-border-subtle); }
+        }
       }
     }
   }
@@ -1146,10 +1180,31 @@
     height: 1.5rem;
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
-    &:hover { color: var(--color-text); background: var(--color-surface-2); }
-    & svg, & [data-svg] { width: 0.85rem; height: 0.85rem; }
+    @media (hover: hover) {
+      &:hover { color: var(--color-text); }
+      &:hover::before { background: var(--color-surface-2); }
+    }
+    /* The button is the hit area; this is the paint. At the touch size both
+       boxes are 2.5rem, so a background on the button itself would cover the
+       field's border and square off its rounded end. */
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: var(--radius-sm);
+      transition: background var(--motion-fast) ease;
+    }
+    & svg, & [data-svg] { position: relative; width: 0.85rem; height: 0.85rem; }
   }
   .search-input input:placeholder-shown ~ .search-input__clear { display: none; }
+  @media (hover: none) {
+    .search-input__clear {
+      width: var(--touch-target);
+      height: var(--touch-target);
+    }
+    /* Widened with it, so the text never runs under the larger target. */
+    .search-input input { padding-right: 2.9rem; }
+  }
 
 
   .kani-checkbox {
@@ -1233,9 +1288,11 @@
     color: var(--color-text-muted);
     touch-action: manipulation;
     transition: background-color var(--motion-base) ease, color var(--motion-base) ease;
-    &:hover {
-      background-color: var(--color-surface-2);
-      color: var(--color-text);
+    @media (hover: hover) {
+      &:hover {
+        background-color: var(--color-surface-2);
+        color: var(--color-text);
+      }
     }
   }
   .star-checkbox__input {
@@ -1334,7 +1391,7 @@
   }
   @media (hover: none) {
     .btn-xs {
-      min-height: 2.25rem;
+      min-height: var(--touch-target);
       padding: 0 0.75rem;
     }
   }
@@ -1358,6 +1415,10 @@
     font-size: var(--text-sm);
     padding-left: 0.625rem;
     padding-right: 0.625rem;
+  }
+  @media (hover: none) {
+    .input-sm { height: var(--touch-target); }
+    .chip { min-height: var(--touch-target); }
   }
 
 
@@ -1392,21 +1453,38 @@
     @media (max-width: 767px) { margin-left: 0; }
   }
 
+  /* Authored, not a utility: Tailwind does not scan the shells, so a class
+     written there generates no rule. Bare vh is the URL-bar-hidden viewport,
+     which makes the scroller taller than the window. */
+  #app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
 
   @media (min-width: 768px) and (max-width: 1023px) { :root { --sidebar-w: 200px; } }
   html[data-sidebar="collapsed"] { --sidebar-w: 60px; }
+  /* Tab-bar clearance: its height, a gutter, and the gesture area. Nav height
+     alone leaves content flush against the bar. Goes on whatever scrolls —
+     padding an ancestor of the scroller reserves nothing. */
+  .pb-nav-safe {
+    @media (max-width: 767px) {
+      padding-bottom: calc(4rem + 1rem + var(--nav-inset));
+    }
+  }
   #page-content {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     scroll-behavior: smooth;
     /* Page roots must overflow (and scroll), not shrink to fit. Full-height
        pages opt into filling via flex-1 basis-0 which is unaffected. */
     & > * { flex-shrink: 0; }
     @media (max-width: 767px) {
-      padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(4rem + 1rem + var(--nav-inset));
     }
   }
 
@@ -1563,17 +1641,6 @@
     @media (max-width: 767px) { height: var(--header-h-mobile); padding: 0 16px; }
   }
 
-  @media (max-width: 767px) {
-    .header-actions .btn-primary,
-    .header-actions .btn-secondary,
-    .header-actions .btn-ghost,
-    .header-actions .btn-danger {
-      height: 2rem;
-      padding: 0 0.7rem;
-      font-size: var(--text-xs);
-    }
-  }
-
   .breadcrumb {
     display: flex; align-items: center; gap: 6px;
     font-size: var(--text-sm); color: var(--color-text-muted);
@@ -1583,36 +1650,48 @@
     scrollbar-width: none;
     &::-webkit-scrollbar { display: none; }
     & a { color: var(--color-text-muted); text-decoration: none; flex-shrink: 0; }
-    & a:hover { color: var(--color-text); }
+    @media (hover: hover) {
+      & a:hover { color: var(--color-text); }
+    }
     & .sep { color: var(--color-text-faint); font-size: var(--text-xs); flex-shrink: 0; }
     & .cur { color: var(--color-text); font-weight: 500; flex-shrink: 1; min-width: 0;
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    /* Narrow screens: ancestors collapse so the current page never truncates
-       behind the header actions. */
-    @media (max-width: 480px) {
-      & a, & .sep { display: none; }
-    }
   }
-  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: relative; }
-  .header-overflow-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: var(--z-popover);
+  /* Page actions on a phone. A row in the document rather than a menu: the
+     kebab it replaces obscured whatever it held. */
+  .page-action-bar {
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    min-width: 10rem;
-    padding: 8px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-popover);
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: 6px 16px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border-subtle);
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+    @media (min-width: 768px) { display: none; }
   }
-  .header-overflow-panel[hidden] { display: none; }
+  .page-action-bar[hidden] { display: none; }
 
+  .breadcrumb__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: -6px;
+    padding-inline: 6px;
+    border-radius: var(--radius-md);
+    @media (hover: none) { min-height: var(--touch-target); }
+  }
+  .breadcrumb__back-label {
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
+  .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; position: relative; }
 
   .avatar {
     width: 28px; height: 28px;
@@ -1854,7 +1933,9 @@
     mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
   }
-  .rail-desc:hover { color: var(--color-text); }
+  @media (hover: hover) {
+    .rail-desc:hover { color: var(--color-text); }
+  }
 
 
   .rail-cover-slot { transition: none; }
@@ -1903,6 +1984,15 @@
     cursor: default;
     mask-image: none;
     -webkit-mask-image: none;
+  }
+  /* Below the fit-to-viewport shell nothing bounds the expanded synopsis, so
+     it displaces the chapter list the page exists for. Cap it and let it
+     scroll inside itself instead. */
+  @media (max-width: 1023px) {
+    .rail--reading .rail-desc {
+      max-height: 40vh;
+      max-height: 40svh;
+    }
   }
 
 
@@ -2016,8 +2106,9 @@
     position: fixed;
     left: 0;
     right: 0;
-    /* Above the mobile tab bar (h-16), not underneath it. */
-    bottom: 4rem;
+    /* Clear of the mobile tab bar, not resting on it: the same nav height plus
+       gutter the page content reserves. */
+    bottom: calc(4rem + 1rem + var(--nav-inset));
     @media (min-width: 768px) {
       left: var(--sidebar-w);
       bottom: 1.5rem;
@@ -2037,6 +2128,54 @@
 
   .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+  /* Sized to its contents. The full-width band this replaced was built to hold
+     a sentence; painted opaque, it hid a strip of every cover in the top row
+     to show one spinner. */
+  .pull-refresh-indicator {
+    position: fixed;
+    left: 50%;
+    translate: -50% 0;
+    top: calc(var(--header-h) + 0.5rem);
+    z-index: var(--z-header);
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    height: 1.75rem;
+    padding-inline: 0.7rem;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: opacity var(--motion-base) ease;
+    }
+    @media (max-width: 767px) { top: calc(var(--header-h-mobile) + 0.5rem); }
+  }
+  .pull-refresh-indicator[data-state="done"] { color: var(--color-success); }
+  .pull-refresh-indicator .icon-sm { display: flex; }
+  .pull-refresh-spinner {
+    width: 0.875rem; height: 0.875rem;
+    flex: none;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-text-muted);
+    border-radius: var(--radius-full);
+    @media (prefers-reduced-motion: no-preference) {
+      animation: pull-refresh-spin 700ms linear infinite;
+    }
+  }
+  @keyframes pull-refresh-spin { to { rotate: 360deg; } }
+
+  /* 4rem of controls *plus* the gesture area, not 4rem total. Padding alone
+     eats the icons' own height, because border-box counts it inside the
+     fixed height. */
+  .tab-bar {
+    height: calc(4rem + var(--nav-inset));
+    padding-bottom: var(--nav-inset);
+  }
+
 
   .tile-btn {
     min-width: 2.125rem; height: 2.125rem;
@@ -2048,7 +2187,44 @@
     flex-shrink: 0;
   }
   @media (hover: none) {
-    .tile-btn { min-width: 2.5rem; height: 2.5rem; }
+    .tile-btn { min-width: var(--touch-target); height: var(--touch-target); }
+  }
+
+  /* Every tab bar renders through components/tabs.js, so one bump reaches all
+     ten consumers. The pill variant is the short one, at 31px. */
+  @media (hover: none) {
+    .tab-btn { min-height: var(--touch-target); }
+  }
+
+  /* Opt-in floor: the hit box grows on touch, the rendered control does not.
+     Height-only for controls in a text row, where squaring each one wraps it. */
+  @media (hover: none) {
+    .touch-min { min-width: var(--touch-target); min-height: var(--touch-target); }
+    .touch-min-h { min-height: var(--touch-target); }
+  }
+
+  /* The floor without the growth: `.touch-min` would square a 1rem checkbox
+     into a different-looking control, so an overlay carries it instead.
+     `select` takes no pseudo-element and raises its own height. */
+  @media (hover: none) {
+    input[type="checkbox"]:not(.kani-toggle__input),
+    .kani-checkbox__box {
+      position: relative;
+    }
+    input[type="checkbox"]:not(.kani-toggle__input)::after,
+    .kani-checkbox__box::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 50%;
+      translate: -50% -50%;
+      width: max(100%, var(--touch-target));
+      height: max(100%, var(--touch-target));
+    }
+    /* The component hides its input at 1x1 and paints `__box`, which carries
+       the floor above. Specificity ties the rule it overrides, so order wins. */
+    .kani-checkbox input[type="checkbox"]::after { content: none; }
+
+    select:not([size]):not([multiple]) { min-height: var(--touch-target); }
   }
 }
 

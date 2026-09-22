@@ -171,7 +171,7 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
   const meta = document.createElement('div');
   meta.className = 'rail-meta flex flex-col gap-3';
 
-  const META_LINK_CLS = 'text-text hover:text-accent hover:underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:text-accent';
+  const META_LINK_CLS = 'touch-min-h inline-flex items-center text-text hover:text-accent hover:underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:text-accent';
 
   /**
    * Splits the two credit lists into the rows a cover would print.
@@ -337,7 +337,7 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
 
     const toggle = document.createElement('button');
     toggle.type = 'button';
-    toggle.className = 'text-xs text-text-muted underline underline-offset-2 decoration-border hover:text-accent text-center self-center shrink-0 py-1';
+    toggle.className = 'touch-min-h inline-flex items-center justify-center text-xs text-text-muted underline underline-offset-2 decoration-border hover:text-accent text-center self-center shrink-0 py-1';
     toggle.textContent = t('manga.header.show_more');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-controls', 'manga-description');
@@ -354,12 +354,22 @@ export function mountMangaHeader(leftCol, info, source, ctx) {
       if (!desc) return;
       expanded = on;
       railRoot()?.classList.toggle('rail--reading', on);
-      // Tailwind's own utility rather than a descendant rule: the utilities
-      // layer wins on order, so `.rail--reading .rail-meta { display:none }`
-      // never beat the `flex` class already on this element.
-      meta.classList.toggle('hidden', on);
+      const fitShell = !!getComputedStyle(document.documentElement)
+        .getPropertyValue('--grid-fit').trim();
+
+      // Reading mode swaps a panel that exists only on the bounded two-column
+      // layout; below it the swap hides every fact to save three pixels.
+      // Utility class, not a descendant rule: the utilities layer wins.
+      meta.classList.toggle('hidden', on && fitShell);
       toggle.textContent = on ? t('manga.header.show_less') : t('manga.header.show_more');
       toggle.setAttribute('aria-expanded', String(on));
+
+      // Without the fit shell the synopsis sits under a tall hero, so expanding
+      // it pushed the chapter list off the bottom. The hero scrolls away and
+      // has to; what matters is that it stays recoverable by scrolling back.
+      if (on && !fitShell) {
+        requestAnimationFrame(() => desc.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      }
     };
 
     // Only offer it when there is more than the three lines already showing.

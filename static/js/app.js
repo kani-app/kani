@@ -70,6 +70,7 @@ import { openCommandPalette } from './components/command-palette.js';
     appEl.appendChild(pageContent);
 
     initRouter(pageContent);
+    _traceLayout();
     _maybeRedirectFirstRun();
     _maybeShowWhatsNew(appEl);
   }
@@ -310,7 +311,7 @@ function _updateDesktopActive(el, path) {
 
 /** @param {HTMLElement} el */
 function _renderBottomNav(el) {
-  el.className = 'md:hidden fixed bottom-0 inset-x-0 z-30 h-16 bg-surface border-t border-border pb-safe';
+  el.className = 'md:hidden fixed bottom-0 inset-x-0 z-30 tab-bar bg-surface border-t border-border';
 
   // Four permanent slots; everything else lives behind "More". Without the sheet,
   // Downloads / Statistics / Accounts / Logs / Jobs have no route on a phone at all.
@@ -394,9 +395,11 @@ function _hideChrome() {
   const nav    = document.getElementById('nav');
   const tabNav = document.getElementById('bottom-nav');
   const hdr    = document.querySelector('.app-header');
+  const bar    = document.querySelector('.page-action-bar');
   if (nav)    nav.style.display = 'none';
   if (tabNav) tabNav.style.display = 'none';
   if (hdr)    /** @type {HTMLElement} */ (hdr).style.display = 'none';
+  if (bar)    /** @type {HTMLElement} */ (bar).style.display = 'none';
   const app = document.getElementById('app');
   if (app) app.classList.remove('shell-main');
 }
@@ -405,9 +408,13 @@ function _showChrome() {
   const nav    = document.getElementById('nav');
   const tabNav = document.getElementById('bottom-nav');
   const hdr    = document.querySelector('.app-header');
+  const bar    = document.querySelector('.page-action-bar');
   if (nav)    nav.style.display = '';
   if (tabNav) tabNav.style.display = '';
   if (hdr)    /** @type {HTMLElement} */ (hdr).style.display = '';
+  // Cleared, not shown: the bar's own `hidden` decides, since a page with no
+  // actions must not leave an empty strip under the header.
+  if (bar)    /** @type {HTMLElement} */ (bar).style.display = '';
   const app = document.getElementById('app');
   if (app) app.classList.add('shell-main');
 }
@@ -468,6 +475,57 @@ function _mountConnectionBanner() {
     if (_graceTimer) { clearTimeout(_graceTimer); _graceTimer = null; }
     if (_banner) { _banner.remove(); _banner = null; }
   });
+}
+
+
+/**
+ * Chrome geometry readout behind `?debug=layout`, for KANI-29 and the tab bar.
+ * Safe-area insets cannot be read off-device, so this reads them where they
+ * resolve. Remove with KANI-44.
+ */
+function _traceLayout() {
+  if (new URLSearchParams(location.search).get('debug') !== 'layout') return;
+
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-bottom,0px)';
+  document.body.appendChild(probe);
+  const rawInset = Math.round(probe.getBoundingClientRect().height);
+  probe.remove();
+
+  const modes = ['standalone', 'fullscreen', 'minimal-ui', 'browser']
+    .filter(m => matchMedia(`(display-mode: ${m})`).matches).join(',') || 'unknown';
+
+  const panel = document.createElement('div');
+  panel.className = 'debug-panel';
+  document.body.appendChild(panel);
+
+  const render = () => {
+    const pc = document.getElementById('page-content');
+    const nav = document.getElementById('bottom-nav');
+    if (!pc || !nav) return;
+    const navBox = nav.getBoundingClientRect();
+    const content = pc.lastElementChild?.getBoundingClientRect();
+    const atEnd = Math.abs(pc.scrollTop + pc.clientHeight - pc.scrollHeight) < 2;
+    const vv = window.visualViewport;
+    panel.textContent = [
+      `dm=${modes} env=${rawInset} --nav-inset=${getComputedStyle(document.documentElement).getPropertyValue('--nav-inset').trim()}`,
+      `nav h=${Math.round(navBox.height)} top=${Math.round(navBox.top)} bottom=${Math.round(navBox.bottom)}`,
+      `pc pad=${getComputedStyle(pc).paddingBottom} top=${Math.round(pc.scrollTop)} ch=${pc.clientHeight} sh=${pc.scrollHeight} atEnd=${atEnd}`,
+      `content bottom=${content ? Math.round(content.bottom) : '-'} GAP=${content ? Math.round(navBox.top - content.bottom) : '-'}`,
+      `innerH=${window.innerHeight} visualH=${vv ? Math.round(vv.height) : '-'} offTop=${vv ? Math.round(vv.offsetTop) : '-'}`,
+    ].join('\n');
+  };
+
+  render();
+  let queued = false;
+  const onScroll = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; render(); });
+  };
+  document.getElementById('page-content')?.addEventListener('scroll', onScroll, { passive: true });
+  window.visualViewport?.addEventListener('resize', onScroll);
+  window.addEventListener('resize', onScroll);
 }
 
 

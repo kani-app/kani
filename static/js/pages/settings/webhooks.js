@@ -143,6 +143,7 @@ function DeliveryLog({ deliveries }) {
     return html`<p class="text-xs text-text-muted">${t('settings.webhooks.deliveries.empty')}</p>`;
   }
   return html`
+    <div class="overflow-x-auto">
     <table class="data-table mt-1">
       <thead>
         <tr>
@@ -166,6 +167,7 @@ function DeliveryLog({ deliveries }) {
         })}
       </tbody>
     </table>
+    </div>
   `;
 }
 

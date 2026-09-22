@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Kani</title>
   <link rel="stylesheet" href="/css/main.css">
   <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0f0f17">
+  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
@@ -15,7 +16,7 @@
   <a href="#app" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-100 focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-md focus:text-sm focus:font-medium focus:shadow-lg">Skip to content</a>
   <div class="shell">
     <aside id="nav" role="navigation" aria-label="Main navigation"></aside>
-    <main id="app" class="shell-main pb-20 md:pb-0 min-h-screen" tabindex="-1"></main>
+    <main id="app" class="shell-main" tabindex="-1"></main>
   </div>
   <nav id="bottom-nav" aria-label="Main navigation"></nav>
   <div id="modal-root"></div>

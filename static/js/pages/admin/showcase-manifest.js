@@ -486,7 +486,8 @@ export const COMPONENTS = [
   {
     "module": "components/sources-header.js",
     "exports": [
-      "createSourcesHeaderActions"
+      "createSourcesHeaderActions",
+      "mountSourcesViewTabs"
     ]
   },
   {

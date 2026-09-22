@@ -403,10 +403,30 @@ function topMangaWidget() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { title: (items) => rows[items[0]?.dataIndex]?.manga_name ?? '' } },
+            },
             scales: {
               x: { beginAtZero: true, ticks: { precision: 0, color: cssVar('--color-text-muted') } },
-              y: { ticks: { color: cssVar('--color-text-muted') } },
+              y: {
+                ticks: {
+                  color: cssVar('--color-text-muted'),
+                  autoSkip: false,
+                  /**
+                   * A canvas cannot reflow, and Chart.js clips a label at the
+                   * axis edge with no ellipsis, so on a phone the manga cannot
+                   * be identified. Budget the label, keep the full title in the
+                   * tooltip.
+                   * @this {any}
+                   */
+                  callback(value) {
+                    const label = String(this.getLabelForValue(value) ?? '');
+                    const budget = Math.max(8, Math.floor(this.chart.width / 20));
+                    return label.length > budget ? `${label.slice(0, budget - 1)}…` : label;
+                  },
+                },
+              },
             },
             onClick: (_evt, elements) => {
               if (elements[0]) {

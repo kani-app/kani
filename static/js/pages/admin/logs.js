@@ -299,12 +299,19 @@ function _buildLogRow(entry) {
   const row = document.createElement('div');
   const lvl = (entry.level ?? 'INFO').toUpperCase();
   const levelCls = LEVEL_CLASSES[lvl] ?? 'text-text-muted';
-  row.className = 'flex items-baseline gap-2 px-4 py-0.5 hover:bg-surface-2 border-b border-border/30 w-max min-w-full';
+  // Stacked on a phone, one line from md up. The single-line row is ~1900px
+  // wide, and scrolling sideways through a log you read downwards is no way to
+  // reach a message.
+  row.className = 'flex flex-col gap-0.5 px-4 py-1 border-b border-border/30'
+    + ' md:flex-row md:items-baseline md:gap-2 md:py-0.5 md:w-max md:min-w-full hover:bg-surface-2';
+  row.title = entry.target ?? '';
   row.innerHTML = `
-    <span class="shrink-0 text-text-muted/60 whitespace-nowrap">${escapeHtml(entry.timestamp ?? '')}</span>
-    <span class="shrink-0 w-11 text-right ${levelCls}">${escapeHtml(lvl)}</span>
-    <span class="shrink-0 text-text-muted truncate max-w-[14rem]" title="${escapeHtml(entry.target ?? '')}">${escapeHtml(entry.target ?? '')}</span>
-    <span class="shrink-0 whitespace-nowrap">${escapeHtml(entry.message ?? '')}</span>
+    <span class="flex items-baseline gap-2 shrink-0">
+      <span class="text-text-muted/60 whitespace-nowrap">${escapeHtml(entry.timestamp ?? '')}</span>
+      <span class="w-11 text-right ${levelCls}">${escapeHtml(lvl)}</span>
+      <span class="hidden md:inline text-text-muted truncate max-w-[14rem]">${escapeHtml(entry.target ?? '')}</span>
+    </span>
+    <span class="min-w-0 break-words md:shrink-0 md:whitespace-nowrap">${escapeHtml(entry.message ?? '')}</span>
   `;
   return row;
 }

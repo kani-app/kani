@@ -1,27 +1,39 @@
 // @ts-check
 
+import { renderTabs } from './tabs.js';
 import { t } from '../i18n.js';
 
 /**
- * @param {{ onTab: (tab: 'extensions' | 'repos') => void, canInstall: boolean }} opts
+ * The Extensions/Repositories switcher.
+ *
+ * It lives in the page body rather than the header because it is navigation —
+ * which of two views you are looking at — and header actions are the first
+ * thing a narrow viewport sacrifices. As a header action it was demoted into an
+ * unlabelled kebab on every phone, so nothing indicated the Repositories view
+ * existed. The underline tab bar also shows which view is active, which two
+ * equally-weighted buttons and an `aria-pressed` did not.
+ *
+ * @param {HTMLElement} container
+ * @param {{ onTab: (tab: 'extensions' | 'repos') => void }} opts
+ * @returns {{ update: (tab: 'extensions' | 'repos') => void, destroy: () => void }}
  */
-export function createSourcesHeaderActions({ onTab, canInstall }) {
-  const tabs = document.createElement('div');
-  tabs.className = 'flex gap-1';
+export function mountSourcesViewTabs(container, { onTab }) {
+  return renderTabs(container, {
+    tabs: [
+      { id: /** @type {const} */ ('extensions'), name: t('sources.tab.extensions') },
+      { id: /** @type {const} */ ('repos'), name: t('repo.tab') },
+    ],
+    activeId: 'extensions',
+    // Fills the sidebar column it heads, as the Users/Roles bar fills its pane.
+    stretch: true,
+    onSelect: onTab,
+  });
+}
 
-  /** @param {string} label @param {'extensions' | 'repos'} tab */
-  const tabButton = (label, tab) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-ghost btn-sm';
-    btn.textContent = label;
-    btn.addEventListener('click', () => onTab(tab));
-    tabs.appendChild(btn);
-    return btn;
-  };
-  const extensionsTab = tabButton(t('sources.tab.extensions'), 'extensions');
-  const reposTab = tabButton(t('repo.tab'), 'repos');
-
+/**
+ * @param {{ canInstall: boolean }} opts
+ */
+export function createSourcesHeaderActions({ canInstall }) {
   /** @type {HTMLButtonElement | null} */
   let addSourceBtn = null;
   if (canInstall) {
@@ -33,14 +45,10 @@ export function createSourcesHeaderActions({ onTab, canInstall }) {
 
   /** @param {'extensions' | 'repos'} tab */
   const setActive = (tab) => {
-    extensionsTab.classList.toggle('bg-surface-2', tab === 'extensions');
-    reposTab.classList.toggle('bg-surface-2', tab === 'repos');
-    extensionsTab.setAttribute('aria-pressed', String(tab === 'extensions'));
-    reposTab.setAttribute('aria-pressed', String(tab === 'repos'));
     addSourceBtn?.classList.toggle('hidden', tab === 'repos');
   };
 
-  const actions = /** @type {HTMLElement[]} */ ([tabs]);
+  const actions = /** @type {HTMLElement[]} */ ([]);
   if (addSourceBtn) actions.push(addSourceBtn);
 
   return { actions, addSourceBtn, setActive };
