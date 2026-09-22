@@ -1038,6 +1038,11 @@ endpoints:
   chapter_list: ChapterListEndpoint
   pages: PagesEndpoint
 
+# === Canonical manga URL (optional) ===
+get_url: string         # URL template for a manga's page on the source site.
+                        # Use `$manga_id$` as the placeholder. Without it the
+                        # host cannot produce an "open on source site" link.
+
 # === Optional sections ===
 filters: FilterList
 preferences: PreferenceList
@@ -1374,6 +1379,10 @@ chapter_list:
       optional: true
     language: '"en"'
   has_next_page: false    # Static value, or a DSL expression evaluated on the document
+  total_pages: 12         # Optional. Static u32 or a DSL expression evaluated on the
+                          # document. Populates `total_pages` on the returned
+                          # MangaList/ChapterList; omit it when the source does not
+                          # report a count and the host will rely on `has_next_page`.
 ```
 
 #### PagesEndpoint
@@ -1850,6 +1859,9 @@ endpoints:
     page_url: "https://example.com/manga/$manga_id$"  # Required. Loaded in the browser.
     script: fetch_manga           # Required. Must be declared in browser_scripts.
     timeout_ms: 15000             # Optional. Default: 30000.
+    auto_scroll: true             # Optional. Default: false. Periodically scrolls the
+                                  # page so lazy-loaded content is present before the
+                                  # payload is captured. Browser endpoints only.
     container: ":root"
     fields:
       id:   { expr: "json(\"/id\").text()" }
@@ -1860,6 +1872,8 @@ endpoints:
 **`browser_scripts`:** top-level map from script name to JavaScript source. Each script is written to `src/scripts/<name>.js` in the generated crate and accessed via `static SCRIPT_<NAME>: &str = include_str!("scripts/<name>.js")`. Scripts that do not call `passPayload` produce a warning during validation.
 
 **`page_url`:** the absolute URL to load. May use `$manga_id$` and `$chapter_id$` placeholders (substituted from endpoint function arguments).
+
+**`auto_scroll`:** when true, the solver scrolls the page during the load so content behind an infinite scroll or a lazy-loading observer is rendered before `passPayload` runs. It costs wall-clock time against `timeout_ms`, so enable it only for endpoints that need it. It has no effect on a non-browser endpoint.
 
 **`queries` and `filter_mapping`:** a browser endpoint issues no request of its own — the page is the request, and the site's scripts turn its query string into whatever API call the payload comes from. Both are therefore appended to `page_url` as query parameters (endpoint queries first, then mapped filters), giving browser endpoints the same filter surface as HTTP ones. Note that sites commonly read a repeated parameter as its *first* occurrence, so a name used in `queries` should not also be the target of a mapped filter.
 
