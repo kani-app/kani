@@ -105,7 +105,7 @@ test whether the current build accepts an archive before attempting a production
 2. Export or copy the relevant diagnostics and bounded log window.
 3. Record deployment, release/commit, source version, browser, and reverse proxy.
 4. Remove tokens, cookies, credentials, private URLs, and personal library data.
-5. Search [existing issues](https://github.com/ArloB/kani/issues) or open a
-   [GitHub Discussion](https://github.com/ArloB/kani/discussions).
+5. Search [existing issues](https://github.com/kani-app/kani/issues) or open a
+   [GitHub Discussion](https://github.com/kani-app/kani/discussions).
 
 Use `RUST_LOG=kani=debug` only for a short reproduction and review the output before sharing it.

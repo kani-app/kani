@@ -45,7 +45,7 @@ lto = "thin"
 
 [workspace.package]
 license = "MIT"
-repository = "https://github.com/ArloB/kani"
+repository = "https://github.com/kani-app/kani"
 edition = "2024"
 
 [workspace.dependencies]

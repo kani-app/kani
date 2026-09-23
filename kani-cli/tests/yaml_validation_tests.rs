@@ -1431,10 +1431,9 @@ base_url: "https://example.com""#
 }
 
 #[test]
-fn invalid_for_each_bad_concurrency() {
-    assert_invalid_containing(
-        &format!(
-            r#"{base}
+fn for_each_legacy_concurrency_key_is_accepted_and_ignored() {
+    assert_valid(&format!(
+        r#"{base}
 endpoints:
   search:
     route: "https://example.com/search"
@@ -1458,14 +1457,12 @@ endpoints:
       status:
         expr: "dom(\".status\").text()"
 "#,
-            base = r#"
+        base = r#"
 id: chain-test
 name: ChainTest
 version: "0.1.0"
 base_url: "https://example.com""#
-        ),
-        "concurrency",
-    );
+    ));
 }
 
 #[test]

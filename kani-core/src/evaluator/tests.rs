@@ -3011,6 +3011,23 @@ mod dsl_v2_tests {
         assert_eq!(v, serde_json::json!(["a", "b", "c"]));
     }
 
+    /// `.unique()` over values that came out of a JSON document, rather than
+    /// out of `Expr::Literal`. The literal form is `Value::Str`; this one is
+    /// `Value::Json`, which is the shape every JSON source actually produces.
+    #[tokio::test]
+    async fn unique_removes_duplicate_json_values() {
+        let doc = r#"{"tags": ["a", "b", "a", "c", "b"]}"#;
+        let expr = Expr::Unique {
+            target: Box::new(Expr::SelfRef.ptr("/tags")),
+        };
+        let rows = json_rows(doc, "", vec![field("v", expr)], vec![]).await;
+        assert_eq!(
+            rows[0]["v"],
+            serde_json::json!(["a", "b", "c"]),
+            "unique() must deduplicate JSON-derived values, not just literals"
+        );
+    }
+
     #[tokio::test]
     async fn unique_already_unique_unchanged() {
         let expr = Expr::Unique {

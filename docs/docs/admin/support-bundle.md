@@ -44,7 +44,7 @@ request and `403` when the account lacks permission.
 
 ## Share it with a report
 
-First search the [existing Kani issues](https://github.com/ArloB/kani/issues). If the problem has
+First search the [existing Kani issues](https://github.com/kani-app/kani/issues). If the problem has
 not been reported, follow the repository's current support convention: open a
-[GitHub Discussion](https://github.com/ArloB/kani/discussions), describe how to reproduce the
+[GitHub Discussion](https://github.com/kani-app/kani/discussions), describe how to reproduce the
 problem, and attach the reviewed bundle. The team can direct confirmed bugs into an issue.

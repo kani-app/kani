@@ -310,15 +310,9 @@ pub struct ForEachStep {
     pub url_expr: String,
     /// Field name in which the fetched result is stored per row.
     pub merge_as: String,
-    #[serde(default = "default_concurrency")]
-    pub concurrency: u32,
     pub on_failure: Option<OnFailure>,
     /// DSL expression for deduplication key; rows with duplicate keys are dropped.
     pub deduplicate_by: Option<String>,
-}
-
-fn default_concurrency() -> u32 {
-    1
 }
 
 fn default_method() -> String {

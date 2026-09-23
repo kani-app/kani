@@ -32,4 +32,4 @@ catalogue.
 ## License
 
 Kani is released under the MIT licence. See the
-[Disclaimer](https://github.com/ArloB/kani/blob/main/DISCLAIMER.md) for details.
+[Disclaimer](https://github.com/kani-app/kani/blob/main/DISCLAIMER.md) for details.

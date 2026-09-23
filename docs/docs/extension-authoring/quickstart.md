@@ -19,7 +19,7 @@ This creates `my-source.yaml`. Open it and set the source identity, base URL, en
 extraction fields. Keep the [YAML schema](yaml-schema.md) and [DSL grammar](dsl-grammar.md) nearby
 as references rather than trying to define the whole source at once.
 
-The [`kani-example`](https://github.com/ArloB/kani/tree/develop/kani-extensions/kani-example)
+The [`kani-example`](https://github.com/kani-app/kani/tree/develop/kani-extensions/kani-example)
 development extension is a useful working implementation to read alongside this walkthrough.
 
 ## 2. Validate the YAML

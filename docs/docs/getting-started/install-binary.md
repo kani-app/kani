@@ -2,7 +2,7 @@
 
 ## Download and verify
 
-Open [GitHub Releases](https://github.com/ArloB/kani/releases) and download the archive for your
+Open [GitHub Releases](https://github.com/kani-app/kani/releases) and download the archive for your
 platform. Archive names and supported targets are recorded on each release; do not reuse a
 filename from another release without checking it. Verify the checksums supplied with the release
 before extracting it.

@@ -78,7 +78,7 @@ export async function maybeShowUpdateBanner(appEl) {
     render(
       html`<${UpdateBanner}
         latest=${info.latest}
-        url=${info.url ?? 'https://github.com/ArloB/kani/releases/latest'}
+        url=${info.url ?? 'https://github.com/kani-app/kani/releases/latest'}
         onDismiss=${() => {
           render(null, mount);
           mount.remove();

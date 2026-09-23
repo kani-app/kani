@@ -74,7 +74,6 @@ fn detail_for_each(url: &str, policy: OnFailurePolicy) -> ValidatedForEachStep {
         merge_as: "detail".into(),
         endpoint_name: "manga_details".into(),
         on_failure: policy,
-        concurrency: 4,
         deduplicate_by: None,
     }
 }

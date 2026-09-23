@@ -1,7 +1,7 @@
 # Kani
 
-[![CI](https://github.com/arlob/kani/actions/workflows/ci.yml/badge.svg)](https://github.com/arlob/kani/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/arlob/kani/graph/badge.svg?token=MGPR4JQ8IO)](https://codecov.io/gh/arlob/kani)
+[![CI](https://github.com/kani-app/kani/actions/workflows/ci.yml/badge.svg)](https://github.com/kani-app/kani/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/kani-app/kani/graph/badge.svg?token=H9PGTX76j2)](https://codecov.io/gh/kani-app/kani)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Kani is a self-hosted manga library server written in Rust with a WebAssembly extension system.
@@ -71,7 +71,7 @@ Inspired by [Tachiyomi/Mihon](https://mihon.app/) and [Komga](https://komga.org/
 ### Docker (recommended)
 
 ```bash
-git clone https://github.com/arlob/kani.git
+git clone https://github.com/kani-app/kani.git
 cd kani
 docker compose up --build
 ```

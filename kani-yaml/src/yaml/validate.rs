@@ -1196,12 +1196,6 @@ fn validate_for_each_step(
             "{path}: 'merge_as' must not be empty"
         )));
     }
-    if step.concurrency == 0 || step.concurrency > 5 {
-        errors.push(YamlError::Validation(format!(
-            "{path}: 'concurrency' must be between 1 and 5 (got {})",
-            step.concurrency
-        )));
-    }
 
     let url_expr = match parse_dsl(&step.url_expr, &format!("{path}.url_expr")) {
         Ok(e) => Some(e),
@@ -1237,7 +1231,6 @@ fn validate_for_each_step(
             merge_as: step.merge_as.clone(),
             endpoint_name: step.endpoint.clone(),
             on_failure,
-            concurrency: step.concurrency,
             deduplicate_by,
         })
     } else {

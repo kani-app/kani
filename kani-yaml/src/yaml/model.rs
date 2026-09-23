@@ -175,7 +175,6 @@ pub struct ValidatedForEachStep {
     /// Name of the endpoint whose blueprint to use for sub-extraction.
     pub endpoint_name: String,
     pub on_failure: OnFailurePolicy,
-    pub concurrency: u32,
     pub deduplicate_by: Option<Expr>,
 }
 

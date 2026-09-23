@@ -3,7 +3,7 @@ services:
     # Signed multi-arch release image. To build from source, swap this for a
     # `build:` block with context "." and args GIT_SHA, plus INSTALL_KCC: "true"
     # for Kindle Comic Converter (MOBI/AZW3 export).
-    image: ghcr.io/arlob/kani:latest
+    image: ghcr.io/kani-app/kani:latest
     ports:
       - "8242:8242"
     volumes:

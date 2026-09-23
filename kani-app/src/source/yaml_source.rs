@@ -477,6 +477,7 @@ impl YamlSource {
                 .eval_browser_payload_endpoint(ep, endpoint_name, args, filters)
                 .await?;
             inject_fn_arg_fields(&mut v, ep, args);
+            deduplicate_for_each_rows(&mut v, ep).await?;
             return Ok(v);
         }
 
@@ -488,6 +489,7 @@ impl YamlSource {
             {
                 Ok(mut v) => {
                     inject_fn_arg_fields(&mut v, ep, args);
+                    deduplicate_for_each_rows(&mut v, ep).await?;
                     return Ok(v);
                 }
                 Err(ref e) if e.starts_with("__refresh_auth__:") => {
@@ -898,6 +900,28 @@ fn total_pages_spec(ep: &kani_yaml::ValidatedEndpoint) -> kani_shared::unpack::T
             kani_shared::unpack::TotalPages::FromScalar
         }
     }
+}
+
+/// Applies each `for_each` step's `deduplicate_by` key to the extracted rows.
+///
+/// Runs after `inject_fn_arg_fields`, so a key naming a function-argument field
+/// such as `$manga_id$` sees it.
+async fn deduplicate_for_each_rows(
+    result: &mut serde_json::Value,
+    ep: &kani_yaml::ValidatedEndpoint,
+) -> Result<()> {
+    for step in &ep.for_each_steps {
+        if let Some(key) = &step.deduplicate_by {
+            kani_core::evaluator::json_eval::deduplicate_rows(result, key)
+                .await
+                .map_err(|e| {
+                    Error::Extension(kani_shared::extension::ExtensionError::parse(format!(
+                        "deduplicate_by: {e}"
+                    )))
+                })?;
+        }
+    }
+    Ok(())
 }
 
 fn unpack_manga_list(result: &serde_json::Value, ep: &kani_yaml::ValidatedEndpoint) -> MangaList {
