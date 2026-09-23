@@ -1256,6 +1256,30 @@ endpoints:
 - `fail` — propagate the error (default).
 - `"<dsl expr>"` — any other string is treated as a DSL expression evaluated as a fallback value.
 
+**`for_each` keeps only the sub-fetch's first row.** The sub-endpoint is extracted
+normally, but the value stored as `merge_as` is its first row, not the whole list —
+so a sub-endpoint whose container matches several elements silently contributes only
+the first.
+
+**`deduplicate_by`** is a DSL expression evaluated against each *main-result* row once
+its sub-fetch has merged in. Rows repeating an earlier row's key are dropped, the first
+occurrence is kept, and the original order is preserved. Use it where a source lists the
+same entry under several categories on one page and only the sub-fetch reveals they are
+the same.
+
+```yaml
+    for_each:
+      - endpoint: manga_details
+        url_expr: "dom('.link').attr('href')"
+        merge_as: details
+        deduplicate_by: "json('/details/canonical_id').text()"
+```
+
+It is applied by the host after extraction, so it is available to **interpreted YAML
+sources only**. A generated Rust extension builds its blueprint in the guest, where the
+key cannot be evaluated; `kani-cli generate` rejects a source that sets it rather than
+emitting a crate that ignores it.
+
 Sub-fetch parallelism is not configurable per step. Every request a source makes,
 including sub-fetches, is bounded by `metadata.rate_limit.max_concurrent` (default 4).
 A `concurrency:` key on a `for_each` step is accepted and ignored: it was

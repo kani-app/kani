@@ -389,6 +389,55 @@ async fn eval_json_field(
     }
 }
 
+/// Drops rows whose `key` expression repeats an earlier row's value, keeping the
+/// first occurrence and the original order.
+///
+/// Runs over an extraction result rather than inside the blueprint, because the
+/// key is only meaningful once a row's `for_each` sub-fetch has merged into it.
+/// That also keeps it off the guest ABI: the expression stays in the validated
+/// YAML model and never reaches a serialized `Blueprint`.
+pub async fn deduplicate_rows(result: &mut serde_json::Value, key: &Expr) -> Result<(), String> {
+    let Some(rows) = result.get_mut("rows").and_then(|r| r.as_array_mut()) else {
+        return Ok(());
+    };
+
+    // `Value`'s PartialEq has no arm for `Json` or `List`, so identical JSON
+    // keys compare unequal and every row would look distinct. Compare on a
+    // normalised form rather than depending on that.
+    fn key_of(value: &Value) -> String {
+        match value {
+            Value::Str(s) => format!("s:{s}"),
+            Value::Int(i) => format!("i:{i}"),
+            Value::Num(n) => format!("n:{n}"),
+            Value::Bool(b) => format!("b:{b}"),
+            Value::Null => "null".to_string(),
+            Value::Json(j) => format!("j:{j}"),
+            other => format!("d:{other:?}"),
+        }
+    }
+
+    let budget = Arc::new(EvalBudget::new());
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut keep = Vec::with_capacity(rows.len());
+
+    for row in rows.iter() {
+        let value = eval_json_expr(
+            key,
+            row,
+            Some((row, 0)),
+            Env::new(),
+            None,
+            Arc::clone(&budget),
+        )
+        .await?;
+        keep.push(seen.insert(key_of(&value)));
+    }
+
+    let mut iter = keep.into_iter();
+    rows.retain(|_| iter.next().unwrap_or(true));
+    Ok(())
+}
+
 fn eval_json_expr<'a>(
     expression: &'a Expr,
     doc: &'a serde_json::Value,
