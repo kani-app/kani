@@ -218,3 +218,19 @@ jobs:
               || { echo "::error::manifest is missing linux/$arch"; exit 1; }
           done
           echo "manifest carries linux/amd64 and linux/arm64"
+
+      # GHCR never prunes the untagged digests and attestations each publish
+      # leaves behind. Runs last so a failure here cannot lose a release that
+      # is already pushed, signed and verified.
+      - name: Prune superseded untagged versions
+        continue-on-error: true
+        uses: actions/delete-package-versions@v5
+        with:
+          owner: ${{ github.repository_owner }}
+          package-name: kani
+          package-type: container
+          delete-only-untagged-versions: true
+          # An untagged digest is not spare: cosign verify and provenance
+          # resolve through them. One publish leaves about a dozen, so this
+          # keeps roughly the last three releases verifiable.
+          min-versions-to-keep: 40

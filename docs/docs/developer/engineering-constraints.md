@@ -657,3 +657,25 @@ raw modules under `cfg!(debug_assertions)` — but the release path is the one p
 **Revalidate.** Before trusting a harness failure, confirm the DOM carries a class the source
 emits. If it does not, rebuild `static/js/dist` (or `cargo build -p kani-web`) and re-run before
 filing anything.
+
+### An untagged GHCR version is not a spare copy
+
+**Constraint.** `docker.yml` pushes each architecture by digest, then attaches provenance and an
+SBOM, then assembles one tagged manifest list. Only the list and the cosign signature carry tags,
+so a publish leaves roughly a dozen untagged versions behind, and GHCR prunes none of them.
+
+**Evidence.** The pre-migration package held **92 versions for 7 tags** — 85 untagged, accumulated
+across three releases and the builds between them.
+
+**Consequence.** Those untagged digests are load-bearing. `cosign verify` resolves the signature
+against the manifest, and the manifest references the per-architecture digests; provenance and SBOM
+attestations are themselves untagged manifests. Deleting untagged versions in bulk breaks
+verification of releases that still matter, and the failure appears only when somebody runs
+`cosign verify`, not at delete time.
+
+**Enforcement.** The merge job prunes with `delete-only-untagged-versions` and a
+`min-versions-to-keep` sized to about three releases, and runs `continue-on-error` after the image
+is pushed, signed and verified — housekeeping must never fail a release.
+
+**Revalidate.** If the build stops emitting provenance or SBOM, or gains a third architecture, the
+per-publish count changes and `min-versions-to-keep` needs re-deriving rather than assuming.
