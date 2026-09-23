@@ -313,6 +313,10 @@ impl PartialEq for Value {
             (Value::Num(a), Value::Num(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Null, Value::Null) => true,
+            (Value::Json(a), Value::Json(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            // Two HtmlElement handles stay unequal: comparing DOM nodes is a
+            // question about identity that nothing here needs answered.
             _ => false,
         }
     }

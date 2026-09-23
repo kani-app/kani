@@ -401,9 +401,8 @@ pub async fn deduplicate_rows(result: &mut serde_json::Value, key: &Expr) -> Res
         return Ok(());
     };
 
-    // `Value`'s PartialEq has no arm for `Json` or `List`, so identical JSON
-    // keys compare unequal and every row would look distinct. Compare on a
-    // normalised form rather than depending on that.
+    // Hashed rather than compared pairwise: `Expr::Unique` scans a Vec, which is
+    // fine for a field's values and quadratic over a page of rows.
     fn key_of(value: &Value) -> String {
         match value {
             Value::Str(s) => format!("s:{s}"),
