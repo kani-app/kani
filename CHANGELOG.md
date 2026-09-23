@@ -6,6 +6,57 @@ Kani uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-rc.4] - 2026-09-23
+
+### Fixed
+
+- The library repeated the same titles forever when scrolled on Chrome for Android. The
+  pull-to-refresh gesture fired on every upward scroll, so a momentum flick re-requested the
+  current page and appended it again.
+- Pages looked cut off at the bottom on Android. The app sized itself to the viewport with the
+  URL bar hidden, so its last rows sat below the visible area.
+- Nineteen layout defects between 320px and 430px, all found by driving 23 routes at five
+  viewports. Most were in shared chrome rather than individual pages: the degraded-state banner
+  could not be dismissed at 320px and filled half the screen; no page reserved a gutter above the
+  bottom navigation; empty states ran edge to edge; the page title was squeezed out of the header
+  and phones had no back control; the "Danger zone" tab was unreachable; the log, webhook and
+  account tables overflowed sideways; the Most Read Manga chart cut off its labels.
+- Controls below the 40px touch floor across the header, reader, sheets, panels and settings. A
+  checkbox is still drawn at its usual size; only the area your finger has to hit grew.
+- Expanding a manga's description hid every fact about it — author, status, tags — to save three
+  pixels, and scrolled the cover and buttons off the top.
+- Pull-to-refresh gave no sign it was working. It now shows a spinner while refreshing and says
+  "Updated" when it finishes, held long enough to read even when the refresh returns instantly.
+  It is limited to the library, where what is being refreshed is unambiguous.
+- The sources page's Extensions/Repositories switcher spanned the whole window on a desktop
+  rather than heading the sidebar it controls, and the library filter panel opened as a strip
+  pinned to the bottom of the window instead of a centred dialogue.
+- A stale service worker could keep serving an old app shell and stylesheet after an upgrade, with
+  no way out but clearing site data.
+- `.unique()` in the extraction DSL removed nothing from values read out of a JSON document, which
+  is every JSON source. It compared such values as always-unequal.
+- `for_each: deduplicate_by:` in a YAML extension was validated and then ignored, so duplicate rows
+  were delivered. It now drops rows repeating a key, keeping the first.
+- The extension specification documented a hook cache API that does not exist — `ctx.cache.get(...)`
+  throws. The working form is `ctx.cache_get(...)`, and the examples were wrong too.
+
+### Added
+
+- `scripts/verify-desktop-layout.mjs`, a browser check for desktop layout rules, alongside the
+  mobile one. Both read their expectations from the app's own sources.
+
+### Changed
+
+- The project moved to the `kani-app` GitHub organisation. Update check, container image path and
+  documentation links all point there. `cosign verify` against rc.1, rc.2 and rc.3 images no longer
+  passes; those were signed under the old identity.
+- `for_each: concurrency:` is removed from the YAML schema. It was validated and never read, so a
+  source setting it got the source's `max_concurrent` instead of what it asked for. A source that
+  still carries the key keeps working; the key is ignored.
+- The extension specification now documents `get_url`, `total_pages`, `auto_scroll`, the whole
+  Rhai hook surface including the `bytes_*` and `cache_*` families, and that a `for_each` sub-fetch
+  keeps only its first row.
+
 ### Removed
 
 - Intel macOS (`x86_64-apple-darwin`) release archives. On an Intel Mac, run the `linux/amd64`
