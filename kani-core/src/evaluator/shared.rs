@@ -524,9 +524,7 @@ where
 
         Expr::ParseFloat { target } => Some(recurse(target, env).await.and_then(|v| {
             v.map_str("parse_float", |s| {
-                s.parse::<f64>()
-                    .map(Value::Num)
-                    .map_err(|e| format!("Invalid float '{}': {}", s, e))
+                Ok(s.parse::<f64>().map(Value::Num).unwrap_or(Value::Null))
             })
         })),
 
@@ -563,18 +561,15 @@ where
             .await,
         ),
 
-        Expr::Lookup { target, table } => Some(
-            recurse(target, env)
-                .await
-                .and_then(|v| v.into_str("lookup"))
-                .map(|s| {
-                    table
-                        .iter()
-                        .find(|(k, _)| s == *k)
-                        .map(|(_, v)| Value::Str(v.clone()))
-                        .unwrap_or(Value::Null)
-                }),
-        ),
+        Expr::Lookup { target, table } => Some(recurse(target, env).await.and_then(|v| {
+            v.map_str("lookup", |s| {
+                Ok(table
+                    .iter()
+                    .find(|(k, _)| s == *k)
+                    .map(|(_, v)| Value::Str(v.clone()))
+                    .unwrap_or(Value::Null))
+            })
+        })),
 
         Expr::StartsWith { target, prefix } => Some(recurse(target, env).await.and_then(|v| {
             v.map_str("starts_with", |s| {

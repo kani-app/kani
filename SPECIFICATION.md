@@ -2,6 +2,10 @@
 
 This document defines the extraction DSL, JSON intermediate model (IM), and YAML extension format.
 
+Every DSL expression in this document's unlabelled and `yaml` code blocks is parsed and evaluated
+by `kani-core/tests/spec_examples.rs`. A block that sketches a schema rather than showing an example
+is preceded by `<!-- schema sketch: not an executable example -->`.
+
 ---
 
 ## 1. Extraction DSL
@@ -19,7 +23,7 @@ Each expression extracts one value from a document element.
 
 **Numeric literals:** Integer or float: `0`, `2`, `3.14`, `-1`
 
-**Keywords:** `let`, `self`, `dom`, `json`, `index`, `null`, `true`, `false`, `if`, `then`, `else`, `pref`, `merge`, `format`
+**Keywords:** `let`, `self`, `dom`, `json`, `index`, `null`, `true`, `false`, `if`, `then`, `else`, `pref`, `scalar`, `merge`, `format`
 
 **Operators:** `.` (method chain), `=` (binding), `;` (statement separator), `,` (argument separator), `{` `}` (map literal), `(` `)` (grouping/call), `+` `-` `*` `/` (arithmetic), `==` `!=` `<` `>` `<=` `>=` (comparison), `&&` `||` (logical)
 
@@ -46,6 +50,7 @@ atom           = "self"
                | "dom" "(" string ")"
                | "json" "(" string ")"
                | "pref" "(" string ")"
+               | "scalar" "(" string ")"
                | "index" "(" ")"
                | "merge" "(" "[" [ expr { "," expr } ] "]" ")"
                | "format" "(" string [ "," expr { "," expr } ] ")"
@@ -114,7 +119,6 @@ These are the starting points for extraction chains:
 |--------|-----------|-------------|-------------|
 | `.attr("name")` | Element | String/Null | Get the value of an HTML attribute. Returns `Null` if the attribute doesn't exist. |
 | `.text()` | Element | String | Get the combined text content of the element and all descendants. Returns empty string if no text. |
-| `.inner_html()` | Element | String | Get the inner HTML of the element as a string. |
 | `.select("selector")` | Element | List&lt;Element&gt; | Select all matching descendant elements. Returns an empty `List` if none match. |
 | `.first("selector")` | Element | Element/Null | Select the first matching descendant element, or `Null` if none match. |
 | `.inner_html()` | Element | String | Get the inner HTML of the element as a raw HTML string. |
@@ -148,7 +152,7 @@ These are the starting points for extraction chains:
 
 | Method | Input Type | Return Type | Description |
 |--------|-----------|-------------|-------------|
-| `.at(n)` | List | Any | Get the element at index `n`. Negative indices count from the end: `-1` is the last element. Returns an error if out of bounds (`.fallback()` does not catch errors — guard with `if`/`.matches()` when the index may be absent). Works on any `List`, including results from `.split()`, `.select()`, and `.children()`. |
+| `.at(n)` | List | Any | Get the element at index `n`. Negative indices count from the end: `-1` is the last element. Returns `Null` if out of bounds, so an absent segment or capture group can be defaulted with `.fallback()`. Works on any `List`, including results from `.split()`, `.select()`, and `.children()`. |
 | `.join("delim")` | List&lt;String&gt; | String | Join a list of strings into a single string using `delim` as the separator. `Null` elements are skipped. |
 | `.take(n)` | List | List | Return the first `n` elements. Returns the whole list if `n` exceeds its length. |
 | `.skip(n)` | List | List | Drop the first `n` elements and return the rest. Returns an empty list if `n` exceeds the length. |
@@ -270,7 +274,7 @@ self.attr("href").split("/").at(2)
 **Multi-step with variable binding:**
 ```
 let $base = dom("meta[property='og:url']").attr("content").split("/manga").at(0);
-self.select("img.cover").attr("src").prepend($base)
+self.first("img.cover").attr("src").prepend($base)
 ```
 
 **Status mapping:**
@@ -337,11 +341,6 @@ self.select("a.tag").map($item.text().trim()).filter($item.matches("[^\s]")).joi
 ```
 let $n = dom("span.count").text().trim().parse_int().fallback(0);
 "/api/items?count=".append($n.to_string())
-```
-
-**Dynamic JSON field access (language preference):**
-```
-json("/data/attributes/title").get(pref(language)).str().fallback(json("/data/attributes/title/en").str())
 ```
 
 **Find first matching element in a JSON array:**
@@ -526,7 +525,7 @@ Each `Expr` node is encoded as a JSON object with a `"op"` field identifying the
 { "op": "at", "target": { ... }, "index": 2 }
 ```
 
-`"index"` may be negative: `-1` is the last element. Returns an error if out of bounds (not null).
+`"index"` may be negative: `-1` is the last element. Returns `Null` if out of bounds.
 
 #### String Operations
 
@@ -897,7 +896,7 @@ Evaluates each subfield expression to a string, joins the results with `delimite
 
 `"method"` is one of `"Get"`, `"Post"`, `"Put"`, `"Delete"`. `"kind"` is `"Html"` or `"Json"` and determines how the fetched response is parsed before the sub-blueprint is applied. The sub-blueprint is a full blueprint object (§2.3). The host evaluates `url_expr`, fetches the URL (subject to the SSRF `AllowedHost` gate and the per-extension I/O budget), and returns the first row of the sub-extraction as a `Json` value, or `Null` if the result is empty. Nesting `fetch` inside another fetch's sub-blueprint is rejected at evaluation time.
 
-`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). The hook runtime uses it to dispatch per-endpoint `pre_request:` / `on_status:` hooks (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
+`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). It is exposed to hooks as `req.endpoint_id`; because it never equals a declared endpoint name, a sub-fetch runs the source-level hooks rather than any per-endpoint hook (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
 
 #### User Function Call
 
@@ -1069,6 +1068,7 @@ Each endpoint corresponds to a method in the `manga-provider` WIT interface. The
 
 #### Common Endpoint Fields
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 endpoint_name:
   # --- Request construction ---
@@ -1237,18 +1237,18 @@ endpoints:
   search:
     route: "https://example.com/search"
     fields:
-      id: "dom('.id').text()"
-      title: "dom('.title').text()"
+      id: 'self.first(".id").text()'
+      title: 'self.first(".title").text()'
     for_each:
       - endpoint: manga_details    # Name of another declared endpoint; its blueprint is used.
-        url_expr: "dom('.link').attr('href')"  # DSL expression (evaluated per-element for for_each).
+        url_expr: 'self.first(".link").attr("href")'  # DSL expression (evaluated per-element for for_each).
         merge_as: details          # Output field / binding name.
         on_failure: skip           # "skip" | "fail" | "<dsl fallback expr>" (default: "fail").
     then:
       - endpoint: manga_details
-        url_expr: "dom('.banner-link').attr('href')"
+        url_expr: 'dom(".banner-link").attr("href")'
         merge_as: banner_info
-        on_failure: "lit(\"\")"    # DSL fallback expression on error.
+        on_failure: '""'           # DSL fallback expression on error.
 ```
 
 **`on_failure`** controls what happens when the sub-fetch or extraction fails:
@@ -1262,7 +1262,8 @@ so a sub-endpoint whose container matches several elements silently contributes 
 the first.
 
 **`deduplicate_by`** is a DSL expression evaluated against each *main-result* row once
-its sub-fetch has merged in. Rows repeating an earlier row's key are dropped, the first
+its sub-fetch has merged in; the row is a JSON object, so `self` and `json()` both address
+it. Rows repeating an earlier row's key are dropped, the first
 occurrence is kept, and the original order is preserved. Use it where a source lists the
 same entry under several categories on one page and only the sub-fetch reveals they are
 the same.
@@ -1270,9 +1271,9 @@ the same.
 ```yaml
     for_each:
       - endpoint: manga_details
-        url_expr: "dom('.link').attr('href')"
+        url_expr: 'self.first(".link").attr("href")'
         merge_as: details
-        deduplicate_by: "json('/details/canonical_id').text()"
+        deduplicate_by: 'self.ptr("/details/canonical_id").str()'
 ```
 
 It is applied by the host after extraction, so it is available to **interpreted YAML
@@ -1326,7 +1327,7 @@ popular:
         .fallback("Unknown Title")
     cover_url:
       expr: |
-        let $filename = self.ptr("/relationships").find("type", "cover_art").ptr("/attributes/fileName").str()
+        let $filename = self.ptr("/relationships").find("type", "cover_art").ptr("/attributes/fileName").str();
         if $filename != null
           then format("https://cdn.example.com/covers/{}/{}{}", self.ptr("/id").str(), $filename, pref("cover_size").fallback(".512.jpg"))
           else null
@@ -1343,10 +1344,10 @@ search:
     page: $page$
   container: ".grid.gap-3 > div"
   fields:
-    id: 'self.select("a").attr("href").split("/").at(2)'
+    id: 'self.first("a").attr("href").split("/").at(2)'
     title: 'self.first(".line-clamp-2").text()'
     cover_url:
-      expr: 'self.select("img").attr("data-src")'
+      expr: 'self.first("img").attr("data-src")'
       optional: true
 ```
 
@@ -1526,12 +1527,12 @@ option_sets:
     options_fetched_by:      # Lazily resolved by the host at filter-panel render time
       route: "/api/tags"
       type: json              # "html" (default) or "json"
-      container: "$.tags"
-      fields:
-        name: 'self.field("name").text()'
-        value: 'self.field("id").text()'
-        adult: 'self.field("adult").text()'  # Any extra fields are available for nsfw_field
-      nsfw_field: adult        # Optional. Options where this field is "true"/"1" are dropped unless NSFW is allowed
+      container: "/tags"      # JSON Pointer (json) or CSS selector (html)
+      fields:                 # JSON Pointers (json) or "selector|attr" specs (html) — not DSL
+        name: "/name"
+        value: "/id"
+        adult: "/adult"        # Any extra fields are available for nsfw_field
+      nsfw_field: adult        # Optional. Options flagged by this field are dropped
       cache:
         ttl: 600               # Seconds, max 30 days
         key: tags-v1
@@ -1556,7 +1557,7 @@ A `Fetched` option set (`options_fetched_by`) declares a remote source for the o
 - For HTML (`type: html`): values are CSS selectors yielding text. Attribute extraction uses `"selector|attribute"` (e.g., `"a|href"`); `"self"` or `"self|attr"` refers to the container element.
 - For JSON (`type: json`): values are JSON Pointer paths (e.g., `/name`, `/meta/id`).
 
-**NSFW filtering:** Set `nsfw_field` on an `options_fetched_by` block to the name of a field in the `fields` map. Options where that field's value is `"true"` or `"1"` are dropped by the host unless the source/install permits NSFW content. The field name is embedded in the emitted `FilterFetchDef` JSON.
+**NSFW filtering:** Set `nsfw_field` on an `options_fetched_by` block to the name of a field in the `fields` map. For HTML, options where that field's text is `"true"` or `"1"` are dropped; for JSON, options where it is the boolean `true` are dropped. They are dropped regardless of the source's or user's NSFW setting. The field name is embedded in the emitted `FilterFetchDef` JSON.
 
 **Filter-to-query mapping:** When an endpoint receives filters, the codegen needs to know how to convert active filter values into query parameters. This is defined in the endpoint:
 
@@ -1632,6 +1633,7 @@ preferences:
 
 ### 3.6 Complete Schema Reference
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 # Top-level fields
 id: string                      # Required. Extension identifier.
@@ -1776,7 +1778,7 @@ option_sets:
       route: string
       type: "html" | "json"        # Default: "html"
       container: string
-      fields: map<string, string>  # DSL expressions, evaluated per resolved option
+      fields: map<string, string>  # JSON Pointers (json) or "selector|attr" specs (html); not DSL
       cache:
         ttl: integer                # Seconds. Default: 3600. Max: 30 days.
         key: string
@@ -1813,7 +1815,7 @@ on_status:                           # Rhai hook bodies by status pattern
 
 # Per-endpoint hooks (subset of above, on any endpoint block)
 # endpoints.<name>:
-#   pre_request: string              # Overrides source-level pre_request for this endpoint
+#   pre_request: string              # Replaces source-level pre_request for this endpoint
 #   on_status:
 #     <pattern>: string
 ```
@@ -1886,11 +1888,11 @@ endpoints:
     auto_scroll: true             # Optional. Default: false. Periodically scrolls the
                                   # page so lazy-loaded content is present before the
                                   # payload is captured. Browser endpoints only.
-    container: ":root"
+    container: ""                 # The payload is JSON, so address its root with a pointer.
     fields:
-      id:   { expr: "json(\"/id\").text()" }
-      title: { expr: "json(\"/title\").text()" }
-      status: { expr: "json(\"/status\").text()" }
+      id: 'self.ptr("/id").str()'
+      title: 'self.ptr("/title").str()'
+      status: 'self.ptr("/status").str()'
 ```
 
 **`browser_scripts`:** top-level map from script name to JavaScript source. Each script is written to `src/scripts/<name>.js` in the generated crate and accessed via `static SCRIPT_<NAME>: &str = include_str!("scripts/<name>.js")`. Scripts that do not call `passPayload` produce a warning during validation.
@@ -1944,16 +1946,24 @@ defined under `scripts.pure:` (see §1.5).
 Hooks can be declared at two levels:
 
 - **Source-level** — top-level `pre_request:` / `on_status:` keys; fire on every HTTP request made by this extension.
-- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); fire only when the request's `endpoint_id` matches this endpoint's name. Per-endpoint hooks receive the same sandbox bindings and override the source-level hook for that status code/event.
+- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); apply only when the request's `endpoint_id` equals this endpoint's name exactly. Per-endpoint hooks receive the same sandbox bindings.
 
-Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form `"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`), enabling per-endpoint hooks to target them specifically.
+#### Dispatch
 
-#### Execution order
+Exactly one hook body runs per event. A per-endpoint hook **replaces** the source-level hook; the
+two never both run.
 
-1. Source-level `pre_request` runs first (if present).
-2. Per-endpoint `pre_request` runs second (if present and `endpoint_id` matches).
-3. The (possibly mutated) request is sent.
-4. On response, source-level `on_status` is checked by key, then per-endpoint `on_status`.
+1. `pre_request`: the endpoint's `pre_request` if the request's `endpoint_id` has one, otherwise
+   the source-level `pre_request`, otherwise nothing.
+2. The (possibly mutated) request is sent.
+3. `on_status`: the endpoint's `on_status` map is searched for the exact status (`"401"`), then
+   its class (`"4xx"`), then `"default"`. Only if the endpoint declares no `on_status` map, or
+   none of its keys match, is the source-level map searched in the same order.
+
+Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form
+`"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`). No endpoint is named that
+way, so a sub-fetch never matches a per-endpoint hook — not even its parent's — and always runs
+the source-level hooks. `req.endpoint_id` lets a source-level hook branch on it.
 
 #### Sandbox bindings
 
@@ -1961,9 +1971,9 @@ Each hook body is a Rhai expression body (not a function declaration) evaluated 
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`, `req.set_body(s)`. |
+| `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.url = s`, `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`. |
 | `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(...)`. |
-| `response` | `ScriptableResponse` | Available in `on_status` only: `response.status` (integer), `response.header(k)`. |
+| `resp` | `ScriptableResponse` | Available in `on_status` only: `resp.status` (integer), `resp.headers` (map), and `resp.body`, which the hook may reassign. |
 
 `set_query` replaces any existing parameter of that name; `push_query` appends, so a
 source that expects a repeated key (`?tag=a&tag=b`) needs `push_query`.

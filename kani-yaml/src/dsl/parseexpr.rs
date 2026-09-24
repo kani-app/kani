@@ -38,6 +38,7 @@ pub enum ParseExpr {
     Concat(Vec<ParseExpr>),
     Merge(Vec<ParseExpr>),
     Pref(String),
+    Scalar(String),
     Format {
         template: String,
         args: Vec<ParseExpr>,
@@ -132,6 +133,7 @@ impl TryFrom<ParseExpr> for Expr {
             ParseExpr::Bool(b) => Ok(Expr::Bool(b)),
             ParseExpr::Null => Ok(Expr::Null),
             ParseExpr::Pref(s) => Ok(Expr::Pref(s)),
+            ParseExpr::Scalar(name) => Ok(Expr::ScalarOverride { name }),
             ParseExpr::Index => Ok(Expr::Index),
 
             ParseExpr::BinaryOperation { op, lhs, rhs } => {
@@ -512,6 +514,7 @@ fn parse_node_count(root: &ParseExpr) -> usize {
             | ParseExpr::Bool(_)
             | ParseExpr::Null
             | ParseExpr::Pref(_)
+            | ParseExpr::Scalar(_)
             | ParseExpr::MapLiteral(_)
             | ParseExpr::Index => {}
         }
@@ -559,6 +562,9 @@ fn lower_arena(value: ParseExpr, outer_span: SimpleSpan) -> Result<Expr, Vec<Yam
                 ParseExpr::Null => push_node(&mut nodes, &mut results, ExprLeaf::Null),
                 ParseExpr::Pref(value) => {
                     push_node(&mut nodes, &mut results, ExprLeaf::Pref(value));
+                }
+                ParseExpr::Scalar(value) => {
+                    push_node(&mut nodes, &mut results, ExprLeaf::ScalarOverride(value));
                 }
                 ParseExpr::Index => push_node(&mut nodes, &mut results, ExprLeaf::Index),
                 ParseExpr::MapLiteral(table) => {

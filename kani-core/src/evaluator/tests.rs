@@ -612,12 +612,12 @@ mod shared_tests {
     }
 
     #[tokio::test]
-    async fn parse_float_invalid_errors() {
-        let err = json_eval_err(Expr::ParseFloat {
+    async fn parse_float_invalid_is_null() {
+        let v = json_eval_opt(Expr::ParseFloat {
             target: Box::new(lit("abc")),
         })
         .await;
-        assert!(err.contains("Invalid float"));
+        assert_eq!(v, serde_json::Value::Null);
     }
 
     #[tokio::test]
@@ -712,6 +712,16 @@ mod shared_tests {
         )
         .await;
         assert_eq!(rows[0]["v"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn lookup_on_null_propagates_null() {
+        let v = json_eval_opt(Expr::Lookup {
+            target: Box::new(Expr::Null),
+            table: vec![("publishing".into(), "ongoing".into())],
+        })
+        .await;
+        assert_eq!(v, serde_json::Value::Null);
     }
 
     #[tokio::test]

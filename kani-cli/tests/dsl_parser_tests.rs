@@ -106,6 +106,16 @@ fn parse_pref() {
 }
 
 #[test]
+fn parse_scalar() {
+    assert_eq!(
+        parse_ok(r#"scalar("base_url")"#),
+        Expr::ScalarOverride {
+            name: "base_url".into()
+        }
+    );
+}
+
+#[test]
 fn parse_var() {
     assert_eq!(parse_ok("$manga_id"), Expr::Var("$manga_id".into()));
 }

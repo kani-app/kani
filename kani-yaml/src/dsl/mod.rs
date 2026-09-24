@@ -433,7 +433,7 @@ impl Parser {
                 "if" => self.if_expr()?,
                 "merge" => self.merge_expr()?,
                 "format" => self.format_expr()?,
-                "dom" | "json" | "pref" => self.builtin_string(&name)?,
+                "dom" | "json" | "pref" | "scalar" => self.builtin_string(&name)?,
                 "index" => {
                     self.expect(TokenKind::LParen, "'(' after index")?;
                     self.expect(TokenKind::RParen, "')' after index(")?;
@@ -525,6 +525,7 @@ impl Parser {
         Ok(match name {
             "dom" => ParseExpr::Dom(value),
             "json" => ParseExpr::Json(value),
+            "scalar" => ParseExpr::Scalar(value),
             _ => ParseExpr::Pref(value),
         })
     }
