@@ -121,6 +121,7 @@ impl HookRegistry {
         let ast = self
             .endpoint_pre_request
             .get(endpoint_id)
+            .or_else(|| parent_endpoint(endpoint_id).and_then(|p| self.endpoint_pre_request.get(p)))
             .or(self.global_pre_request.as_ref());
 
         let Some(ast) = ast else {
@@ -158,6 +159,9 @@ impl HookRegistry {
 
         let ast = self
             .find_on_status_ast(endpoint_id, status)
+            .or_else(|| {
+                parent_endpoint(endpoint_id).and_then(|p| self.find_on_status_ast(p, status))
+            })
             .or_else(|| self.find_on_status_ast("", status));
 
         let Some(ast) = ast else {
@@ -197,6 +201,13 @@ impl HookRegistry {
             .or_else(|| map.get(&class))
             .or_else(|| map.get("default"))
     }
+}
+
+fn parent_endpoint(endpoint_id: &str) -> Option<&str> {
+    endpoint_id
+        .split_once('/')
+        .map(|(parent, _)| parent)
+        .filter(|parent| !parent.is_empty())
 }
 
 #[cfg(test)]
@@ -542,5 +553,70 @@ mod tests {
             "endpoint hook must win: {:?}",
             req.headers
         );
+    }
+
+    fn inheriting_registry() -> HookRegistry {
+        let mut ep_pre = std::collections::BTreeMap::new();
+        ep_pre.insert(
+            "manga_details".to_string(),
+            r#"req.set_header("X-Hook", "parent"); proceed()"#.to_string(),
+        );
+        let mut ep_status = std::collections::BTreeMap::new();
+        ep_status.insert(
+            "manga_details".to_string(),
+            std::collections::BTreeMap::from([(
+                "401".to_string(),
+                r#"resp.body = "parent"; proceed()"#.to_string(),
+            )]),
+        );
+        let scripts = HookScripts {
+            pre_request: Some(r#"req.set_header("X-Hook", "global"); proceed()"#.to_string()),
+            on_status: std::collections::BTreeMap::from([(
+                "default".to_string(),
+                r#"resp.body = "global"; proceed()"#.to_string(),
+            )]),
+            endpoint_pre_request: ep_pre,
+            endpoint_on_status: ep_status,
+            ..Default::default()
+        };
+        HookRegistry::compile(&scripts).unwrap()
+    }
+
+    #[test]
+    fn sub_fetch_pre_request_inherits_its_parent_endpoint_hook() {
+        let registry = inheriting_registry();
+        for (endpoint_id, expected) in [
+            (Some("manga_details/chapters"), "parent"),
+            (Some("manga_details"), "parent"),
+            (Some("search/details"), "global"),
+            (Some("/orphan"), "global"),
+            (None, "global"),
+        ] {
+            let mut req = dummy_req(endpoint_id);
+            tokio::task::block_in_place(|| registry.run_pre_request(&mut req, dummy_ctx()))
+                .unwrap();
+            let header = req
+                .headers
+                .iter()
+                .find(|(k, _)| k == "X-Hook")
+                .map(|(_, v)| v.as_str());
+            assert_eq!(header, Some(expected), "endpoint_id {endpoint_id:?}");
+        }
+    }
+
+    #[test]
+    fn sub_fetch_on_status_inherits_its_parent_endpoint_hook() {
+        let registry = inheriting_registry();
+        for (endpoint_id, status, expected) in [
+            ("manga_details/chapters", 401, "parent"),
+            ("manga_details/chapters", 500, "global"),
+            ("search/details", 401, "global"),
+        ] {
+            let req = dummy_req(Some(endpoint_id));
+            let mut resp = dummy_resp(status);
+            tokio::task::block_in_place(|| registry.run_on_status(&req, &mut resp, dummy_ctx()))
+                .unwrap();
+            assert_eq!(resp.body, expected, "{endpoint_id} {status}");
+        }
     }
 }

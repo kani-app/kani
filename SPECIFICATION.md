@@ -898,7 +898,7 @@ Decoding splits on the first `n - 1` delimiters, so only the **last** subfield m
 
 `"method"` is one of `"Get"`, `"Post"`, `"Put"`, `"Delete"`. `"kind"` is `"Html"` or `"Json"` and determines how the fetched response is parsed before the sub-blueprint is applied. The sub-blueprint is a full blueprint object (§2.3). The host evaluates `url_expr`, fetches the URL (subject to the SSRF `AllowedHost` gate and the per-extension I/O budget), and returns the first row of the sub-extraction as a `Json` value, or `Null` if the result is empty. Nesting `fetch` inside another fetch's sub-blueprint is rejected at evaluation time.
 
-`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). It is exposed to hooks as `req.endpoint_id`; because it never equals a declared endpoint name, a sub-fetch runs the source-level hooks rather than any per-endpoint hook (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
+`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). It is exposed to hooks as `req.endpoint_id`, and a sub-fetch runs its parent endpoint's per-endpoint hooks (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
 
 #### User Function Call
 
@@ -1947,24 +1947,25 @@ defined under `scripts.pure:` (see §1.5).
 Hooks can be declared at two levels:
 
 - **Source-level** — top-level `pre_request:` / `on_status:` keys; fire on every HTTP request made by this extension.
-- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); apply only when the request's `endpoint_id` equals this endpoint's name exactly. Per-endpoint hooks receive the same sandbox bindings.
+- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); apply to that endpoint's requests and to its `then:` / `for_each:` sub-fetches. Per-endpoint hooks receive the same sandbox bindings.
 
 #### Dispatch
 
 Exactly one hook body runs per event. A per-endpoint hook **replaces** the source-level hook; the
 two never both run.
 
-1. `pre_request`: the endpoint's `pre_request` if the request's `endpoint_id` has one, otherwise
-   the source-level `pre_request`, otherwise nothing.
-2. The (possibly mutated) request is sent.
-3. `on_status`: the endpoint's `on_status` map is searched for the exact status (`"401"`), then
-   its class (`"4xx"`), then `"default"`. Only if the endpoint declares no `on_status` map, or
-   none of its keys match, is the source-level map searched in the same order.
-
 Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form
-`"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`). No endpoint is named that
-way, so a sub-fetch never matches a per-endpoint hook — not even its parent's — and always runs
-the source-level hooks. `req.endpoint_id` lets a source-level hook branch on it.
+`"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`). Hooks are looked up for the
+full id first, then for the parent (the part before `/`), then at source level. No endpoint can be
+named with a `/`, so in practice a sub-fetch runs its parent's hooks. A hook that must treat the
+sub-fetch differently can branch on `req.endpoint_id`.
+
+1. `pre_request`: the first hook found for the full id, the parent endpoint, or the source level,
+   in that order; otherwise nothing.
+2. The (possibly mutated) request is sent.
+3. `on_status`: each map, in the same order, is searched for the exact status (`"401"`), then
+   its class (`"4xx"`), then `"default"`. The first match runs. A per-endpoint map with no
+   matching key falls through to the next level rather than suppressing it.
 
 #### Sandbox bindings
 
