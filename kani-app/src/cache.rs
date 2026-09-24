@@ -355,7 +355,7 @@ impl CacheBackend for SqliteCache {
     }
 
     async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
-        let expires_at = now_secs() + ttl.as_secs() as i64;
+        let expires_at = now_secs() + kani_core::cache::effective_ttl(ttl).as_secs() as i64;
 
         let _ = sqlx::query(
             "INSERT OR REPLACE INTO extension_cache (namespace, key, value, expires_at)
@@ -441,6 +441,28 @@ mod tests {
     fn default_is_equivalent_to_new() {
         let _a = RequestCache::new();
         let _b = RequestCache::default();
+    }
+
+    #[tokio::test]
+    async fn sqlite_cache_zero_ttl_never_expires() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE extension_cache (namespace TEXT NOT NULL, key TEXT NOT NULL, \
+             value BLOB NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (namespace, key))",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let cache = SqliteCache::new(pool);
+
+        cache.put("ns", "key", b"v".to_vec(), Duration::ZERO).await;
+        cache.prune_expired().await;
+
+        assert_eq!(cache.get("ns", "key").await, Some(b"v".to_vec()));
     }
 
     #[tokio::test]

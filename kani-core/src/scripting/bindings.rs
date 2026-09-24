@@ -160,14 +160,23 @@ fn ctx_cache_put(
     ttl_secs: i64,
 ) {
     let namespace = scoped_namespace(ctx, &namespace);
-    let dur = Duration::from_secs(ttl_secs.max(0) as u64);
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(ctx.cache_backend.put(
-            &namespace,
-            &key,
-            value.into_bytes(),
-            dur,
-        ))
+        let backend = &ctx.cache_backend;
+        tokio::runtime::Handle::current().block_on(async {
+            match u64::try_from(ttl_secs) {
+                Ok(secs) => {
+                    backend
+                        .put(
+                            &namespace,
+                            &key,
+                            value.into_bytes(),
+                            Duration::from_secs(secs),
+                        )
+                        .await
+                }
+                Err(_) => backend.delete(&namespace, &key).await,
+            }
+        })
     });
 }
 
@@ -359,6 +368,18 @@ mod tests {
         );
 
         ctx_cache_delete(&mut a, "ns".into(), "k".into());
+        assert!(ctx_cache_get(&mut a, "ns".into(), "k".into()).is_unit());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_negative_ttl_removes_the_entry() {
+        let backend: Arc<dyn crate::cache::CacheBackend> =
+            Arc::new(crate::cache::InMemoryCache::new());
+        let mut a = ctx_in(&backend, "source-a:");
+
+        ctx_cache_put(&mut a, "ns".into(), "k".into(), "value".into(), 60);
+        ctx_cache_put(&mut a, "ns".into(), "k".into(), "stale".into(), -1);
+
         assert!(ctx_cache_get(&mut a, "ns".into(), "k".into()).is_unit());
     }
 

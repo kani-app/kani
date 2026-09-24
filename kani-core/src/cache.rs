@@ -11,6 +11,13 @@ const DEFAULT_MAX_BYTES: usize = 64 * 1024 * 1024;
 const DEFAULT_NAMESPACE_MAX_BYTES: usize = 4 * 1024 * 1024;
 const DEFAULT_NAMESPACE_MAX_ENTRIES: usize = 4096;
 
+const NO_EXPIRY: Duration = Duration::from_secs(100 * 365 * 24 * 60 * 60);
+
+/// Maps a zero TTL to "never expires"; such an entry leaves only by eviction or deletion.
+pub fn effective_ttl(ttl: Duration) -> Duration {
+    if ttl.is_zero() { NO_EXPIRY } else { ttl }
+}
+
 /// Async cache backend trait. Implementations may be in-memory or persistent.
 #[async_trait::async_trait]
 pub trait CacheBackend: Send + Sync + 'static {
@@ -168,7 +175,7 @@ impl CacheBackend for InMemoryCache {
     }
 
     async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
-        let expires_at = Instant::now() + ttl;
+        let expires_at = Instant::now() + effective_ttl(ttl);
         while self.total_bytes() + value.len() > self.max_global_bytes {
             self.evict_lru_globally();
         }
@@ -226,6 +233,14 @@ mod tests {
             .await;
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert_eq!(cache.get("ns", "key").await, None);
+    }
+
+    #[tokio::test]
+    async fn zero_ttl_never_expires() {
+        let cache = InMemoryCache::new();
+        cache.put("ns", "key", b"v".to_vec(), Duration::ZERO).await;
+        cache.prune_expired().await;
+        assert_eq!(cache.get("ns", "key").await, Some(b"v".to_vec()));
     }
 
     #[tokio::test]

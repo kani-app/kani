@@ -300,3 +300,160 @@ async fn every_spec_example_parses_and_evaluates() {
         failures.join("\n")
     );
 }
+
+struct HookBlock {
+    origin: String,
+    hooks: kani_core::scripting::HookScripts,
+    pure: std::collections::BTreeMap<String, String>,
+    endpoints: Vec<String>,
+}
+
+fn string_map(value: Option<&Yaml>) -> std::collections::BTreeMap<String, String> {
+    value
+        .and_then(Yaml::as_mapping)
+        .map(|map| {
+            map.iter()
+                .filter_map(|(k, v)| Some((k.as_str()?.to_owned(), v.as_str()?.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn hook_blocks() -> Vec<HookBlock> {
+    let mut blocks = Vec::new();
+    for (line, info, body) in fenced_blocks() {
+        if info != "yaml" {
+            continue;
+        }
+        let Ok(doc) = serde_yaml::from_str::<Yaml>(&body) else {
+            continue;
+        };
+        let mut hooks = kani_core::scripting::HookScripts {
+            pre_request: doc
+                .get("pre_request")
+                .and_then(Yaml::as_str)
+                .map(str::to_owned),
+            on_status: string_map(doc.get("on_status")),
+            ..Default::default()
+        };
+        let mut endpoints = Vec::new();
+        if let Some(map) = doc.get("endpoints").and_then(Yaml::as_mapping) {
+            for (name, endpoint) in map {
+                let Some(name) = name.as_str() else { continue };
+                endpoints.push(name.to_owned());
+                if let Some(body) = endpoint.get("pre_request").and_then(Yaml::as_str) {
+                    hooks
+                        .endpoint_pre_request
+                        .insert(name.to_owned(), body.to_owned());
+                }
+                let on_status = string_map(endpoint.get("on_status"));
+                if !on_status.is_empty() {
+                    hooks.endpoint_on_status.insert(name.to_owned(), on_status);
+                }
+            }
+        }
+        let pure = string_map(doc.get("scripts").and_then(|s| s.get("pure")));
+        hooks.shared = pure.clone();
+        if !hooks.is_empty() || !pure.is_empty() {
+            blocks.push(HookBlock {
+                origin: format!("SPECIFICATION.md:{line}"),
+                hooks,
+                pure,
+                endpoints,
+            });
+        }
+    }
+    blocks
+}
+
+fn hook_ctx() -> kani_core::scripting::bindings::ScriptableCtx {
+    kani_core::scripting::bindings::ScriptableCtx {
+        cache_backend: std::sync::Arc::new(kani_core::cache::InMemoryCache::new()),
+        cache_namespace: "spec:".into(),
+        prefs: std::collections::HashMap::new(),
+        v8_process: None,
+        http: None,
+        browser_scripts: None,
+        browser_profile_key: None,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn every_spec_hook_example_compiles_and_runs() {
+    use kani_core::evaluator::shared::Value;
+    use kani_core::scripting::bindings::ScriptableRequest;
+
+    let blocks = hook_blocks();
+    let hook_count: usize = blocks
+        .iter()
+        .map(|b| {
+            usize::from(b.hooks.pre_request.is_some())
+                + b.hooks.on_status.len()
+                + b.hooks.endpoint_pre_request.len()
+                + b.hooks
+                    .endpoint_on_status
+                    .values()
+                    .map(|m| m.len())
+                    .sum::<usize>()
+                + b.pure.len()
+        })
+        .sum();
+    assert!(
+        hook_count >= 5,
+        "found only {hook_count} hook bodies; the extractor has probably stopped matching the spec"
+    );
+
+    let mut failures = Vec::new();
+    for block in &blocks {
+        match kani_core::scripting::HookRegistry::compile(&block.hooks) {
+            Err(e) => failures.push(format!("{}: hooks do not compile: {e}", block.origin)),
+            Ok(registry) => {
+                let ids = block
+                    .endpoints
+                    .iter()
+                    .map(|e| Some(e.as_str()))
+                    .chain([None]);
+                for endpoint_id in ids {
+                    let mut req = ScriptableRequest {
+                        method: "GET".into(),
+                        url: "https://example.com/".into(),
+                        headers: Vec::new(),
+                        queries: Vec::new(),
+                        body: None,
+                        endpoint_id: endpoint_id.map(str::to_owned),
+                    };
+                    if let Err(e) = registry.run_pre_request(&mut req, hook_ctx()) {
+                        failures.push(format!(
+                            "{}: pre_request for {endpoint_id:?} fails: {e}",
+                            block.origin
+                        ));
+                    }
+                }
+            }
+        }
+        match kani_core::scripting::PureFunctionRegistry::compile(&block.pure) {
+            Err(e) => failures.push(format!(
+                "{}: pure scripts do not compile: {e}",
+                block.origin
+            )),
+            Ok(registry) => {
+                for name in block.pure.keys() {
+                    match registry.call(name, &[Value::Str("Hello World".into())]) {
+                        Ok(Value::Str(_)) => {}
+                        other => failures.push(format!(
+                            "{}: pure function {name} does not return a string: {other:?}",
+                            block.origin
+                        )),
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "{} spec hook example(s) are broken:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}

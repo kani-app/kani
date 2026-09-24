@@ -236,14 +236,17 @@ The following methods operate on `Json` values from `json()` or a JSON-mode blue
 #### User Script Methods
 
 Pure functions declared in `scripts.pure:` (§3.10) are callable from any DSL expression via `.user.<name>(args...)`.
+Each entry is Rhai source that must define a function with the same name as its key; the host
+calls that function by name. The same definitions are also prepended to every hook body, so hooks
+can call them too.
 
 | Syntax | Description |
 |--------|-------------|
 | `.user.<name>()` | Call the named pure function with no arguments. Receiver (the value before the dot) is passed as the first argument. |
 | `.user.<name>(arg1, arg2, ...)` | Call with additional arguments. Each argument is a DSL expression evaluated before the call. |
 
-**Null propagation:** If the receiver or an argument evaluates to `Null`, the call returns `Null`
-without invoking the Rhai function.
+**Null propagation:** If the receiver evaluates to `Null`, the call returns `Null` without invoking
+the Rhai function. A `Null` in any other argument is passed to the script as `()`.
 
 **Constraints:** Pure functions use the Rhai sandbox described in §3.10 but cannot access `req`,
 `ctx`, or `HookAction` constructors. Supported input and output types are `String`, `Int`, `Number`,
@@ -255,8 +258,11 @@ without invoking the Rhai function.
 scripts:
   pure:
     slugify: |
-      let s = arg0.to_lower();
-      s.replace(" ", "-")
+      fn slugify(title) {
+        let slug = title.to_lower();
+        slug.replace(" ", "-");
+        slug
+      }
 
 endpoints:
   popular:
@@ -912,7 +918,7 @@ Calls a pure function registered under `scripts.pure:` by name. Produced by the 
 }
 ```
 
-`"name"` matches a key in `ExtensionMetadata.scripts.pure`. `"args"` is the evaluated argument list; the receiver (the value before `.user.`) is always prepended as `args[0]` by the parser. Null propagation applies: if any arg is `Null`, the host returns `Null` without calling the function. The function runs in the Rhai pure sandbox (§3.10 sandbox limits).
+`"name"` matches a key in `ExtensionMetadata.scripts.pure`. `"args"` is the evaluated argument list; the receiver (the value before `.user.`) is always prepended as `args[0]` by the parser. Null propagation applies to the receiver only: if `args[0]` is `Null`, the host returns `Null` without calling the function; any other `Null` argument is passed to the script as `()`. The function runs in the Rhai pure sandbox (§3.10 sandbox limits).
 
 ### 2.3 Blueprint Encoding
 
@@ -1021,6 +1027,7 @@ The YAML format is the developer-facing representation of a kani extension. It i
 
 ### 3.1 Top-Level Structure
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 # === Required metadata ===
 id: string              # Unique extension identifier (lowercase, alphanumeric + hyphens)
@@ -1065,7 +1072,7 @@ chapter_sort: ChapterSortBlock # Optional. Chapter sort options exposed to the h
 # === Scripting (optional) ===
 scripts:
   pure:                        # Named pure Rhai functions callable from the DSL via `.user.<name>()`
-    <name>: string             # Rhai expression body; receives args as arg0, arg1, ...
+    <name>: string             # Rhai source defining `fn <name>(...)`; also shared with hooks
 
 pre_request: string            # Top-level Rhai hook body: runs before every HTTP request (§3.10)
 on_status:                     # Top-level Rhai hook bodies keyed by status pattern (§3.10)
@@ -1180,7 +1187,11 @@ cache:
     key_template: "search:{query}:{page}"  # Optional, free-form; interpreted by the consuming runtime
 ```
 
-Each entry is validated (non-empty name, no `:`/`/`, `ttl` ≤ 30 days, non-empty `key_template` when present) and emitted by codegen as a `kani_shared::CacheNamespace` entry in a generated `pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace]`. This phase only declares the registry — the runtime call-sites that read/write entries under a declared namespace (driven by Rhai `pre_request:` hooks) are owned by the Rhai scripting extension cluster.
+Each entry is validated (non-empty name, no `:`/`/`, `ttl` ≤ 30 days, non-empty `key_template` when present) and emitted by codegen as a `kani_shared::CacheNamespace` entry in a generated `pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace]`.
+
+**The registry is declarative only.** Nothing in the host reads it: `scope`, `ttl`, `max_entries`
+and `key_template` do not change how entries are stored or expired. Hook scripts pass their own
+TTL to `ctx.cache_put`, and every entry follows §4.
 
 #### Extension Metadata
 
@@ -1290,8 +1301,8 @@ the same.
 
 It is applied by the host after extraction, so it is available to **interpreted YAML
 sources only**. A generated Rust extension builds its blueprint in the guest, where the
-key cannot be evaluated; `kani-cli generate` rejects a source that sets it rather than
-emitting a crate that ignores it.
+key cannot be evaluated; `kani-cli generate` and factory `kani-cli build` reject a source that
+sets it rather than emitting a crate that ignores it (§5).
 
 Sub-fetch parallelism is not configurable per step. Every request a source makes,
 including sub-fetches, is bounded by `metadata.rate_limit.max_concurrent` (default 4).
@@ -1563,7 +1574,7 @@ filters:
 
 A `Static` option set (a plain YAML sequence) is resolved and inlined directly into the generated `filter_list!`/`preference_list!` call at codegen time.
 
-A `Fetched` option set (`options_fetched_by`) declares a remote source for the options. Codegen emits an empty options list for the filter itself but also generates a `get_fetched_option_sets()` WIT export returning a JSON array of `FilterFetchDef` records. The host calls this at filter-panel render time, fetches each route using `SmartClient`, parses the response per `container` + `fields`, and injects the resolved options back into the returned `FilterList`. Results are cached in the host's `ext_cache` under the key `"fetched_opts:{source_id}"` with the TTL from the `cache:` block (default 300 s).
+A `Fetched` option set (`options_fetched_by`) declares a remote source for the options. Codegen emits an empty options list for the filter itself but also generates a `get_fetched_option_sets()` WIT export returning a JSON array of `FilterFetchDef` records. The host calls this at filter-panel render time, fetches each route using `SmartClient`, parses the response per `container` + `fields`, and injects the resolved options back into the returned `FilterList`. Results are cached in the host's `ext_cache` under the namespace `fetched_opts:{source_id}`, keyed by `cache.key` (or the option set's name when there is no `cache:` block). The TTL is `cache.ttl`: 3600 s if the block omits it, 300 s if there is no block, and `0` never expires (§4.1).
 
 **`fields` format:**
 - For HTML (`type: html`): values are CSS selectors yielding text. Attribute extraction uses `"selector|attribute"` (e.g., `"a|href"`); `"self"` or `"self|attr"` refers to the container element.
@@ -1819,7 +1830,7 @@ pagination:
 # Scripting (top-level, optional; see §3.10)
 scripts:
   pure:
-    <name>: string                   # Rhai function body (arg0, arg1, ... as params)
+    <name>: string                   # Rhai source defining `fn <name>(...)`; also shared with hooks
 
 pre_request: string                  # Rhai hook body; runs before every source-level HTTP request
 on_status:                           # Rhai hook bodies by status pattern
@@ -2006,8 +2017,8 @@ The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-
 
 | Method | Description |
 |--------|-------------|
-| `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `""` if absent. |
-| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value with a TTL. A TTL below zero is clamped to zero. |
+| `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `()` if absent or expired; test with `== ()`. |
+| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value. A TTL of `0` never expires (§4.1); a negative TTL removes the entry. |
 | `ctx.cache_delete(namespace, key)` | Remove an entry. |
 
 `namespace` is prefixed with the extension's own namespace before it reaches the
@@ -2072,7 +2083,7 @@ metadata:
 
 pre_request: |
   let token = ctx.cache_get("auth", "token");
-  if token != "" {
+  if token != () {
     req.set_header("Authorization", "Bearer " + token);
   }
   proceed()
@@ -2096,37 +2107,43 @@ endpoints:
 
 ## 4. Extension Cache Interface
 
-Extensions can store and retrieve values across invocations using the host-provided `cache` WIT interface. The cache is namespaced per extension and version, preventing cross-extension data leakage and stale reads after an upgrade.
+Extensions can store and retrieve values across invocations using the host-provided `cache` WIT
+interface. Each extension has its own namespace, so one extension cannot read another's entries.
 
 ### 4.1 Operations
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `cache::get(key)` | `string → option<string>` | Retrieve a value by key. Returns `None` if absent or expired. |
-| `cache::put(key, value, ttl_seconds)` | `string, string, u64 → ()` | Store a value with a TTL. Pass `0` for no expiry (evicted only by capacity limits). |
-| `cache::delete(key)` | `string → ()` | Remove a specific key immediately. |
-| `cache::clear_namespace()` | `→ ()` | Remove all keys for this extension's namespace. |
+| WIT function | Guest wrapper (`kani_shared::host_abi::cache`) | Description |
+|--------------|-----------------------------------------------|-------------|
+| `get(key: string) -> option<list<u8>>` | `get(key: &str) -> Option<Vec<u8>>` | Retrieve a value. `None` if absent or expired. |
+| `put(key: string, value: list<u8>, ttl-secs: u32)` | `put(key: &str, value: Vec<u8>, ttl_secs: u32)` | Store a value. A TTL of `0` means the entry never expires; it leaves only by capacity eviction or deletion. |
+| `delete(key: string)` | `delete(key: &str)` | Remove one entry. |
+| `clear()` | `clear()` | Remove every entry in this extension's namespace. |
 
-**`get_or_insert`** is a host-side convenience provided by the `CacheBackend` trait that composes `get` + `put`: retrieve a value if present, otherwise compute it and store it with a TTL. This is used internally by the hook runtime (§3.10) for auth-token caching. It is not exposed as a separate WIT export — scripts in §3.10 express the same pattern via `ctx.cache_get` + `ctx.cache_put`.
+Values are raw bytes; extensions encode structured values themselves (e.g. JSON). The wrappers
+return nothing: a cache write that fails is dropped rather than failing the call.
 
-All values are serialized as strings at the boundary. Extensions are responsible for encoding/decoding structured values (e.g. JSON).
+**`get_or_insert`** is a host-side convenience on the `CacheBackend` trait that composes `get` +
+`put`. It is not exposed over WIT; hook scripts express the same pattern with `ctx.cache_get` +
+`ctx.cache_put` (§3.10).
 
-### 4.2 Scopes
+### 4.2 Namespace and backend
 
-The `scope` declared in the extension metadata controls the backend and key namespace:
+All extension cache entries live in one SQLite table (`extension_cache`), keyed by namespace and
+key, so they persist across restarts. The namespace is the extension id followed by `:`. It does
+**not** include the extension version: entries written by one version are readable after an
+upgrade. An extension that changes the format of a cached value should change its key (e.g.
+`"cdn_base:v2"`) or call `clear()` once after upgrading.
 
-| Scope | Backend | Lifetime | Key prefix |
-|-------|---------|----------|------------|
-| `session` | In-memory (per process) | Until server restart | `{ext_id}:{version}:session:` |
-| `extension` | SQLite | Persistent across restarts | `{ext_id}:{version}:ext:` |
-| `installation` | SQLite | Persistent, per installation | `{ext_id}:{version}:{install_id}:inst:` |
+Hook scripts share the extension's namespace, with the script-supplied namespace appended
+(§3.10). Fetched option sets (§3.4) are cached under the host namespace `fetched_opts:{source_id}`.
 
-The version component means cache entries are automatically isolated between extension upgrades — a v2 extension will never read v1's cached data.
+The `scope` of a declared cache namespace (§3.2 [Cache Namespaces](#cache-namespaces)) is not
+read by the host; every entry behaves as described here.
 
-### 4.3 Capacity Limits
+### 4.3 Capacity limits
 
-- **In-memory (`session`):** Global ceiling of `KANI_EXTENSION_CACHE_MAX_MB` (default 64 MB) across all extensions. LRU eviction within the global budget.
-- **SQLite (`extension` / `installation`):** Per-namespace cap of 4 MB / 4096 rows (configurable). LRU eviction within the namespace when the cap is reached.
+Each namespace is capped at 4 MB and 4096 entries. When a write would exceed either cap, the
+entries closest to expiry are evicted first. Neither cap is configurable.
 
 ### 4.4 Usage in Rust Extensions
 
@@ -2134,20 +2151,21 @@ The version component means cache entries are automatically isolated between ext
 use kani_shared::host_abi::cache;
 
 // Store the fetched cover CDN base URL for 10 minutes
-cache::put("cdn_base", &cdn_url, 600)?;
+cache::put("cdn_base", cdn_url.as_bytes().to_vec(), 600);
 
 // Retrieve on subsequent calls
-if let Some(base) = cache::get("cdn_base")? {
-    // use cached value
+if let Some(base) = cache::get("cdn_base") {
+    // use cached bytes
 }
 
 // Invalidate on auth refresh
-cache::delete("auth_token")?;
+cache::delete("auth_token");
 ```
 
 ### 4.5 TTL and Pruning
 
-Expired entries are not returned by `cache::get` and are pruned by a background job running every 10 minutes (`spawn_cache_prune`). There is no guarantee of exact expiry timing — entries may persist slightly past their TTL until the next prune cycle, but will never be returned to callers after expiry.
+Expired entries are never returned by `get`. A background job (`spawn_cache_prune`) deletes them
+every 10 minutes, so they may occupy space until the next prune.
 
 ## 5. Runtime Backends
 
@@ -2159,6 +2177,16 @@ dispatch interface.
 |---------|----------|-----------|-----------|
 | `Wasm`  | `<name>.wasm` | `wasm32-unknown-unknown` → `wasm-opt` → component | leased WASM instance over the WIT boundary |
 | `Yaml`  | `<name>.yaml` | none (parsed at load) | host-native blueprint evaluation, no WIT call |
+
+A YAML source can run either way: interpreted as-is, or compiled to a WASM crate by
+`kani-cli generate` / `build`. The two differ only where this table says so. Code generation
+rejects a source that uses an interpreted-only feature (`reject_interpreted_only` in
+`kani-cli/src/commands/generate.rs`) rather than producing a crate that ignores it. Add any newly
+found difference here and to that check.
+
+| Feature | Interpreted YAML | Generated WASM |
+|---------|------------------|----------------|
+| `for_each[].deduplicate_by` (§3.2) | Supported | Rejected at generation |
 
 ### 5.1 Interpreted YAML backend
 
