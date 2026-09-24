@@ -869,6 +869,8 @@ Reads the named value from the document-level `scalars` map, computed before per
 
 Evaluates each subfield expression to a string, joins the results with `delimiter`, then encodes the concatenated value with `encoding`. The result is a single string suitable for use as a composite identifier.
 
+Decoding splits on the first `n - 1` delimiters, so only the **last** subfield may contain the delimiter. If any earlier subfield contains it, evaluation fails with an `encoded_field` error rather than producing an ID that would decode into the wrong parts. Order `fields` so a free-text value such as a slug comes last, or choose a delimiter the source never emits.
+
 `"encoding"` is one of:
 
 | Value | Encoding |
@@ -1144,7 +1146,7 @@ fields:
     slug: 'self.attr("data-slug")'
 ```
 
-This compiles to an `encoded_field` expression that evaluates each subfield, joins the results with `delimiter`, and encodes the joined string per `encoding`.
+This compiles to an `encoded_field` expression that evaluates each subfield, joins the results with `delimiter`, and encodes the joined string per `encoding`. Only the last field may contain `delimiter`; see [`encoded_field`](#composite-id-encoding-encoded_field).
 
 **Decoding (unpacking a composite ID in a route or query):** reference an individual subfield with a dotted placeholder `$<role>.<field>$`, e.g.:
 

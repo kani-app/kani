@@ -74,7 +74,8 @@ fn decide(stored: &str, entry: &IdEncodingEntry) -> Decision {
     if parts.len() != names.len() {
         return Decision::Unfixable;
     }
-    Decision::Rewrite(encode_composite(&parts, &entry.delimiter, &encoding))
+    encode_composite(&parts, &entry.delimiter, &encoding)
+        .map_or(Decision::Unfixable, Decision::Rewrite)
 }
 
 async fn repair_rows(

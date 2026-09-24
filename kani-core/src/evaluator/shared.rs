@@ -995,9 +995,9 @@ where
                     parts.push(s);
                 }
                 let part_refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-                Ok(Value::Str(crate::evaluator::id_encoding::encode_composite(
-                    &part_refs, delimiter, encoding,
-                )))
+                crate::evaluator::id_encoding::encode_composite(&part_refs, delimiter, encoding)
+                    .map(Value::Str)
+                    .map_err(|e| format!("encoded_field: {e}"))
             })
             .await,
         ),

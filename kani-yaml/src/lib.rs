@@ -423,7 +423,8 @@ mod url_tests {
             &["h1", "some-title-slug"],
             "|",
             &kani_shared::ast::IdEncoding::Base64Url,
-        );
+        )
+        .expect("no delimiter in a non-final part");
 
         let mut resolved = args(&[("manga_id", &encoded)]);
         decode_composite_arg(&entry, "manga", "manga_id", &mut resolved);

@@ -3084,6 +3084,24 @@ mod dsl_v2_tests {
     }
 
     #[tokio::test]
+    async fn encoded_field_rejects_delimiter_in_non_final_subfield() {
+        use kani_shared::ast::IdEncoding;
+        let expr = Expr::EncodedField {
+            subfields: vec![
+                ("hid".into(), Box::new(Expr::Literal("a|b".into()))),
+                ("slug".into(), Box::new(Expr::Literal("slug".into()))),
+            ],
+            delimiter: "|".into(),
+            encoding: IdEncoding::Base64Url,
+        };
+        let err = json_eval_err(expr).await;
+        assert!(
+            err.contains("encoded_field") && err.contains("contains the delimiter"),
+            "expected a delimiter rejection, got: {err}"
+        );
+    }
+
+    #[tokio::test]
     async fn url_encode_spaces_and_special_chars() {
         let expr = Expr::UrlEncode {
             target: Box::new(Expr::Literal("hello world & more".into())),
