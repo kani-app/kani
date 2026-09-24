@@ -218,7 +218,14 @@ impl http::Host for HostState {
 
         self.check_allowed_host(url.host_str().unwrap_or(""))?;
 
-        let mut builder = self.http_client.inner().request(method, url.as_str());
+        let mut builder = self
+            .http_client
+            .inner()
+            .request(method, url.as_str())
+            .redirect(
+                self.http_client
+                    .source_redirect_policy(self.allowed_host.clone()),
+            );
         for (k, v) in req.headers {
             builder = builder.header(k, v);
         }

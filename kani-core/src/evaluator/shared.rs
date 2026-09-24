@@ -1102,7 +1102,15 @@ pub async fn fetch_body(
             m => return Err(format!("Unsupported HTTP method: {}", m)),
         };
 
-        let mut builder = state.http_client.inner().request(method, url.to_string());
+        let mut builder = state
+            .http_client
+            .inner()
+            .request(method, url.to_string())
+            .redirect(
+                state
+                    .http_client
+                    .source_redirect_policy(state.allowed_host.clone()),
+            );
         for (k, v) in &working.headers {
             builder = builder.header(k, v);
         }
@@ -1318,6 +1326,7 @@ pub(super) fn charge_fetch_request(
 /// applies. Mirrors `fetch_body`'s no-hooks path exactly.
 pub(super) async fn send_prepared_request(
     client: crate::http::SmartClient,
+    allowed_host: crate::wasm::AllowedHost,
     req: kani_shared::ast::RequestDef,
 ) -> Result<String, String> {
     let method = match req.method.to_uppercase().as_str() {
@@ -1332,7 +1341,10 @@ pub(super) async fn send_prepared_request(
     if !req.queries.is_empty() {
         url.query_pairs_mut().extend_pairs(req.queries.iter());
     }
-    let mut builder = client.inner().request(method, url.to_string());
+    let mut builder = client
+        .inner()
+        .request(method, url.to_string())
+        .redirect(client.source_redirect_policy(allowed_host));
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }

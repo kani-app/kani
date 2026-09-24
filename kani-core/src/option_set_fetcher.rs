@@ -29,18 +29,23 @@ fn resolve_route(base_url: &str, route: &str) -> Result<String> {
 
 /// Enforce the source's HTTP policy on a resolved option-set URL: unrestricted
 /// sources may fetch anywhere, restricted ones only from their own host (exact
-/// match, the same rule the guest HTTP path applies).
-fn enforce_option_set_host(base_url: &str, url: &str, unrestricted_http: bool) -> Result<()> {
+/// match, the same rule the guest HTTP path applies). Returns the policy so the
+/// fetch can hold redirects to it too.
+fn enforce_option_set_host(
+    base_url: &str,
+    url: &str,
+    unrestricted_http: bool,
+) -> Result<AllowedHost> {
     if unrestricted_http {
-        return Ok(());
+        return Ok(AllowedHost::Unrestricted);
     }
     let base_host = url_host(base_url)
         .ok_or_else(|| Error::Other(format!("source base_url '{base_url}' has no host")))?;
     let req_host = url_host(url)
         .ok_or_else(|| Error::Other(format!("option-set route '{url}' has no host")))?;
-    AllowedHost::Restricted(base_host)
-        .allows_host(&req_host)
-        .map_err(Error::Other)
+    let policy = AllowedHost::Restricted(base_host);
+    policy.allows_host(&req_host).map_err(Error::Other)?;
+    Ok(policy)
 }
 
 /// Fetches and parses a `FilterFetchDef`, returning `(name, value)` pairs.
@@ -57,13 +62,13 @@ pub async fn fetch_option_set(
     unrestricted_http: bool,
 ) -> Result<Vec<(String, String)>> {
     let url = resolve_route(base_url, &def.route)?;
-    enforce_option_set_host(base_url, &url, unrestricted_http)?;
+    let policy = enforce_option_set_host(base_url, &url, unrestricted_http)?;
 
     // Bounded: this is an operator-supplied URL fetched to populate a filter
     // dropdown. An option set is kilobytes; anything past the cap is not a
     // document we were going to parse.
     let bytes = client
-        .get(&url)
+        .get_for_source(&url, policy)
         .await?
         .bytes_prefix(client.budgets().max_option_set_bytes)
         .await?;

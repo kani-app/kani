@@ -503,10 +503,12 @@ fn egress_forbidden(allow_loopback: &std::sync::atomic::AtomicBool, url: &str) -
             && crate::network::is_loopback_url_host(url))
 }
 
-/// Redirect policy for the auto-following client (source extraction): follow up
-/// to `REDIRECT_LIMIT` hops, refusing a forbidden egress target per hop.
+/// Redirect policy for the auto-following client: follow up to `REDIRECT_LIMIT`
+/// hops, refusing a forbidden egress target per hop and, when given, any hop the
+/// source's host policy would not allow as a first request.
 fn ssrf_aware_redirect_policy(
     allow_loopback: Arc<std::sync::atomic::AtomicBool>,
+    allowed_host: Option<crate::wasm::AllowedHost>,
 ) -> rquest::redirect::Policy {
     rquest::redirect::Policy::custom(move |attempt| {
         if attempt.previous.len() >= REDIRECT_LIMIT {
@@ -518,6 +520,13 @@ fn ssrf_aware_redirect_policy(
             return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(
                 "redirect to a forbidden host refused",
             ));
+        }
+        if let Some(policy) = &allowed_host
+            && let Err(reason) = policy.allows_host(attempt.uri.host().unwrap_or_default())
+        {
+            return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(format!(
+                "redirect refused: {reason}"
+            )));
         }
         attempt.follow()
     })
@@ -590,9 +599,10 @@ impl SmartClient {
         // every hop for SSRF; send_request keeps its simple loop.
         let client = rquest::Client::builder()
             .emulation(rquest_util::Emulation::Chrome130)
-            .redirect(ssrf_aware_redirect_policy(Arc::clone(
-                &allow_loopback_egress,
-            )))
+            .redirect(ssrf_aware_redirect_policy(
+                Arc::clone(&allow_loopback_egress),
+                None,
+            ))
             .dns_resolver(Arc::new(resolver))
             .pool_idle_timeout(std::time::Duration::from_secs(300))
             .pool_max_idle_per_host(100)
@@ -960,6 +970,15 @@ impl SmartClient {
         }
     }
 
+    /// The redirect policy for one extension's request: the client's own rules plus that
+    /// source's host policy, applied to every hop.
+    pub fn source_redirect_policy(
+        &self,
+        allowed_host: crate::wasm::AllowedHost,
+    ) -> rquest::redirect::Policy {
+        ssrf_aware_redirect_policy(Arc::clone(&self.allow_loopback_egress), Some(allowed_host))
+    }
+
     /// Refuses a first hop to a forbidden IP literal, which the validating resolver never sees.
     fn refuse_forbidden_egress(&self, url: &str) -> Result<()> {
         if egress_forbidden(&self.allow_loopback_egress, url) {
@@ -972,6 +991,20 @@ impl SmartClient {
 
     pub async fn get(&self, url: &str) -> Result<SmartResponse> {
         let request = self.client.get(url).build()?;
+        self.send_request(request).await
+    }
+
+    /// [`Self::get`] with a source's host policy applied to every redirect hop.
+    pub async fn get_for_source(
+        &self,
+        url: &str,
+        allowed_host: crate::wasm::AllowedHost,
+    ) -> Result<SmartResponse> {
+        let request = self
+            .client
+            .get(url)
+            .redirect(self.source_redirect_policy(allowed_host))
+            .build()?;
         self.send_request(request).await
     }
 

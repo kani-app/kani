@@ -2339,8 +2339,9 @@ to the first request and to every redirect hop.
 | Image proxy (covers, pages) | No: images may come from any CDN | Yes |
 | Repository index and artifacts | Artifact must share the repo's host | Yes |
 
-**Redirects** are re-checked for forbidden addresses on every hop, but **not** against the host
-policy: a restricted source's request may be redirected to any public host.
+**Redirects** are held to both checks on every hop: a restricted source's request may not be
+redirected off its host. A site that redirects to another host (commonly `example.com` →
+`www.example.com`) must use the final host as its `base_url`, or declare `unrestricted_http`.
 
 **The solver browser** is a separate process with its own network. Kani checks the page it is
 asked to load, but not what that page's scripts or subresources then fetch. Treat a browser

@@ -575,3 +575,102 @@ async fn json_sub_fetches_run_concurrently_not_sequentially() {
         elapsed
     );
 }
+
+/// A server on `127.0.0.2`: another host than wiremock's `127.0.0.1`, yet still loopback.
+async fn other_host_serving(body: &'static str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.2:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf).await;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+        }
+    });
+    format!("http://{addr}/landing")
+}
+
+async fn redirecting_to(target: &str) -> MockServer {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(wiremock::matchers::path("/start"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", target))
+        .mount(&server)
+        .await;
+    server
+}
+
+fn start_request(server: &MockServer) -> RequestDef {
+    RequestDef {
+        url: format!("{}/start", server.uri()),
+        method: "GET".into(),
+        headers: vec![],
+        queries: vec![],
+        endpoint_id: None,
+    }
+}
+
+#[tokio::test]
+async fn a_redirect_is_held_to_the_sources_host() {
+    let target = other_host_serving(r#"{"title":"elsewhere"}"#).await;
+    let server = redirecting_to(&target).await;
+    let bp = BlueprintBuilder::new("")
+        .with_request(start_request(&server))
+        .field("title", Expr::self_ref().ptr("/title").str_val())
+        .build();
+
+    let mut restricted = make_state(AllowedHost::Restricted(server.uri()));
+    let err = extract_json(&mut restricted, None, &bp).await.unwrap_err();
+    assert!(
+        err.contains("redirect"),
+        "refused at the redirect, got: {err}"
+    );
+
+    let mut unrestricted = make_state(AllowedHost::Unrestricted);
+    let out = extract_json(&mut unrestricted, None, &bp).await.unwrap();
+    assert_eq!(out["rows"][0]["title"], "elsewhere");
+}
+
+#[tokio::test]
+async fn a_sub_fetch_redirect_is_held_to_the_sources_host() {
+    let target = other_host_serving(r#"{"title":"elsewhere"}"#).await;
+    let server = redirecting_to(&target).await;
+    Mock::given(method("GET"))
+        .and(wiremock::matchers::path("/list"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(format!(r#"[{{"url":"{}/start"}}]"#, server.uri())),
+        )
+        .mount(&server)
+        .await;
+    let detail_bp = BlueprintBuilder::new("")
+        .field("title", Expr::self_ref().ptr("/title").str_val())
+        .build();
+    let list_bp = BlueprintBuilder::new("")
+        .with_request(RequestDef {
+            url: format!("{}/list", server.uri()),
+            method: "GET".into(),
+            headers: vec![],
+            queries: vec![],
+            endpoint_id: None,
+        })
+        .field(
+            "data",
+            Expr::fetch_json(Expr::self_ref().ptr("/url").str_val(), detail_bp),
+        )
+        .build();
+
+    let mut restricted = make_state(AllowedHost::Restricted(server.uri()));
+    let err = extract_json(&mut restricted, None, &list_bp)
+        .await
+        .unwrap_err();
+    assert!(
+        err.contains("redirect"),
+        "refused at the redirect, got: {err}"
+    );
+}
