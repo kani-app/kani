@@ -1127,7 +1127,7 @@ fn validate_endpoint(
             page_url,
             script_name,
             timeout_ms: body.timeout_ms,
-            auto_scroll: body.auto_scroll.unwrap_or(true),
+            auto_scroll: body.auto_scroll.unwrap_or(false),
         })
     } else {
         Err(errors)

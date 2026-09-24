@@ -1884,7 +1884,7 @@ endpoints:
     page_url: "https://example.com/manga/$manga_id$"  # Required. Loaded in the browser.
     script: fetch_manga           # Required. Must be declared in browser_scripts.
     timeout_ms: 15000             # Optional. Default: 30000.
-    auto_scroll: true             # Optional. Default: true. Periodically scrolls the
+    auto_scroll: true             # Optional. Default: false. Periodically scrolls the
                                   # page so lazy-loaded content is present before the
                                   # payload is captured. Browser endpoints only.
     container: ""                 # The payload is JSON, so address its root with a pointer.
@@ -1898,7 +1898,7 @@ endpoints:
 
 **`page_url`:** the absolute URL to load. May use `$manga_id$` and `$chapter_id$` placeholders (substituted from endpoint function arguments).
 
-**`auto_scroll`:** when true, the solver scrolls the page during the load so content behind an infinite scroll or a lazy-loading observer is rendered before `passPayload` runs. It costs wall-clock time against `timeout_ms`, so set `auto_scroll: false` on endpoints that do not need it. It has no effect on a non-browser endpoint.
+**`auto_scroll`:** when true, the solver scrolls the page during the load so content behind an infinite scroll or a lazy-loading observer is rendered before `passPayload` runs. It costs wall-clock time against `timeout_ms`, so enable it only for endpoints that need it. It has no effect on a non-browser endpoint.
 
 **`queries` and `filter_mapping`:** a browser endpoint issues no request of its own — the page is the request, and the site's scripts turn its query string into whatever API call the payload comes from. Both are therefore appended to `page_url` as query parameters (endpoint queries first, then mapped filters), giving browser endpoints the same filter surface as HTTP ones. Note that sites commonly read a repeated parameter as its *first* occurrence, so a name used in `queries` should not also be the target of a mapped filter.
 
