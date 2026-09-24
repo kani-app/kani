@@ -86,6 +86,28 @@ async fn file_len(path: std::path::PathBuf) -> u64 {
 }
 
 impl AppService {
+    /// Warns while the configured solver lacks the egress guard. An unreachable
+    /// solver leaves the current state alone, since nothing new is known.
+    pub async fn refresh_solver_egress_degradation(&self) {
+        use crate::service::degradations::{Severity, ids::SOLVER_EGRESS_GUARD};
+        match self.smart_client.solver_has_egress_guard().await {
+            Some(false) => self.degradations.register(
+                SOLVER_EGRESS_GUARD,
+                Severity::Warn,
+                "Browser solver",
+                "The configured solver does not advertise kani.egress-guard/1, so pages it \
+                 loads can reach private, loopback and cloud-metadata addresses on its network.",
+                "Run the flaresolverr-kani image as the solver, or keep the solver on a network \
+                 with nothing else reachable.",
+            ),
+            Some(true) => self.degradations.clear(SOLVER_EGRESS_GUARD),
+            None if !self.smart_client.solver_is_configured() => {
+                self.degradations.clear(SOLVER_EGRESS_GUARD)
+            }
+            None => {}
+        }
+    }
+
     pub async fn get_diagnostics(&self) -> crate::error::Result<DiagnosticsPayload> {
         let info = build_info();
 

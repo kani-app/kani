@@ -2348,7 +2348,9 @@ the solver to load; the solver (`flaresolverr-kani`) enforces the forbidden-addr
 everything that page then fetches, by routing the browser through an egress-guard proxy that
 dials only the address it checked. It advertises this as `kani.egress-guard/1` on `GET /`. A
 stock FlareSolverr has no such guard, and neither does a solver request that supplies its own
-upstream `proxy`. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
+upstream `proxy`. Kani reads the solver's index at startup and whenever the solver setting
+changes, and raises a `solver_egress_guard` warning in Diagnostics while the configured solver
+lacks the capability. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
 challenge scripts from other hosts.
 
 **Secret preferences** are readable by the extension that declares them and may be sent to any

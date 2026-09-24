@@ -1434,6 +1434,10 @@ impl SmartClient {
         Ok((cookies, ua))
     }
 
+    pub fn solver_is_configured(&self) -> bool {
+        self.solver_configured()
+    }
+
     pub(crate) fn solver_configured(&self) -> bool {
         self.solver_url
             .load()
@@ -1483,6 +1487,25 @@ impl SmartClient {
         parsed.set_path("/");
         parsed.set_query(None);
         Some(parsed.to_string())
+    }
+
+    /// Whether the configured solver keeps its browser off private addresses, as it
+    /// advertises with `kani.egress-guard/1` on its index. `None` when no solver is
+    /// configured or its index cannot be read, since then nothing is known.
+    pub async fn solver_has_egress_guard(&self) -> Option<bool> {
+        let guard = self.solver_url.load();
+        let url = guard.as_deref().filter(|url| !url.trim().is_empty())?;
+        let index_url = Self::solver_index_url(url)?;
+        let response = self.solver_http().ok()?.get(&index_url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let body = response.json::<serde_json::Value>().await.ok()?;
+        Some(
+            body["capabilities"]
+                .as_array()
+                .is_some_and(|caps| caps.iter().any(|c| c == "kani.egress-guard/1")),
+        )
     }
 
     /// Establishes what the configured solver can do, and caches it. The index

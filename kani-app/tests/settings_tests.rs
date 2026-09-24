@@ -369,3 +369,41 @@ async fn a_recovered_subsystem_disappears_from_diagnostics() {
     svc.degradations.clear(ids::LIBRARY_PATH);
     assert!(svc.get_diagnostics().await.unwrap().degradations.is_empty());
 }
+
+#[tokio::test]
+async fn a_solver_without_the_egress_guard_is_reported_until_fixed() {
+    use kani_app::service::degradations::ids::SOLVER_EGRESS_GUARD;
+    use kani_shared_test::origin::{Response, TestOrigin};
+
+    let solver = TestOrigin::start().await;
+    let svc = common::test_service().await;
+    let reported = |svc: &kani_app::service::AppService| {
+        svc.degradations
+            .list()
+            .iter()
+            .any(|d| d.id == SOLVER_EGRESS_GUARD)
+    };
+    svc.smart_client
+        .update_solver_url(Some(solver.url("/v1")))
+        .await;
+
+    solver.set(
+        "/",
+        Response::json(r#"{"capabilities":["kani.capture/1","kani.capture/2"]}"#),
+    );
+    svc.refresh_solver_egress_degradation().await;
+    assert!(reported(&svc), "a stock-capability solver must be reported");
+
+    solver.set(
+        "/",
+        Response::json(r#"{"capabilities":["kani.capture/2","kani.egress-guard/1"]}"#),
+    );
+    svc.refresh_solver_egress_degradation().await;
+    assert!(!reported(&svc), "a guarded solver clears the warning");
+
+    solver.set("/", Response::json(r#"{"capabilities":[]}"#));
+    svc.refresh_solver_egress_degradation().await;
+    svc.smart_client.update_solver_url(None).await;
+    svc.refresh_solver_egress_degradation().await;
+    assert!(!reported(&svc), "no solver means nothing to warn about");
+}

@@ -380,6 +380,10 @@ async fn main() {
     state.spawn_webhook_listener();
     state.spawn_login_attempt_prune();
     state.spawn_cache_prune();
+    {
+        let solver_state = state.clone();
+        tokio::spawn(async move { solver_state.refresh_solver_egress_degradation().await });
+    }
     state.spawn_progress_flush();
 
     {

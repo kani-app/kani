@@ -331,6 +331,8 @@ impl AppService {
                     .update_solver_url(new_solver.clone())
                     .await;
                 self.proxy_client.update_solver_url(new_solver).await;
+                let svc = self.clone();
+                tokio::spawn(async move { svc.refresh_solver_egress_degradation().await });
                 self.audit(Some(user_id), "settings.update.advanced", None, None)
                     .await;
             }
