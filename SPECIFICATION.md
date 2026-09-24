@@ -2285,6 +2285,14 @@ the row upsert then fails, they are put back exactly as they were and the instal
 error. The registry is only touched after the row is committed, and `hot_swap` cannot fail: it
 waits up to 30 s for in-flight calls (§5.4) and then swaps. Repo add/trust/install/update/remove and block/unblock are audit-logged.
 
+**Every install path runs this pipeline.** A manual install (`POST /rest/sources/yaml`,
+`/yaml/fetch`, `/wasm`, `/wasm/fetch`) skips only the repository steps (index lookup, hash and
+signature) and finds or creates the source row by the artifact's own id. Replacing a specific
+source (`POST /rest/sources/{id}/wasm`, `/{id}/wasm/fetch`) requires the artifact to declare that
+source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_version`, id form
+(§3.9) and capability checks apply on every path; an artifact that fails any of them, or does not
+compile, is a `400` and changes nothing.
+
 ### 6.4 SSE events
 
 `SourceInstalled`, `RepoRefreshed`, `UpdateAvailable` (emitted by `refresh_repo` when a repo version exceeds the installed version, by semver compare), and `SourceUpdating` (emitted at the start of an update) are broadcast for live frontend indicators.

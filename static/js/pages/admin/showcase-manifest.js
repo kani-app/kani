@@ -494,8 +494,7 @@ export const COMPONENTS = [
     "module": "components/sources-sidebar.js",
     "exports": [
       "AddSourceModal",
-      "SourcesSidebar",
-      "consumePendingSourceId"
+      "SourcesSidebar"
     ]
   },
   {

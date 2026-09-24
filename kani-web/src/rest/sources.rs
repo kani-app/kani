@@ -15,6 +15,8 @@ pub fn router() -> Router<AppState> {
         .route("/sources/{id}/metadata", get(get_metadata))
         .route("/sources/{id}/wasm", post(upload_wasm))
         .route("/sources/{id}/wasm/fetch", post(fetch_wasm))
+        .route("/sources/wasm", post(install_wasm))
+        .route("/sources/wasm/fetch", post(install_wasm_from_url))
         .route("/sources/yaml", post(install_yaml))
         .route("/sources/yaml/fetch", post(fetch_yaml))
         .route("/sources/{id}/reload", post(reload_source_handler))
@@ -360,12 +362,17 @@ pub(super) async fn upload_wasm(
             "Source installation is disabled by the administrator".into(),
         ));
     }
-    let source = state.get_source(id).await?;
+    state.get_source(id).await?;
+    let bytes = read_wasm_field(&mut multipart).await?;
+    state.update_wasm_source(id, bytes.as_ref()).await?;
+    Ok(StatusCode::OK)
+}
 
+async fn read_wasm_field(multipart: &mut Multipart) -> Result<bytes::Bytes, AppError> {
     let field = multipart
         .next_field()
         .await?
-        .ok_or_else(|| AppError::InternalServerError("no file field in upload".into()))?;
+        .ok_or_else(|| AppError::ValidationError("no file field in upload".into()))?;
 
     let content_length = field
         .headers()
@@ -373,18 +380,67 @@ pub(super) async fn upload_wasm(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<usize>().ok());
 
-    let bytes: bytes::Bytes = kani_core::http::collect_bytes_limited(
+    Ok(kani_core::http::collect_bytes_limited(
         Box::pin(field.map_err(|e| kani_core::error::Error::Other(e.to_string()))),
         content_length,
         MAX_WASM_BYTES,
     )
-    .await?;
+    .await?)
+}
 
-    state
-        .install_source(id, &source.name, bytes.as_ref(), crate::KANI_VERSION)
-        .await?;
+#[utoipa::path(
+    post, path = "/rest/sources/wasm",
+    request_body(content = inline(serde_json::Value), description = "Multipart form with WASM file field", content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "WASM extension installed; returns its source ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 400, description = "Invalid WASM extension"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn install_wasm(
+    _: AuthGuard<crate::permissions::guards::SourceInstall>,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, AppError> {
+    if !crate::SOURCE_INSTALL_ALLOWED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(AppError::Forbidden(
+            "Source installation is disabled by the administrator".into(),
+        ));
+    }
+    let bytes = read_wasm_field(&mut multipart).await?;
+    let id = state.install_wasm_source(bytes.as_ref()).await?;
+    Ok(Json(json!({ "id": id })))
+}
 
-    Ok(StatusCode::OK)
+#[utoipa::path(
+    post, path = "/rest/sources/wasm/fetch",
+    request_body = FetchWasmRequest,
+    responses(
+        (status = 200, description = "WASM fetched from URL and installed; returns its source ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 400, description = "Invalid WASM extension"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn install_wasm_from_url(
+    _: AuthGuard<crate::permissions::guards::SourceInstall>,
+    State(state): State<AppState>,
+    ValidatedJson(payload): ValidatedJson<FetchWasmRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if !crate::SOURCE_INSTALL_ALLOWED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(AppError::Forbidden(
+            "Source installation is disabled by the administrator".into(),
+        ));
+    }
+    let response = state.proxy_client.safe_get(&payload.url, None).await?;
+    let bytes = response.bytes_limited(MAX_WASM_BYTES).await?;
+    let id = state.install_wasm_source(&bytes).await?;
+    Ok(Json(json!({ "id": id })))
 }
 
 #[utoipa::path(
@@ -410,15 +466,13 @@ pub(super) async fn fetch_wasm(
             "Source installation is disabled by the administrator".into(),
         ));
     }
-    let source = state.get_source(id).await?;
+    state.get_source(id).await?;
 
     let response = state.proxy_client.safe_get(&payload.url, None).await?;
 
     let bytes = response.bytes_limited(MAX_WASM_BYTES).await?;
 
-    state
-        .install_source(id, &source.name, &bytes, crate::KANI_VERSION)
-        .await?;
+    state.update_wasm_source(id, &bytes).await?;
 
     Ok(StatusCode::OK)
 }
@@ -430,7 +484,7 @@ pub(super) async fn fetch_wasm(
         (status = 200, description = "Interpreted-YAML extension installed"),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Insufficient permissions"),
-        (status = 422, description = "Invalid YAML extension"),
+        (status = 400, description = "Invalid YAML extension"),
     ),
     security(("session" = [])),
     tag = "sources"
@@ -458,7 +512,7 @@ pub(super) async fn install_yaml(
         (status = 200, description = "YAML fetched from URL and installed"),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Insufficient permissions"),
-        (status = 422, description = "Invalid YAML extension"),
+        (status = 400, description = "Invalid YAML extension"),
     ),
     security(("session" = [])),
     tag = "sources"

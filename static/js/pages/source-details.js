@@ -19,7 +19,7 @@ import { createMangaCard } from '../components/manga-card.js';
 import { fetchPagedGrid } from '../components/paged-grid.js';
 import { Modal, mountIntoModalRoot, showConfirm } from '../components/modal.js';
 import { showApiError } from '../components/toast.js';
-import { SourcesSidebar, AddSourceModal, consumePendingSourceId } from '../components/sources-sidebar.js';
+import { SourcesSidebar, AddSourceModal } from '../components/sources-sidebar.js';
 import { PreferenceRow, PreferenceDetailView } from '../components/preference-row.js';
 import { TileSizeSelect } from '../components/tile-size-select.js';
 import { FALLBACK_PAGE_SIZE, MAX_PAGE_SIZE, gridCapacity, gridFitEnabled, observeCapacity } from '../grid-columns.js';
@@ -1204,7 +1204,5 @@ export function destroy(container) {
   _addSourceBtn = null;
   _headerActions = null;
   clearPageHeader();
-  const pendingId = consumePendingSourceId();
-  if (pendingId !== null) api.deleteSource(pendingId).catch(() => {});
   container.innerHTML = '';
 }

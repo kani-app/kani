@@ -279,3 +279,83 @@ async fn bulk_and_per_source_agree() {
         "bulk and per-source disagree about the same source"
     );
 }
+
+fn wasm_upload(cookie: Option<&str>, bytes: &[u8]) -> axum::http::Request<axum::body::Body> {
+    let boundary = "kani-test-boundary";
+    let mut body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"x.wasm\"\r\n\
+         Content-Type: application/wasm\r\n\r\n"
+    )
+    .into_bytes();
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    let mut builder = axum::http::Request::builder()
+        .method("POST")
+        .uri("/rest/sources/wasm")
+        .header(
+            "Content-Type",
+            format!("multipart/form-data; boundary={boundary}"),
+        );
+    if let Some(cookie) = cookie {
+        builder = builder
+            .header("Cookie", common::csrf_cookie(cookie))
+            .header("X-CSRF-Token", common::csrf_token(cookie));
+    }
+    builder.body(axum::body::Body::from(body)).unwrap()
+}
+
+fn fixture_wasm() -> Vec<u8> {
+    std::fs::read(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("wasm_sources")
+            .join("fixture.wasm"),
+    )
+    .expect("wasm_sources/fixture.wasm: cargo run -p kani-cli -- build kani-fixture-source")
+}
+
+#[tokio::test]
+async fn install_wasm_creates_the_source_named_by_the_artifact() {
+    let (app, cookie) = common::admin_app().await;
+
+    let res = app
+        .clone()
+        .oneshot(wasm_upload(Some(&cookie), &fixture_wasm()))
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    let id = body_json(res).await["id"].as_i64().expect("numeric id");
+    let source = body_json(
+        app.oneshot(authed_get(&format!("/rest/sources/{id}"), &cookie))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let name = source["name"].as_str().unwrap_or_default();
+    assert!(
+        !name.is_empty() && !name.starts_with("pending-"),
+        "the row is named by the artifact, got {name:?}"
+    );
+}
+
+#[tokio::test]
+async fn install_wasm_requires_authentication() {
+    let (app, _) = common::admin_app().await;
+    let res = app
+        .oneshot(wasm_upload(None, &fixture_wasm()))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn install_wasm_rejects_bytes_that_are_not_an_extension() {
+    let (app, cookie) = common::admin_app().await;
+    let res = app
+        .oneshot(wasm_upload(Some(&cookie), b"not a wasm module"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

@@ -697,3 +697,73 @@ async fn an_artifact_declaring_another_sources_id_is_refused() {
         "the victim's artifact was overwritten"
     );
 }
+
+fn fixture_wasm() -> Vec<u8> {
+    std::fs::read(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("wasm_sources")
+            .join("fixture.wasm"),
+    )
+    .expect("wasm_sources/fixture.wasm: cargo run -p kani-cli -- build kani-fixture-source")
+}
+
+#[tokio::test]
+async fn a_manual_wasm_install_finds_or_creates_by_its_own_id() {
+    let svc = test_service().await;
+    let bytes = fixture_wasm();
+
+    let first = svc.install_wasm_source(&bytes).await.unwrap();
+    let again = svc.install_wasm_source(&bytes).await.unwrap();
+
+    assert_eq!(first, again, "a reinstall must reuse the source row");
+    let source = svc.get_source(first).await.unwrap();
+    assert!(
+        kani_shared::types::is_valid_extension_id(&source.name),
+        "the row is named by the artifact's id, got {}",
+        source.name
+    );
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    assert!(storage.join(format!("{}.wasm", source.name)).exists());
+}
+
+#[tokio::test]
+async fn a_manual_wasm_update_must_keep_the_sources_id() {
+    let svc = test_service().await;
+    let other = svc
+        .install_yaml_source(
+            b"id: some-other-source\nname: Other\nversion: \"1.0.0\"\nbase_url: \"https://other.example\"\n",
+        )
+        .await
+        .unwrap();
+
+    let err = svc
+        .update_wasm_source(other, &fixture_wasm())
+        .await
+        .expect_err("an artifact for another id must not replace this source");
+
+    assert!(
+        err.to_string().contains("declares id"),
+        "refused for the id mismatch, got: {err}"
+    );
+    assert_eq!(
+        svc.get_source(other).await.unwrap().name,
+        "some-other-source"
+    );
+}
+
+#[tokio::test]
+async fn a_reserved_id_is_refused_on_every_install_path() {
+    let svc = test_service().await;
+    let err = svc
+        .install_yaml_source(
+            b"id: example\nname: Example\nversion: \"1.0.0\"\nbase_url: \"https://example.com\"\n",
+        )
+        .await
+        .expect_err("a reserved id must be refused for YAML as well as WASM");
+    assert!(
+        err.to_string().contains("reserved"),
+        "refused as reserved, got: {err}"
+    );
+}

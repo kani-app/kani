@@ -331,11 +331,6 @@ export async function downloadSupportBundle() {
   URL.revokeObjectURL(a.href);
 }
 
-/** @param {string} name */
-export async function createSource(name) {
-  return _req('POST', '/sources', { body: { name } });
-}
-
 /** @param {number} id */
 export async function getSource(id) {
   return _req('GET', `/sources/${id}`);
@@ -372,11 +367,11 @@ export async function reloadSource(id) {
 }
 
 /**
- * Fetch and install a WASM extension from a URL.
- * @param {number} id @param {string} url
+ * Fetch and install a WASM extension from a URL (find-or-create by its id).
+ * @param {string} url
  */
-export async function fetchWasm(id, url) {
-  return _req('POST', `/sources/${id}/wasm/fetch`, { body: { url } });
+export async function fetchWasm(url) {
+  return _req('POST', '/sources/wasm/fetch', { body: { url } });
 }
 
 /** Install an interpreted-YAML extension from raw YAML text (find-or-create by id). @param {string} content */
@@ -391,13 +386,12 @@ export async function fetchYaml(url) {
 
 /**
  * Upload a .wasm file to install an extension.
- * @param {number} id
  * @param {File} file
  */
-export async function uploadWasm(id, file) {
+export async function uploadWasm(file) {
   const body = new FormData();
   body.append('file', file);
-  const res = await fetch(`/rest/sources/${id}/wasm`, {
+  const res = await fetch('/rest/sources/wasm', {
     method: 'POST',
     credentials: 'include',
     headers: { 'X-CSRF-Token': _csrfToken() },

@@ -258,6 +258,8 @@ impl Modify for StabilityAddon {
         crate::rest::sources::get_metadata,
         crate::rest::sources::upload_wasm,
         crate::rest::sources::fetch_wasm,
+        crate::rest::sources::install_wasm,
+        crate::rest::sources::install_wasm_from_url,
         crate::rest::sources::install_yaml,
         crate::rest::sources::fetch_yaml,
         crate::rest::sources::reload_source_handler,

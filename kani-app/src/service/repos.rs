@@ -564,8 +564,34 @@ impl AppService {
         Ok(source_id)
     }
 
+    /// Install a compiled WASM extension from raw bytes: the manual counterpart to
+    /// [`Self::install_yaml_source`], finding or creating the source row by the
+    /// artifact's own id. Runs the same pipeline as a repository install.
+    pub async fn install_wasm_source(&self, bytes: &[u8]) -> Result<i64> {
+        let storage_path = self.storage_path_string().await?;
+        self.install_wasm_artifact(bytes, &storage_path, None, None)
+            .await
+    }
+
+    /// Replace the artifact of an existing source with compiled WASM bytes. The
+    /// artifact must declare the source's own id, exactly as a repository update must.
+    pub async fn update_wasm_source(&self, source_id: i64, bytes: &[u8]) -> Result<i64> {
+        let storage_path = self.storage_path_string().await?;
+        self.install_wasm_artifact(bytes, &storage_path, Some(source_id), None)
+            .await
+    }
+
+    async fn storage_path_string(&self) -> Result<String> {
+        let settings = self.settings.read().await;
+        settings
+            .wasm_storage_path
+            .to_str()
+            .map(str::to_string)
+            .ok_or_else(|| ServiceError::Internal("Failed to convert storage path".to_string()))
+    }
+
     /// Install an interpreted-YAML extension from raw YAML bytes — the manual
-    /// add-source counterpart to `install_source` (WASM). Validates, saves to
+    /// add-source counterpart to [`Self::install_wasm_source`]. Validates, saves to
     /// storage, upserts the source row (find-or-create/revive by the YAML's own
     /// id, so reinstalling a previously-removed source works), and hot-loads the
     /// backend. Returns the source id.
@@ -610,6 +636,7 @@ impl AppService {
 
         self.check_artifact_identity(&validated.id, expected_id, existing_id)
             .await?;
+        check_artifact_gating(&validated.id, validated.min_kani_version.as_deref())?;
         crate::install_gating::check_required_capabilities_live(
             &validated.requires_capabilities,
             &self.smart_client,
@@ -676,7 +703,9 @@ impl AppService {
             tokio::task::spawn_blocking(move || runtime_clone.compile_component(&bytes_owned))
                 .await
                 .map_err(|e| ServiceError::Internal(format!("Compile task panicked: {e}")))?
-                .map_err(ServiceError::Core)?;
+                .map_err(|e| {
+                    ServiceError::Validation(format!("Not a loadable WASM extension: {e}"))
+                })?;
 
         let (metadata, raw_schema) = {
             let mut inst =
@@ -690,8 +719,9 @@ impl AppService {
             .map_err(ServiceError::Core)?;
             let raw = inst.get_metadata().await.map_err(ServiceError::Core)?;
             let schema = inst.get_preferences().await.ok();
-            let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw)
-                .map_err(|e| ServiceError::Internal(format!("Bad metadata: {e}")))?;
+            let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw).map_err(|e| {
+                ServiceError::Validation(format!("Invalid extension metadata: {e}"))
+            })?;
             (meta, schema)
         };
 
@@ -703,6 +733,7 @@ impl AppService {
         }
         self.check_artifact_identity(&metadata.id, expected_id, existing_id)
             .await?;
+        check_artifact_gating(&metadata.id, metadata.min_kani_version.as_deref())?;
         crate::install_gating::check_required_capabilities_live(
             &metadata.requires_capabilities,
             &self.smart_client,
@@ -1031,4 +1062,16 @@ async fn restore_after_failed_install(
             "Install of '{extension_id}' failed and its previous artifacts could not be restored: {e}"
         );
     }
+}
+
+/// Checks every install path applies to the artifact itself, whichever way it arrived.
+fn check_artifact_gating(extension_id: &str, min_kani_version: Option<&str>) -> Result<()> {
+    const RESERVED_IDS: &[&str] = &["example", "test-abi"];
+    if RESERVED_IDS.contains(&extension_id) {
+        return Err(ServiceError::Validation(format!(
+            "Extension ID '{extension_id}' is reserved for development use and cannot be installed"
+        )));
+    }
+    crate::install_gating::check_min_kani_version(min_kani_version, env!("CARGO_PKG_VERSION"))
+        .map_err(ServiceError::Validation)
 }
