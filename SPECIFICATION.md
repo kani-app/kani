@@ -2335,7 +2335,7 @@ to the first request and to every redirect hop.
 | WASM guest HTTP imports | Yes | Yes |
 | Fetched option sets (§3.4) | Yes (`base_url` host) | Yes |
 | Browser `page_url` (endpoint, WASM guest, hook `ctx.capture_page_payload`) | Yes | Yes |
-| Page scripts and subresources inside the solver browser | **No** | **No** |
+| Page scripts and subresources inside the solver browser | No: pages load CDNs and challenge scripts | Yes, by the solver (below) |
 | Image proxy (covers, pages) | No: images may come from any CDN | Yes |
 | Repository index and artifacts | Artifact must share the repo's host | Yes |
 
@@ -2343,9 +2343,13 @@ to the first request and to every redirect hop.
 redirected off its host. A site that redirects to another host (commonly `example.com` →
 `www.example.com`) must use the final host as its `base_url`, or declare `unrestricted_http`.
 
-**The solver browser** is a separate process with its own network. Kani checks the page it is
-asked to load, but not what that page's scripts or subresources then fetch. Treat a browser
-endpoint as able to reach whatever the solver container can.
+**The solver browser** is a separate process with its own network. Kani checks the page it asks
+the solver to load; the solver (`flaresolverr-kani`) enforces the forbidden-address rule on
+everything that page then fetches, by routing the browser through an egress-guard proxy that
+dials only the address it checked. It advertises this as `kani.egress-guard/1` on `GET /`. A
+stock FlareSolverr has no such guard, and neither does a solver request that supplies its own
+upstream `proxy`. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
+challenge scripts from other hosts.
 
 **Secret preferences** are readable by the extension that declares them and may be sent to any
 host the table above allows (§3.5).
