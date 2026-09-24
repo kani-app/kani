@@ -248,7 +248,6 @@ impl Modify for StabilityAddon {
         crate::rest::stats::reading_stats,
         // sources
         crate::rest::sources::list_sources,
-        crate::rest::sources::add_source,
         crate::rest::sources::get_sources_health,
         crate::rest::sources::get_active_source_ids,
         crate::rest::sources::list_metadata_providers,
@@ -419,7 +418,6 @@ impl Modify for StabilityAddon {
             crate::models::LoginRequest,
             crate::models::SetChapterProgressRequest,
             crate::models::ChangePasswordRequest,
-            crate::models::CreateSource,
             crate::models::UpdateSource,
             crate::models::FetchWasmRequest,
             crate::models::InstallYamlRequest,

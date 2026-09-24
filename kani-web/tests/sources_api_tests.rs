@@ -2,26 +2,8 @@
 
 mod common;
 use axum::http::StatusCode;
-use common::{
-    authed_get, authed_post, body_array, body_json, build_test_app, create_regular_user, login,
-    put_json, test_state,
-};
+use common::{authed_get, authed_post, body_array, body_json, put_json};
 use tower::ServiceExt;
-
-/// Creates a source as admin and returns its id.
-async fn create_source(app: &axum::Router, cookie: &str, name: &str) -> i64 {
-    let res = app
-        .clone()
-        .oneshot(authed_post(
-            "/rest/sources",
-            cookie,
-            serde_json::json!({ "name": name }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::CREATED);
-    body_json(res).await["id"].as_i64().expect("numeric id")
-}
 
 #[tokio::test]
 async fn list_sources_returns_empty_list_on_fresh_db() {
@@ -38,88 +20,9 @@ async fn list_sources_returns_empty_list_on_fresh_db() {
 }
 
 #[tokio::test]
-async fn add_source_requires_source_install_permission() {
-    let state = test_state().await;
-    let (username, password) = create_regular_user(&state, "bob").await;
-    let app = build_test_app(state).await;
-    let cookie = login(&app, username, password).await;
-
-    let res = app
-        .oneshot(authed_post(
-            "/rest/sources",
-            &cookie,
-            serde_json::json!({"name": "my-source"}),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::FORBIDDEN);
-    let body = body_json(res).await;
-    assert_eq!(body["code"], serde_json::json!("forbidden"));
-}
-
-#[tokio::test]
-async fn add_source_returns_201_for_admin() {
-    let (app, cookie) = common::admin_app().await;
-
-    let res = app
-        .clone()
-        .oneshot(authed_post(
-            "/rest/sources",
-            &cookie,
-            serde_json::json!({"name": "test-source"}),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::CREATED);
-    let body = body_json(res).await;
-    assert!(
-        body["id"].is_number(),
-        "response must contain numeric id, got: {body}"
-    );
-
-    let list_res = app
-        .oneshot(authed_get("/rest/sources", &cookie))
-        .await
-        .unwrap();
-    let sources = body_array(list_res).await;
-    assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0]["name"], serde_json::json!("test-source"));
-}
-
-#[tokio::test]
-async fn add_source_returns_400_for_empty_name() {
-    let (app, cookie) = common::admin_app().await;
-
-    let res = app
-        .oneshot(authed_post(
-            "/rest/sources",
-            &cookie,
-            serde_json::json!({"name": ""}),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
-}
-
-#[tokio::test]
 async fn get_source_returns_200_for_authed_user() {
-    let (app, cookie) = common::admin_app().await;
-
-    let create_res = app
-        .clone()
-        .oneshot(authed_post(
-            "/rest/sources",
-            &cookie,
-            serde_json::json!({"name": "fetch-me"}),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(create_res.status(), StatusCode::CREATED);
-    let created = body_json(create_res).await;
-    let id = created["id"].as_i64().expect("id must be numeric");
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "fetch-me").await;
 
     let res = app
         .oneshot(authed_get(&format!("/rest/sources/{id}"), &cookie))
@@ -132,10 +35,25 @@ async fn get_source_returns_200_for_authed_user() {
 }
 
 #[tokio::test]
-async fn set_browser_enabled_returns_200_and_persists_for_admin() {
+async fn an_empty_source_cannot_be_created() {
     let (app, cookie) = common::admin_app().await;
 
-    let id = create_source(&app, &cookie, "browser-src").await;
+    let res = app
+        .oneshot(authed_post(
+            "/rest/sources",
+            &cookie,
+            serde_json::json!({ "name": "placeholder" }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
+async fn set_browser_enabled_returns_200_and_persists_for_admin() {
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "browser-src").await;
 
     let res = app
         .clone()
@@ -178,10 +96,10 @@ async fn set_browser_enabled_rejects_invalid_body() {
 
 #[tokio::test]
 async fn bulk_capabilities_returns_200_with_auth() {
-    let (app, cookie) = common::admin_app().await;
+    let (app, cookie, state) = common::admin_app_with_state().await;
 
-    create_source(&app, &cookie, "alpha").await;
-    create_source(&app, &cookie, "beta").await;
+    kani_shared_test::insert_source(&state.db, "alpha").await;
+    kani_shared_test::insert_source(&state.db, "beta").await;
 
     let res = app
         .clone()
@@ -220,8 +138,8 @@ async fn bulk_capabilities_is_empty_not_an_error_with_no_sources() {
 
 #[tokio::test]
 async fn bulk_route_is_not_swallowed_by_the_per_source_route() {
-    let (app, cookie) = common::admin_app().await;
-    let id = create_source(&app, &cookie, "gamma").await;
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "gamma").await;
 
     let bulk = app
         .clone()
@@ -248,8 +166,8 @@ async fn bulk_route_is_not_swallowed_by_the_per_source_route() {
 
 #[tokio::test]
 async fn bulk_and_per_source_agree() {
-    let (app, cookie) = common::admin_app().await;
-    let id = create_source(&app, &cookie, "delta").await;
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "delta").await;
 
     let bulk = body_array(
         app.clone()

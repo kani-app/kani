@@ -117,20 +117,6 @@ impl AppService {
         .map_err(Into::into)
     }
 
-    /// Inserts a new source row with a default version and returns its id.
-    pub async fn add_source(&self, name: &str, user_id: UserId) -> Result<i64> {
-        let id = sqlx::query_scalar!(
-            "INSERT INTO sources (name, version) VALUES (?, '0.1') RETURNING id",
-            name
-        )
-        .fetch_one(&self.db)
-        .await?;
-
-        self.audit(Some(user_id), "source.install", Some(name), None)
-            .await;
-        Ok(id)
-    }
-
     /// Updates the name and/or version of an existing source.
     pub async fn update_source(
         &self,

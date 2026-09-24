@@ -7,7 +7,7 @@ use crate::{
         AddDownloadRuleRequest, AddRepoRequest, AdminCreateRoleRequest, AdminCreateUserRequest,
         AdminGrantRoleRequest, AdminUpdateRoleRequest, AdminUpdateUserRequest, BlockRepoRequest,
         BulkMigrationRequest, ChangePasswordRequest, ContinueReadingShelfQuery,
-        CreateCategoryRequest, CreateSource, FetchWasmRequest, FetchYamlRequest, GlobalSearchQuery,
+        CreateCategoryRequest, FetchWasmRequest, FetchYamlRequest, GlobalSearchQuery,
         InstallFromRepoRequest, InstallYamlRequest, LibraryQuery, ListItemRequest,
         LocalChaptersQuery, LoginRequest, MarkUpToRequest, MatchMigrationTargetsRequest,
         MigrateMangaRequest, MigrationStatusRequest, PageQuery, PasswordResetConfirmBody,

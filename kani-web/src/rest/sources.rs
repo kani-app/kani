@@ -4,7 +4,7 @@ use super::*;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/sources", get(list_sources).post(add_source))
+        .route("/sources", get(list_sources))
         .route("/sources/health", get(get_sources_health))
         .route("/sources/active_ids", get(get_active_source_ids))
         .route("/sources/metadata-providers", get(list_metadata_providers))
@@ -103,26 +103,6 @@ pub(super) async fn list_sources(
     State(svc): State<Arc<dyn SourceDomain>>,
 ) -> Result<impl IntoResponse, AppError> {
     Ok(Json(svc.list_sources().await?))
-}
-
-#[utoipa::path(
-    post, path = "/rest/sources",
-    request_body = CreateSource,
-    responses(
-        (status = 201, description = "Source slot created; returns new ID"),
-        (status = 401, description = "Not authenticated"),
-        (status = 403, description = "Insufficient permissions"),
-    ),
-    security(("session" = [])),
-    tag = "sources"
-)]
-pub(super) async fn add_source(
-    AuthGuard(user, _): AuthGuard<crate::permissions::guards::SourceInstall>,
-    State(svc): State<Arc<dyn SourceDomain>>,
-    ValidatedJson(payload): ValidatedJson<CreateSource>,
-) -> Result<impl IntoResponse, AppError> {
-    let id = svc.add_source(&payload.name, user.id).await?;
-    Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
 }
 
 #[utoipa::path(
@@ -1358,9 +1338,6 @@ mod tests {
             }])
         }
         async fn get_source(&self, _: i64) -> kani_app::error::Result<Source> {
-            unimplemented!()
-        }
-        async fn add_source(&self, _: &str, _: UserId) -> kani_app::error::Result<i64> {
             unimplemented!()
         }
         async fn update_source(

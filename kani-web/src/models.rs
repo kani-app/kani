@@ -12,12 +12,6 @@ fn validate_https_url(value: &str, _: &()) -> garde::Result {
 }
 
 #[derive(garde::Validate, Deserialize, Debug, utoipa::ToSchema)]
-pub(crate) struct CreateSource {
-    #[garde(length(min = 1, max = 100))]
-    pub name: String,
-}
-
-#[derive(garde::Validate, Deserialize, Debug, utoipa::ToSchema)]
 pub(crate) struct UpdateSource {
     #[garde(inner(length(min = 1, max = 100)))]
     pub name: Option<String>,
