@@ -1569,3 +1569,15 @@ endpoints:
         "route",
     );
 }
+
+#[test]
+fn an_id_outside_the_documented_form_is_rejected() {
+    for id in ["Fetched_Opts", "a:b", "1abc", "has space", "-lead"] {
+        assert_invalid_containing(
+            &format!(
+                "id: \"{id}\"\nname: X\nversion: \"0.1.0\"\nbase_url: \"https://example.com\"\n"
+            ),
+            "must match [a-z][a-z0-9-]*",
+        );
+    }
+}

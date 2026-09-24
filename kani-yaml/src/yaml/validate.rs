@@ -40,6 +40,14 @@ pub fn validate(
     let mut errors: Vec<YamlError> = Vec::new();
     let filename = path.to_string_lossy().into_owned();
 
+    if !kani_shared::types::is_valid_extension_id(&ext.id) {
+        errors.push(YamlError::Validation(format!(
+            "id: '{}' must match [a-z][a-z0-9-]* (lowercase letter first, then lowercase \
+             letters, digits and hyphens)",
+            ext.id
+        )));
+    }
+
     let id_encoding = ext.id_encoding.as_ref();
     if let Some(block) = id_encoding {
         errors.append(&mut validate_id_encoding(block));

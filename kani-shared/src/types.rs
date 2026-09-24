@@ -124,6 +124,14 @@ pub fn to_shared_filters(filters: Vec<wit_types::ActiveFilter>) -> Vec<ActiveFil
 
 pub const DEFAULT_BROWSER_AUTO_SCROLL: bool = false;
 
+/// Whether `id` has the `[a-z][a-z0-9-]*` form every extension id must take. Ids name
+/// artifact files, source rows and cache namespaces, so they may not contain separators.
+pub fn is_valid_extension_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 const AUTO_SCROLL_ON: &str = "/*kani:auto-scroll=true*/\n";
 const AUTO_SCROLL_OFF: &str = "/*kani:auto-scroll=false*/\n";
 
@@ -1463,6 +1471,19 @@ pub struct ContinueReadingChapter {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn extension_id_form() {
+        for valid in ["a", "comix", "mangapill-gen", "x9"] {
+            assert!(is_valid_extension_id(valid), "{valid} should be valid");
+        }
+        for invalid in ["", "A", "1a", "-a", "a_b", "a:b", "a b", "é"] {
+            assert!(
+                !is_valid_extension_id(invalid),
+                "{invalid} should be invalid"
+            );
+        }
+    }
 
     #[test]
     fn auto_scroll_marker_round_trips_and_defaults_off() {

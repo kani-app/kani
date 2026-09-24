@@ -1327,6 +1327,12 @@ impl AppService {
                 metadata.id
             )));
         }
+        if !kani_shared::types::is_valid_extension_id(&metadata.id) {
+            return Err(ServiceError::Validation(format!(
+                "Extension id '{}' must match [a-z][a-z0-9-]*",
+                metadata.id
+            )));
+        }
 
         crate::install_gating::check_min_kani_version(
             metadata.min_kani_version.as_deref(),

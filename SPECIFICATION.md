@@ -1942,7 +1942,10 @@ endpoints:
 The `kani-cli validate` command checks:
 
 1. **Required fields present:** `id`, `name`, `version`, `base_url` must all be set.
-2. **ID format:** Must match `[a-z][a-z0-9-]*` (lowercase, starts with letter).
+2. **ID format:** Must match `[a-z][a-z0-9-]*` (lowercase, starts with letter). The host enforces
+   the same rule on a WASM extension's metadata id at install. Ids name artifact files, source rows
+   and cache namespaces, so a separator such as `:` or `_` would let two extensions' namespaces
+   collide.
 3. **Version format:** Must be valid semver.
 4. **Base URL format:** Must be a valid URL with scheme.
 5. **DSL syntax:** All DSL strings must parse without errors.

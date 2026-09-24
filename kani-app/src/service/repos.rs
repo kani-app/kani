@@ -680,6 +680,12 @@ impl AppService {
             (meta, schema)
         };
 
+        if !kani_shared::types::is_valid_extension_id(&metadata.id) {
+            return Err(ServiceError::Validation(format!(
+                "Extension id '{}' must match [a-z][a-z0-9-]*",
+                metadata.id
+            )));
+        }
         crate::install_gating::check_required_capabilities_live(
             &metadata.requires_capabilities,
             &self.smart_client,
