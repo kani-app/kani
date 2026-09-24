@@ -200,6 +200,7 @@ pub fn apply_pre_request(
         http: Some(state.http_client.clone()),
         browser_scripts: state.browser_scripts.clone(),
         browser_profile_key: Some(state.browser_profile_key.clone()),
+        allowed_host: state.allowed_host.clone(),
     };
 
     tokio::task::block_in_place(|| registry.run_pre_request(&mut scriptable, ctx))

@@ -29,6 +29,7 @@ pub struct ScriptableCtx {
     pub http: Option<crate::http::SmartClient>,
     pub browser_scripts: Option<Arc<crate::scripting::BrowserScriptRegistry>>,
     pub browser_profile_key: Option<String>,
+    pub allowed_host: crate::wasm::AllowedHost,
 }
 
 impl std::fmt::Debug for dyn crate::cache::CacheBackend {
@@ -187,6 +188,24 @@ fn ctx_cache_delete(ctx: &mut ScriptableCtx, namespace: String, key: String) {
     });
 }
 
+/// Applies the source's host policy, and the forbidden-address rule, to a page a capture
+/// would load. Shared by the hook binding and the WASM guest import.
+pub(crate) fn check_capture_target(
+    allowed_host: &crate::wasm::AllowedHost,
+    page_url: &str,
+) -> Result<(), String> {
+    let url = page_url
+        .parse::<url::Url>()
+        .map_err(|error| format!("Invalid browser page URL: {error}"))?;
+    allowed_host.allows_host(url.host_str().unwrap_or_default())?;
+    if crate::network::is_forbidden_url_host(page_url) {
+        return Err(format!(
+            "browser capture of a forbidden host refused: {page_url}"
+        ));
+    }
+    Ok(())
+}
+
 fn ctx_capture_page_payload(
     ctx: &mut ScriptableCtx,
     page_url: String,
@@ -209,6 +228,7 @@ fn ctx_capture_page_payload_scrolled(
     timeout_ms: i64,
     auto_scroll: bool,
 ) -> Result<Dynamic, Box<rhai::EvalAltResult>> {
+    check_capture_target(&ctx.allowed_host, &page_url).map_err(Box::<rhai::EvalAltResult>::from)?;
     let handle = ctx.v8_process.as_ref().ok_or_else(|| {
         Box::<rhai::EvalAltResult>::from("browser runtime unavailable in this context")
     })?;
@@ -322,6 +342,7 @@ mod tests {
                 &map,
             ))),
             browser_profile_key: Some("test-source".to_string()),
+            allowed_host: crate::wasm::AllowedHost::Restricted("example.com".into()),
         }
     }
 
@@ -334,7 +355,37 @@ mod tests {
             http: None,
             browser_scripts: None,
             browser_profile_key: None,
+            allowed_host: crate::wasm::AllowedHost::MetadataOnly,
         }
+    }
+
+    #[test]
+    fn capture_page_payload_refuses_another_host() {
+        let mut c = ctx(None, &[("fetch", "passPayload('{}')")]);
+        let err =
+            ctx_capture_page_payload(&mut c, "https://other.example".into(), "fetch".into(), 1000)
+                .unwrap_err();
+        assert!(
+            err.to_string().contains("may only contact"),
+            "expected the host policy to refuse, got: {err}"
+        );
+    }
+
+    #[test]
+    fn capture_page_payload_refuses_a_forbidden_address_even_when_unrestricted() {
+        let mut c = ctx(None, &[("fetch", "passPayload('{}')")]);
+        c.allowed_host = crate::wasm::AllowedHost::Unrestricted;
+        let err = ctx_capture_page_payload(
+            &mut c,
+            "http://169.254.169.254/latest/meta-data/".into(),
+            "fetch".into(),
+            1000,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("forbidden host"),
+            "expected the forbidden-address rule to refuse, got: {err}"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

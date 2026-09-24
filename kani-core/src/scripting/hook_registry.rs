@@ -225,6 +225,7 @@ mod tests {
             http: None,
             browser_scripts: None,
             browser_profile_key: None,
+            allowed_host: crate::wasm::AllowedHost::MetadataOnly,
         }
     }
 

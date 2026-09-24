@@ -1076,6 +1076,7 @@ pub async fn fetch_body(
                 http: Some(state.http_client.clone()),
                 browser_scripts: state.browser_scripts.clone(),
                 browser_profile_key: Some(state.browser_profile_key.clone()),
+                allowed_host: state.allowed_host.clone(),
             };
             let action = registry
                 .run_pre_request(&mut working, ctx)
@@ -1171,6 +1172,7 @@ pub async fn fetch_body(
                 http: Some(state.http_client.clone()),
                 browser_scripts: state.browser_scripts.clone(),
                 browser_profile_key: Some(state.browser_profile_key.clone()),
+                allowed_host: state.allowed_host.clone(),
             };
             let action = registry
                 .run_on_status(&working, &mut scriptable_resp, ctx)

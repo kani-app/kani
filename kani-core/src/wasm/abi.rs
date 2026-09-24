@@ -767,13 +767,7 @@ impl scripting::Host for HostState {
         if !self.browser_enabled {
             return Err("Browser capability is disabled for this source".to_string());
         }
-        let host = page_url
-            .parse::<url::Url>()
-            .map_err(|error| format!("Invalid browser page URL: {error}"))?
-            .host_str()
-            .unwrap_or_default()
-            .to_string();
-        self.check_allowed_host(&host)?;
+        crate::scripting::bindings::check_capture_target(&self.allowed_host, &page_url)?;
         self.charge_io()?;
         let (auto_scroll, init_script) = kani_shared::types::take_auto_scroll(&init_script);
         let result = crate::v8_process::capture_page_payload_resilient(

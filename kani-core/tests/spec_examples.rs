@@ -375,6 +375,7 @@ fn hook_ctx() -> kani_core::scripting::bindings::ScriptableCtx {
         http: None,
         browser_scripts: None,
         browser_profile_key: None,
+        allowed_host: kani_core::wasm::AllowedHost::MetadataOnly,
     }
 }
 
