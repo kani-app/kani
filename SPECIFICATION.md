@@ -1654,6 +1654,10 @@ preferences:
     options_ref: tags    # Resolve options from a top-level `option_sets` entry (see §3.4)
 ```
 
+**`secret: true`** hides the value in the UI (a password field) and nowhere else. The extension
+reads it like any other preference and may send it to any host it is allowed to contact (§7);
+the settings page says so under the field.
+
 ### 3.6 Complete Schema Reference
 
 <!-- schema sketch: not an executable example -->
@@ -2299,3 +2303,40 @@ waits up to 30 s for in-flight calls (§5.4) and then swaps. Repo add/trust/inst
 - `kani-cli publish` — validate, hash, sign an extension and upsert its `index.json` entry.
 - `kani-cli repo init|add|list|verify` — manage a local repo; `verify` recomputes hashes + checks signatures (non-zero exit on failure, for CI).
 - `kani-cli new <name>` scaffolds a YAML extension; `--rust` scaffolds a Rust/WASM crate instead.
+
+## 7. Outbound Request Policy
+
+Every request an extension causes, directly or through the host, passes two checks. They apply
+to the first request and to every redirect hop.
+
+1. **Host policy (`AllowedHost`).** A source may contact only its `base_url` host, matched
+   exactly, unless it declares `unrestricted_http: true`. The check runs on the final request,
+   after any `pre_request` hook has rewritten it.
+2. **Forbidden addresses.** Private, loopback, link-local (including cloud metadata
+   `169.254.169.254`), CGNAT, multicast, documentation and reserved ranges are refused whatever
+   the host policy allows. For a hostname, the validating resolver filters the addresses it
+   resolves to at connect time, so DNS rebinding cannot change the answer after the check. For an
+   IP literal, the URL itself is checked before connecting. No setting turns this off; there is
+   no supported way to point a source at a LAN or loopback address.
+
+| Path | Host policy | Forbidden addresses |
+|------|-------------|---------------------|
+| Endpoint routes and pagination chunks | Yes | Yes |
+| Sub-fetches (`then:` / `for_each:`, `Expr::Fetch`) | Yes | Yes |
+| Hook-driven retries and rewritten `req.url` | Yes (checked after the hook) | Yes |
+| WASM guest HTTP imports | Yes | Yes |
+| Fetched option sets (§3.4) | Yes (`base_url` host) | Yes |
+| Browser `page_url` (endpoint, WASM guest, hook `ctx.capture_page_payload`) | Yes | Yes |
+| Page scripts and subresources inside the solver browser | **No** | **No** |
+| Image proxy (covers, pages) | No: images may come from any CDN | Yes |
+| Repository index and artifacts | Artifact must share the repo's host | Yes |
+
+**Redirects** are re-checked for forbidden addresses on every hop, but **not** against the host
+policy: a restricted source's request may be redirected to any public host.
+
+**The solver browser** is a separate process with its own network. Kani checks the page it is
+asked to load, but not what that page's scripts or subresources then fetch. Treat a browser
+endpoint as able to reach whatever the solver container can.
+
+**Secret preferences** are readable by the extension that declares them and may be sent to any
+host the table above allows (§3.5).

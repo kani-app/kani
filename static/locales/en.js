@@ -725,6 +725,7 @@ export default {
   'pref_row.items_other': '{n} items',
   'pref_row.unknown_kind': 'Unknown preference kind: {kind}',
   'pref_row.no_detail_view': 'No detail view for kind: {kind}',
+  'pref_row.secret_disclosure': 'Hidden here, but this source can read it and send it to the sites it contacts.',
   'common.tile_size': 'Tile size',
   'common.tile_size.sm': 'Small',
   'common.tile_size.md': 'Medium',
