@@ -494,19 +494,19 @@ impl SmartResponse {
 
 const REDIRECT_LIMIT: usize = 10;
 
-/// The one SSRF egress decision, shared by both redirect-following mechanisms
-/// (the auto-follow `Policy::custom` for `send_request`, and `safe_get`'s manual
-/// loop): refuse a hop whose target is a forbidden IP literal — the hole the
-/// DNS-only resolver never sees — unless `allow_private` is set (tests only).
-fn redirect_egress_forbidden(allow_private: &std::sync::atomic::AtomicBool, url: &str) -> bool {
-    !allow_private.load(std::sync::atomic::Ordering::Relaxed)
-        && crate::network::is_forbidden_url_host(url)
+/// The one SSRF egress decision, applied to the first request and to every redirect
+/// hop: refuse a forbidden IP literal, the hole the DNS-only resolver never sees.
+/// `allow_loopback` (tests only) exempts loopback literals and nothing else.
+fn egress_forbidden(allow_loopback: &std::sync::atomic::AtomicBool, url: &str) -> bool {
+    crate::network::is_forbidden_url_host(url)
+        && !(allow_loopback.load(std::sync::atomic::Ordering::Relaxed)
+            && crate::network::is_loopback_url_host(url))
 }
 
 /// Redirect policy for the auto-following client (source extraction): follow up
 /// to `REDIRECT_LIMIT` hops, refusing a forbidden egress target per hop.
 fn ssrf_aware_redirect_policy(
-    allow_private: Arc<std::sync::atomic::AtomicBool>,
+    allow_loopback: Arc<std::sync::atomic::AtomicBool>,
 ) -> rquest::redirect::Policy {
     rquest::redirect::Policy::custom(move |attempt| {
         if attempt.previous.len() >= REDIRECT_LIMIT {
@@ -514,7 +514,7 @@ fn ssrf_aware_redirect_policy(
                 "too many redirects",
             ));
         }
-        if redirect_egress_forbidden(&allow_private, &attempt.uri.to_string()) {
+        if egress_forbidden(&allow_loopback, &attempt.uri.to_string()) {
             return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(
                 "redirect to a forbidden host refused",
             ));
@@ -544,11 +544,11 @@ pub struct SmartClient {
     pub cond_cache: Arc<ConditionalGetCache>,
     timings: Timings,
     budgets: Budgets,
-    /// When false (production), a redirect to a forbidden IP literal
-    /// (private/loopback/metadata) is refused — closing the SSRF-via-redirect
-    /// hole the DNS-only resolver can't see. Shared with the client's redirect
-    /// policy closure so it is read live. Tests set it true to reach loopback.
-    allow_private_egress: Arc<std::sync::atomic::AtomicBool>,
+    /// When false (production), any request or redirect to a forbidden IP literal
+    /// (private/loopback/metadata) is refused. Tests set it true to reach a local
+    /// server on loopback; other forbidden ranges stay refused. Shared with the
+    /// redirect policy closure so it is read live.
+    allow_loopback_egress: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SmartClient {
@@ -569,29 +569,29 @@ impl SmartClient {
         self.budgets
     }
 
-    /// Allow egress to private/loopback IP literals (test seam so a `TestOrigin`
-    /// on `127.0.0.1` is reachable).
+    /// Allow egress to loopback IP literals (test seam so a `TestOrigin` on
+    /// `127.0.0.1` is reachable). Other forbidden ranges stay refused.
     ///
     /// Gated to test builds: it exists only under `cfg(test)` or the `test-util`
     /// feature, neither of which a release binary compiles (dev-deps are excluded
     /// from a production build). So there is **no way to disable the SSRF guard in
     /// production** — the field is constructed `false` and has no public mutator.
     #[cfg(any(test, feature = "test-util"))]
-    pub fn with_allow_private_egress(self, allow: bool) -> Self {
-        self.allow_private_egress
+    pub fn with_allow_loopback_egress(self, allow: bool) -> Self {
+        self.allow_loopback_egress
             .store(allow, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
     pub fn new(solver_url: Option<String>) -> Result<Self> {
         let resolver = ValidatingResolver::new()?;
-        let allow_private_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
         // Auto-following client (source extraction). The redirect policy validates
         // every hop for SSRF; send_request keeps its simple loop.
         let client = rquest::Client::builder()
             .emulation(rquest_util::Emulation::Chrome130)
             .redirect(ssrf_aware_redirect_policy(Arc::clone(
-                &allow_private_egress,
+                &allow_loopback_egress,
             )))
             .dns_resolver(Arc::new(resolver))
             .pool_idle_timeout(std::time::Duration::from_secs(300))
@@ -614,7 +614,7 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress,
+            allow_loopback_egress,
         })
     }
 
@@ -649,7 +649,7 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            allow_loopback_egress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })
     }
 
@@ -731,6 +731,7 @@ impl SmartClient {
 
     pub(crate) async fn send_request(&self, request: rquest::Request) -> Result<SmartResponse> {
         let mut request = request;
+        self.refuse_forbidden_egress(&request.uri().to_string())?;
 
         let domain = request.uri().host().map(base_domain).unwrap_or_default();
         let creds_map = self.credentials.load();
@@ -959,6 +960,16 @@ impl SmartClient {
         }
     }
 
+    /// Refuses a first hop to a forbidden IP literal, which the validating resolver never sees.
+    fn refuse_forbidden_egress(&self, url: &str) -> Result<()> {
+        if egress_forbidden(&self.allow_loopback_egress, url) {
+            return Err(crate::error::Error::Other(format!(
+                "request to a forbidden host refused: {url}"
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn get(&self, url: &str) -> Result<SmartResponse> {
         let request = self.client.get(url).build()?;
         self.send_request(request).await
@@ -990,6 +1001,7 @@ impl SmartClient {
         // Unified with the auto-following client's policy limit.
         const MAX_REDIRECTS: usize = REDIRECT_LIMIT;
 
+        self.refuse_forbidden_egress(initial_url)?;
         let mut current_url = initial_url.to_string();
         let mut solver_headers = rquest::header::HeaderMap::new();
         let mut solved = false;
@@ -1171,7 +1183,7 @@ impl SmartClient {
 
                 // Re-validate the redirect TARGET for SSRF (same decision the
                 // auto-follow policy makes — the resolver never sees an IP literal).
-                if redirect_egress_forbidden(&self.allow_private_egress, next.as_str()) {
+                if egress_forbidden(&self.allow_loopback_egress, next.as_str()) {
                     return Err(crate::error::Error::Other(format!(
                         "redirect to a forbidden host refused: {next}"
                     )));
@@ -2062,7 +2074,7 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            allow_loopback_egress: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         })
     }
 }
@@ -3069,7 +3081,7 @@ mod tests {
 
         let client = SmartClient::new_for_test()
             .unwrap()
-            .with_allow_private_egress(false);
+            .with_allow_loopback_egress(true);
         let Err(err) = client
             .safe_get(&format!("{}/redir", server.uri()), None)
             .await
@@ -3077,8 +3089,8 @@ mod tests {
             panic!("expected the redirect to a forbidden host to be refused");
         };
         assert!(
-            err.to_string().contains("forbidden host"),
-            "refused for the right reason, got: {err}"
+            err.to_string().contains("redirect to a forbidden host"),
+            "refused at the redirect, got: {err}"
         );
     }
 
@@ -3094,12 +3106,60 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SmartClient::new(None).unwrap();
-        let res = client.get(&format!("{}/redir", server.uri())).await;
+        let client = SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
+        let Err(err) = client.get(&format!("{}/redir", server.uri())).await else {
+            panic!("a source redirect to a forbidden host must be refused");
+        };
         assert!(
-            res.is_err(),
-            "a source redirect to a forbidden host must be refused"
+            format!("{err:?}").contains("forbidden host"),
+            "refused at the redirect, got: {err:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_first_request_to_a_forbidden_ip_literal_is_refused() {
+        let client = SmartClient::new(None).unwrap();
+        for url in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:9/",
+            "http://10.0.0.1/",
+            "http://[::1]:9/",
+        ] {
+            for (label, result) in [
+                ("get", client.get(url).await.err()),
+                ("safe_get", client.safe_get(url, None).await.err()),
+            ] {
+                let err = result.unwrap_or_else(|| panic!("{label} reached {url}"));
+                assert!(
+                    err.to_string()
+                        .contains("request to a forbidden host refused"),
+                    "{label} {url} refused for the wrong reason: {err}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_loopback_test_switch_exempts_loopback_only() {
+        let client = SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
+        for url in [
+            "http://169.254.169.254/",
+            "http://10.0.0.1/",
+            "http://192.168.1.1/",
+        ] {
+            let Err(err) = client.safe_get(url, None).await else {
+                panic!("{url} was reached with only loopback allowed");
+            };
+            assert!(
+                err.to_string()
+                    .contains("request to a forbidden host refused"),
+                "{url} must stay refused with loopback allowed: {err}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -3113,7 +3173,7 @@ mod tests {
 
         let client = SmartClient::new(None)
             .unwrap()
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let start = std::time::Instant::now();
         let res = client.get(&format!("{}/loop", server.uri())).await;
         let elapsed = start.elapsed();

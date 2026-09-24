@@ -34,7 +34,9 @@ fn yaml_backend(name: &str) -> SourceBackend {
     };
     SourceBackend::Yaml(Box::new(YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "test:".into(),
         HashMap::new(),
@@ -116,12 +118,15 @@ async fn a_deleted_source_does_not_hang_an_in_flight_request() {
         manga_details: Some(details_endpoint()),
         ..Default::default()
     };
-    let client = SmartClient::new(None).unwrap().with_timings(Timings {
-        request_timeout: Duration::from_millis(200),
-        retry_base_delay: Duration::from_millis(1),
-        retry_jitter: Duration::ZERO,
-        ..Timings::default()
-    });
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true)
+        .with_timings(Timings {
+            request_timeout: Duration::from_millis(200),
+            retry_base_delay: Duration::from_millis(1),
+            retry_jitter: Duration::ZERO,
+            ..Timings::default()
+        });
     svc.sources.insert(
         source_id,
         SourceBackend::Yaml(Box::new(YamlSource::new(

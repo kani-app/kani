@@ -78,6 +78,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]
+kani-core = { path = ".", features = ["test-util"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 kani-shared = { path = "../kani-shared", features = ["builder"] }
 kani-yaml = { path = "../kani-yaml" }

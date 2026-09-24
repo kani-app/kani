@@ -1596,7 +1596,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_option_set_returns_cached_values_without_network_call() {
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
 
         let options: Vec<(String, String)> = vec![
             ("Action".to_string(), "action".to_string()),
@@ -1625,7 +1627,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_option_set_returns_none_on_network_failure() {
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let def = make_def(None);
         let result =
             resolve_option_set(&*cache, &client, 1, "https://example.invalid", false, &def).await;
@@ -1642,7 +1646,9 @@ mod tests {
         origin.set("/genres", Response::status(500));
 
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let mut def = make_def(Some("genres-v1"));
         def.route = origin.url("/genres");
 
@@ -1664,7 +1670,9 @@ mod tests {
         );
 
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let mut def = make_def(Some("genres-v1"));
         def.route = origin.url("/genres");
         def.cache_ttl = 1;

@@ -26,7 +26,9 @@ async fn a_breached_password_is_rejected() {
         )),
     );
 
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let res = check_password_with_hibp_base(STRONG_PW, "alice", &client, &origin.base()).await;
     assert!(
         matches!(res, Err(PasswordPolicyError::Pwned(42))),
@@ -42,7 +44,9 @@ async fn a_breach_check_failure_does_not_block_registration() {
     let origin = TestOrigin::start().await;
     origin.set(&format!("/range/{prefix}"), Response::status(500));
 
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let res = check_password_with_hibp_base(STRONG_PW, "alice", &client, &origin.base()).await;
     assert!(
         res.is_ok(),
@@ -61,7 +65,9 @@ async fn a_hostile_breach_response_is_bounded() {
         Response::ok(vec![b'A'; 4 * 1024 * 1024]),
     );
 
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let res = check_password_with_hibp_base(STRONG_PW, "alice", &client, &origin.base()).await;
 
     assert!(
@@ -79,7 +85,9 @@ async fn a_hostile_breach_response_is_bounded() {
 #[tokio::test]
 async fn an_update_check_failure_is_silent_and_harmless() {
     let origin = TestOrigin::start().await;
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     origin.set("/releases", Response::status(500));
     assert!(
@@ -108,7 +116,9 @@ async fn a_newer_release_tag_is_detected() {
         "/releases",
         Response::json(r#"{"tag_name":"v1.2.3","html_url":"https://example/releases/v1.2.3"}"#),
     );
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     let info = check_for_update_at(&client, "0.9.0", &origin.url("/releases"))
         .await

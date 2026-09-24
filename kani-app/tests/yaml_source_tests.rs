@@ -107,7 +107,9 @@ fn yaml_source(_base_url: &str, ext: ValidatedExtension) -> YamlSource {
 
 fn yaml_source_with_browser(ext: ValidatedExtension, browser_enabled: bool) -> YamlSource {
     let cache = Arc::new(kani_core::cache::InMemoryCache::new());
-    let http = kani_core::http::SmartClient::new(None).unwrap();
+    let http = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     YamlSource::new(
         Arc::new(ext),
         http,
@@ -326,7 +328,9 @@ fn capability_unrestricted_http_is_supported() {
 #[tokio::test]
 async fn metadata_serialises_from_config() {
     let cache = Arc::new(kani_core::cache::InMemoryCache::new());
-    let http = kani_core::http::SmartClient::new(None).unwrap();
+    let http = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let src = YamlSource::new(
         Arc::new(ValidatedExtension {
             id: "test-id".into(),

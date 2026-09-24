@@ -298,7 +298,9 @@ async fn opds_reflects_what_the_source_actually_returned() {
         src,
         SourceBackend::Yaml(Box::new(YamlSource::new(
             Arc::new(ext),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "opds:".into(),
             HashMap::new(),

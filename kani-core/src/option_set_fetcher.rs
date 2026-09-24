@@ -363,7 +363,7 @@ mod tests {
 
         let generous = SmartClient::new_for_test()
             .unwrap()
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let all = fetch_option_set(&generous, &def, &server.uri(), true)
             .await
             .unwrap();
@@ -371,7 +371,7 @@ mod tests {
 
         let stingy = SmartClient::new_for_test()
             .unwrap()
-            .with_allow_private_egress(true)
+            .with_allow_loopback_egress(true)
             .with_budgets(crate::http::Budgets {
                 max_option_set_bytes: full_len / 8,
                 ..crate::http::Budgets::default()

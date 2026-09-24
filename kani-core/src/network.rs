@@ -68,6 +68,18 @@ pub fn is_forbidden_url_host(url: &str) -> bool {
     }
 }
 
+/// Whether a URL's host is a loopback IP literal (`127.0.0.0/8` or `::1`).
+pub fn is_loopback_url_host(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    match parsed.host() {
+        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
+        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
+        _ => false,
+    }
+}
+
 /// Build an HTTP client that refuses to reach private/reserved hosts, for
 /// server-initiated egress to user-supplied URLs (webhooks). Redirects are
 /// disabled so a `3xx` cannot bounce the request to an internal host that the

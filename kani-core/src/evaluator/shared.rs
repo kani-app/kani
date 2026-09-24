@@ -1570,6 +1570,9 @@ mod tests {
         let mut state = HostState {
             allowed_host: AllowedHost::Unrestricted,
             max_hook_requests: 2,
+            http_client: crate::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             ..Default::default()
         };
 

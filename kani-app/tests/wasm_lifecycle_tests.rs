@@ -46,7 +46,9 @@ fn wasm_backend(origin_base: &str) -> Option<SourceBackend> {
     Some(loader::build_wasm_source(
         engine,
         instance_pre,
-        SmartClient::new(None).unwrap(),
+        SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         None,
         true,
         false,

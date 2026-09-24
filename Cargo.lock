@@ -3270,6 +3270,7 @@ dependencies = [
  "http-body-util",
  "image",
  "imagesize",
+ "kani-core",
  "kani-shared",
  "kani-yaml",
  "postcard",

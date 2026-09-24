@@ -101,7 +101,9 @@ fn chapter_list_endpoint(route: &str, container: &str) -> ValidatedEndpoint {
 
 fn yaml_source(base_url: &str, chapter_ep: ValidatedEndpoint) -> YamlSource {
     let cache = Arc::new(kani_core::cache::InMemoryCache::new());
-    let http = kani_core::http::SmartClient::new(None).unwrap();
+    let http = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let ext = ValidatedExtension {
         id: "fixture-source".into(),
         name: "Fixture Source".into(),

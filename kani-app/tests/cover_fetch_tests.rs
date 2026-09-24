@@ -78,7 +78,9 @@ fn wire_cover_source(svc: &AppService, source_id: i64, origin: &TestOrigin) {
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("cover-{source_id}:"),
         HashMap::new(),

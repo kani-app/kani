@@ -94,7 +94,9 @@ fn wire_source(svc: &kani_app::service::AppService, source_id: i64, base_url: &s
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("test-{source_id}:"),
         HashMap::new(),
@@ -625,7 +627,9 @@ async fn a_declared_rate_limit_applies_to_page_fetches_not_only_catalogue_calls(
         origin.set(&format!("/img/{i}.jpg"), Response::image(vec![0u8; 32]));
     }
 
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     client.register_rate_limit(
         "127.0.0.1",
         &kani_shared::extension::RateLimitConfig {
@@ -671,7 +675,7 @@ async fn credentials_are_not_carried_across_a_cross_host_redirect() {
 
     let client = kani_core::http::SmartClient::new(None)
         .unwrap()
-        .with_allow_private_egress(true);
+        .with_allow_loopback_egress(true);
     let res = client.safe_get(&first.url("/start"), Some(headers)).await;
     assert!(res.is_ok(), "the redirect should still be followed");
     assert_eq!(
@@ -700,7 +704,9 @@ async fn an_interrupted_page_is_not_treated_as_downloaded_on_the_next_run() {
     );
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     let first = kani_core::downloader::DownloaderManager::download_page_for_test(
         &client,
@@ -733,7 +739,9 @@ async fn a_complete_page_is_staged_and_reusable() {
     origin.set("/img/0001.jpg", Response::image(page.clone()));
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let (path, _name) = kani_core::downloader::DownloaderManager::download_page_for_test(
         &client,
         &origin.url("/img/0001.jpg"),
@@ -815,7 +823,9 @@ fn wire_paginated_source(svc: &kani_app::service::AppService, source_id: i64, ba
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("paged-{source_id}:"),
         HashMap::new(),
@@ -831,7 +841,9 @@ async fn a_permanent_status_is_not_retried() {
     origin.set("/img/gone.jpg", Response::status(404));
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     let started = std::time::Instant::now();
     let res = kani_core::downloader::DownloaderManager::download_page_with_retry_for_test(
@@ -870,7 +882,9 @@ async fn a_transient_status_is_still_retried() {
     );
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     let res = kani_core::downloader::DownloaderManager::download_page_with_retry_for_test(
         &client,
@@ -897,7 +911,9 @@ async fn the_servers_retry_after_survives_into_the_error_classification() {
     );
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
 
     let err = kani_core::downloader::DownloaderManager::download_page_for_test(
         &client,
@@ -937,7 +953,9 @@ async fn a_png_served_as_octet_stream_is_not_stored_as_jpg() {
     );
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let (_path, filename) = kani_core::downloader::DownloaderManager::download_page_for_test(
         &client,
         &origin.url("/img/mystery"),
@@ -967,7 +985,9 @@ async fn a_jpeg_is_still_named_jpg_when_nothing_else_identifies_it() {
     );
 
     let staging = tempfile::tempdir().unwrap();
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let (_p, filename) = kani_core::downloader::DownloaderManager::download_page_for_test(
         &client,
         &origin.url("/img/mystery"),
@@ -1098,7 +1118,9 @@ fn wire_filtering_source(svc: &kani_app::service::AppService, source_id: i64, ba
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("filter-{source_id}:"),
         HashMap::new(),
@@ -1153,7 +1175,9 @@ async fn a_preference_change_propagates_without_a_restart() {
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "pref:".into(),
         HashMap::from([("region".to_string(), "US".to_string())]),
@@ -1202,7 +1226,9 @@ async fn a_preference_change_reaches_the_next_request() {
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "prefhdr:".into(),
         HashMap::from([("region".to_string(), "US".to_string())]),
@@ -1267,7 +1293,9 @@ fn wire_sorting_source(svc: &kani_app::service::AppService, source_id: i64, base
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("sort-{source_id}:"),
         HashMap::new(),
@@ -1329,7 +1357,9 @@ async fn wire_fetched_options_source(
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("optset-{source_id}:"),
         HashMap::new(),
@@ -1569,7 +1599,9 @@ fn wire_migration_target(svc: &kani_app::service::AppService, source_id: i64, ba
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("target-{source_id}:"),
         HashMap::new(),
@@ -1618,7 +1650,9 @@ fn wire_endless_migration_target(
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("endless-{source_id}:"),
         HashMap::new(),
@@ -1766,7 +1800,9 @@ fn wire_searchable_migration_target(
     };
     let source = YamlSource::new(
         Arc::new(ext),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         format!("searchable-{source_id}:"),
         HashMap::new(),

@@ -1032,10 +1032,14 @@ mod tests {
         let library_path = tmp.path().to_path_buf();
         let save_path = library_path.join("manga");
 
-        let mgr =
-            DownloaderManager::new(SmartClient::new(None).unwrap(), DownloaderConfig::default())
-                .await
-                .unwrap();
+        let mgr = DownloaderManager::new(
+            SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
+            DownloaderConfig::default(),
+        )
+        .await
+        .unwrap();
 
         let task = DownloadTask {
             chapter_id: 1,

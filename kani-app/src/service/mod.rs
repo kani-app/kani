@@ -1032,10 +1032,10 @@ impl AppService {
 
         let smart_client = kani_core::http::SmartClient::new(None)
             .expect("SmartClient::new failed in test")
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let proxy_client = kani_core::http::SmartClient::new(None)
             .expect("proxy SmartClient::new failed in test")
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let wasm_runtime =
             Arc::new(WasmRuntime::new_on_demand().expect("WasmRuntime::new failed in test"));
         let downloader = DownloaderManager::new(
