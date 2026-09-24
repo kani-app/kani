@@ -775,9 +775,7 @@ impl scripting::Host for HostState {
             .to_string();
         self.check_allowed_host(&host)?;
         self.charge_io()?;
-        let (auto_scroll, init_script) = init_script
-            .strip_prefix("/*kani:auto-scroll=false*/\n")
-            .map_or((true, init_script.as_str()), |script| (false, script));
+        let (auto_scroll, init_script) = kani_shared::types::take_auto_scroll(&init_script);
         let result = crate::v8_process::capture_page_payload_resilient(
             &self.v8_process,
             &self.http_client,

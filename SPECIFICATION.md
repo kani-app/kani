@@ -1892,6 +1892,10 @@ limits.
 Both backends extract the captured payload as a standard JSON endpoint: the interpreted backend
 (§5.1) directly, and generated code by passing it to `extract::json`.
 
+Auto-scroll defaults to `false` everywhere: browser endpoints, the hook `ctx.capture_page_payload`,
+and a Rust extension's `v8_context::capture_page_payload`. A Rust extension opts in with
+`capture_page_payload_configured(url, script, timeout_ms, true)`.
+
 ```yaml
 browser_scripts:
   fetch_manga: |

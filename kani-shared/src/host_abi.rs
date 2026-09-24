@@ -881,10 +881,7 @@ pub mod v8_context {
         timeout_ms: u32,
         auto_scroll: bool,
     ) -> Result<String, ExtensionError> {
-        if auto_scroll {
-            return capture_page_payload(page_url, init_script, timeout_ms);
-        }
-        let script = format!("/*kani:auto-scroll=false*/\n{init_script}");
+        let script = crate::types::mark_auto_scroll(init_script, auto_scroll);
         capture_page_payload(page_url, &script, timeout_ms)
     }
 }

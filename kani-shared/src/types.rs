@@ -124,6 +124,32 @@ pub fn to_shared_filters(filters: Vec<wit_types::ActiveFilter>) -> Vec<ActiveFil
 
 pub const DEFAULT_BROWSER_AUTO_SCROLL: bool = false;
 
+const AUTO_SCROLL_ON: &str = "/*kani:auto-scroll=true*/\n";
+const AUTO_SCROLL_OFF: &str = "/*kani:auto-scroll=false*/\n";
+
+/// Prefixes a capture script with its auto-scroll choice, which is how the setting
+/// crosses the WIT `capture-page-payload` call.
+pub fn mark_auto_scroll(init_script: &str, auto_scroll: bool) -> String {
+    let marker = if auto_scroll {
+        AUTO_SCROLL_ON
+    } else {
+        AUTO_SCROLL_OFF
+    };
+    format!("{marker}{init_script}")
+}
+
+/// Splits a capture script into its auto-scroll choice and the script itself; an
+/// unmarked script takes [`DEFAULT_BROWSER_AUTO_SCROLL`].
+pub fn take_auto_scroll(init_script: &str) -> (bool, &str) {
+    if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_ON) {
+        (true, script)
+    } else if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_OFF) {
+        (false, script)
+    } else {
+        (DEFAULT_BROWSER_AUTO_SCROLL, init_script)
+    }
+}
+
 /// Visibility scope for a declared cache namespace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
@@ -1437,6 +1463,15 @@ pub struct ContinueReadingChapter {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn auto_scroll_marker_round_trips_and_defaults_off() {
+        for auto_scroll in [true, false] {
+            let marked = mark_auto_scroll("run()", auto_scroll);
+            assert_eq!(take_auto_scroll(&marked), (auto_scroll, "run()"));
+        }
+        assert_eq!(take_auto_scroll("run()"), (false, "run()"));
+    }
 
     #[test]
     fn download_status_serialises_as_integer() {
