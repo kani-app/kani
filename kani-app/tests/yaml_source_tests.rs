@@ -1823,3 +1823,79 @@ async fn a_failed_first_install_leaves_no_artifact() {
         "no artifact may be left behind without a row"
     );
 }
+
+#[tokio::test]
+async fn a_version_change_clears_the_extension_cache() {
+    let svc = test_service().await;
+    let sid = svc
+        .install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .unwrap();
+    let ttl = std::time::Duration::from_secs(600);
+    let seed = || async {
+        for ns in ["recover-me:", "recover-me:auth"] {
+            svc.ext_cache.put(ns, "k", b"v".to_vec(), ttl).await;
+        }
+        svc.ext_cache
+            .put(&format!("fetched_opts:{sid}"), "k", b"v".to_vec(), ttl)
+            .await;
+    };
+    let cached = || async {
+        let mut present = Vec::new();
+        for ns in [
+            "recover-me:".to_string(),
+            "recover-me:auth".to_string(),
+            format!("fetched_opts:{sid}"),
+        ] {
+            if svc.ext_cache.get(&ns, "k").await.is_some() {
+                present.push(ns);
+            }
+        }
+        present
+    };
+
+    seed().await;
+    svc.install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .unwrap();
+    assert_eq!(
+        cached().await.len(),
+        3,
+        "a same-version reinstall keeps the cache"
+    );
+
+    svc.install_yaml_source(recoverable_yaml("2.0.0").as_bytes())
+        .await
+        .unwrap();
+    assert!(
+        cached().await.is_empty(),
+        "a version change must clear every namespace, left: {:?}",
+        cached().await
+    );
+}
+
+#[tokio::test]
+async fn a_version_change_found_at_startup_clears_the_extension_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("recover-me.yaml");
+    let svc = test_service().await;
+
+    std::fs::write(&file, recoverable_yaml("1.0.0")).unwrap();
+    svc.scan_and_load_yaml_dir_for_test(dir.path())
+        .await
+        .unwrap();
+    let ttl = std::time::Duration::from_secs(600);
+    svc.ext_cache
+        .put("recover-me:auth", "k", b"v".to_vec(), ttl)
+        .await;
+
+    std::fs::write(&file, recoverable_yaml("2.0.0")).unwrap();
+    svc.scan_and_load_yaml_dir_for_test(dir.path())
+        .await
+        .unwrap();
+
+    assert!(
+        svc.ext_cache.get("recover-me:auth", "k").await.is_none(),
+        "a version bump on disk must clear the cache"
+    );
+}

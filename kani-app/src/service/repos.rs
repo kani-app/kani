@@ -603,6 +603,7 @@ impl AppService {
         .await
         .map_err(ServiceError::Validation)?;
 
+        let previous_version = self.stored_version(existing_id, &validated.id).await?;
         let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &validated.id)
             .await
             .map_err(ServiceError::Core)?;
@@ -623,6 +624,10 @@ impl AppService {
                 return Err(e);
             }
         };
+        if previous_version.is_some_and(|v| v != validated.version) {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), &validated.id, sid)
+                .await;
+        }
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", validated.id);
@@ -686,6 +691,7 @@ impl AppService {
             .instantiate_pre(&component)
             .map_err(ServiceError::Core)?;
 
+        let previous_version = self.stored_version(existing_id, &metadata.id).await?;
         let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &metadata.id)
             .await
             .map_err(ServiceError::Core)?;
@@ -706,6 +712,10 @@ impl AppService {
                 return Err(e);
             }
         };
+        if previous_version.is_some_and(|v| v != metadata.version) {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), &metadata.id, sid)
+                .await;
+        }
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", metadata.id);
@@ -740,6 +750,28 @@ impl AppService {
         }
         self.cache.invalidate_source(sid);
         Ok(sid)
+    }
+
+    async fn stored_version(
+        &self,
+        existing_id: Option<i64>,
+        extension_id: &str,
+    ) -> Result<Option<String>> {
+        let version: Option<String> = match existing_id {
+            Some(id) => {
+                sqlx::query_scalar("SELECT version FROM sources WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&self.db_read)
+                    .await?
+            }
+            None => {
+                sqlx::query_scalar("SELECT version FROM sources WHERE name = ?")
+                    .bind(extension_id)
+                    .fetch_optional(&self.db_read)
+                    .await?
+            }
+        };
+        Ok(version)
     }
 
     async fn upsert_yaml_source_row(

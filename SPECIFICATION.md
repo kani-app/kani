@@ -2133,10 +2133,12 @@ return nothing: a cache write that fails is dropped rather than failing the call
 ### 4.2 Namespace and backend
 
 All extension cache entries live in one SQLite table (`extension_cache`), keyed by namespace and
-key, so they persist across restarts. The namespace is the extension id followed by `:`. It does
-**not** include the extension version: entries written by one version are readable after an
-upgrade. An extension that changes the format of a cached value should change its key (e.g.
-`"cdn_base:v2"`) or call `clear()` once after upgrading.
+key, so they persist across restarts. The namespace is the extension id followed by `:`.
+
+**A version change clears the cache.** When an install, an update, or the startup scan records a
+version different from the stored one, the host deletes every namespace beginning with
+`"<id>:"` (the extension's own and its hooks') and the source's `fetched_opts:{source_id}`
+namespace. Reinstalling the same version keeps the cache.
 
 Hook scripts share the extension's namespace, with the script-supplied namespace appended
 (§3.10). Fetched option sets (§3.4) are cached under the host namespace `fetched_opts:{source_id}`.

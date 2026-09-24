@@ -946,6 +946,7 @@ impl AppService {
         smart_client: kani_core::http::SmartClient,
         wasm_runtime: &WasmRuntime,
         preference_schemas: &DashMap<i64, Vec<kani_core::PreferenceSpec>>,
+        ext_cache: &dyn kani_core::cache::CacheBackend,
     ) -> Result<()> {
         tracing::info!(
             "Scanning and registering sources in {:?}",
@@ -1033,13 +1034,18 @@ impl AppService {
                 let mihon_id: Option<i64> = ext.as_ref().and_then(|e| e.mihon_source_id);
                 let enabled_i = enabled as i64;
 
-                let existing = sqlx::query("SELECT id FROM sources WHERE name = ?")
+                let existing = sqlx::query("SELECT id, version FROM sources WHERE name = ?")
                     .bind(&canonical_id)
                     .fetch_optional(db)
                     .await?;
 
                 if let Some(row) = existing {
                     let id: i64 = row.try_get("id")?;
+                    let stored_version: String = row.try_get("version")?;
+                    if ext.is_some() && stored_version != version {
+                        crate::cache::invalidate_extension_cache(ext_cache, &canonical_id, id)
+                            .await;
+                    }
                     sqlx::query(
                         "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ?, \
                          mihon_source_id = ?, load_error = ?, \

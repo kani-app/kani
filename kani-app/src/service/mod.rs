@@ -586,6 +586,7 @@ impl AppService {
             global_smart_client.clone(),
             &wasm_runtime,
             &cache.preference_schema,
+            ext_cache.as_ref(),
         )
         .await
         {
@@ -1156,6 +1157,7 @@ impl AppService {
             self.smart_client.clone(),
             &self.wasm_runtime,
             &pref_schemas,
+            self.ext_cache.as_ref(),
         )
         .await?;
 

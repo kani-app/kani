@@ -25,6 +25,8 @@ pub trait CacheBackend: Send + Sync + 'static {
     async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration);
     async fn delete(&self, namespace: &str, key: &str);
     async fn clear_namespace(&self, namespace: &str);
+    /// Removes every namespace whose name starts with `prefix`.
+    async fn clear_namespaces_with_prefix(&self, prefix: &str);
     async fn prune_expired(&self);
 }
 
@@ -200,6 +202,10 @@ impl CacheBackend for InMemoryCache {
         self.namespaces.remove(namespace);
     }
 
+    async fn clear_namespaces_with_prefix(&self, prefix: &str) {
+        self.namespaces.retain(|name, _| !name.starts_with(prefix));
+    }
+
     async fn prune_expired(&self) {
         for ns in self.namespaces.iter() {
             if let Ok(mut state) = ns.value().lock() {
@@ -233,6 +239,20 @@ mod tests {
             .await;
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert_eq!(cache.get("ns", "key").await, None);
+    }
+
+    #[tokio::test]
+    async fn prefix_clear_spares_other_extensions() {
+        let cache = InMemoryCache::new();
+        let ttl = Duration::from_secs(60);
+        for ns in ["a:", "a:auth", "ab:", "b:a:"] {
+            cache.put(ns, "k", b"v".to_vec(), ttl).await;
+        }
+        cache.clear_namespaces_with_prefix("a:").await;
+        assert_eq!(cache.get("a:", "k").await, None);
+        assert_eq!(cache.get("a:auth", "k").await, None);
+        assert!(cache.get("ab:", "k").await.is_some());
+        assert!(cache.get("b:a:", "k").await.is_some());
     }
 
     #[tokio::test]
