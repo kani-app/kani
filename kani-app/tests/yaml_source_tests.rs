@@ -1748,3 +1748,78 @@ async fn an_unresolved_route_placeholder_is_an_error_not_a_literal() {
         "no request must be sent when a placeholder is unresolved"
     );
 }
+
+fn recoverable_yaml(version: &str) -> String {
+    format!(
+        r#"id: recover-me
+name: recover-me
+version: "{version}"
+base_url: "https://example.com"
+language: en
+endpoints:
+  popular:
+    route: /popular
+    container: ".item"
+    fields:
+      id: 'self.attr("data-id")'
+      title: 'self.first(".title").text()'
+"#
+    )
+}
+
+async fn fail_source_writes(svc: &kani_app::service::AppService, event: &str) {
+    sqlx::query(&format!(
+        "CREATE TRIGGER inject_failure BEFORE {event} ON sources \
+         BEGIN SELECT RAISE(ABORT, 'injected row failure'); END"
+    ))
+    .execute(&svc.db)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_failed_row_update_restores_the_previous_artifact() {
+    let svc = test_service().await;
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    let v1 = recoverable_yaml("1.0.0");
+    svc.install_yaml_source(v1.as_bytes()).await.unwrap();
+    fail_source_writes(&svc, "UPDATE").await;
+
+    let error = svc
+        .install_yaml_source(recoverable_yaml("2.0.0").as_bytes())
+        .await
+        .expect_err("the injected trigger must fail the row update");
+
+    assert!(
+        error.to_string().contains("injected row failure"),
+        "failed for the injected reason, got: {error}"
+    );
+    assert_eq!(
+        tokio::fs::read_to_string(storage.join("recover-me.yaml"))
+            .await
+            .unwrap(),
+        v1,
+        "the artifact on disk must still match the row"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_first_install_leaves_no_artifact() {
+    let svc = test_service().await;
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    fail_source_writes(&svc, "INSERT").await;
+
+    let error = svc
+        .install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .expect_err("the injected trigger must fail the row insert");
+
+    assert!(
+        error.to_string().contains("injected row failure"),
+        "failed for the injected reason, got: {error}"
+    );
+    assert!(
+        !storage.join("recover-me.yaml").exists(),
+        "no artifact may be left behind without a row"
+    );
+}

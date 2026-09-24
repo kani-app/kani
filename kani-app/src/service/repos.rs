@@ -603,14 +603,26 @@ impl AppService {
         .await
         .map_err(ServiceError::Validation)?;
 
-        kani_core::file_storage::save_yaml(storage_path, &validated.id, text)
+        let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &validated.id)
             .await
             .map_err(ServiceError::Core)?;
-        kani_core::file_storage::delete_wasm_file(storage_path, &validated.id)
-            .await
-            .map_err(ServiceError::Core)?;
-
-        let sid = self.upsert_yaml_source_row(&validated, existing_id).await?;
+        let written = async {
+            kani_core::file_storage::save_yaml(storage_path, &validated.id, text)
+                .await
+                .map_err(ServiceError::Core)?;
+            kani_core::file_storage::delete_wasm_file(storage_path, &validated.id)
+                .await
+                .map_err(ServiceError::Core)?;
+            self.upsert_yaml_source_row(&validated, existing_id).await
+        }
+        .await;
+        let sid = match written {
+            Ok(sid) => sid,
+            Err(e) => {
+                restore_after_failed_install(storage_path, &validated.id, previous).await;
+                return Err(e);
+            }
+        };
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", validated.id);
@@ -669,15 +681,31 @@ impl AppService {
         )
         .await
         .map_err(ServiceError::Validation)?;
-
-        kani_core::file_storage::save_wasm(storage_path, &metadata.id, bytes)
-            .await
-            .map_err(ServiceError::Core)?;
-        kani_core::file_storage::delete_yaml_file(storage_path, &metadata.id)
-            .await
+        let instance_pre = self
+            .wasm_runtime
+            .instantiate_pre(&component)
             .map_err(ServiceError::Core)?;
 
-        let sid = self.upsert_wasm_source_row(&metadata, existing_id).await?;
+        let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &metadata.id)
+            .await
+            .map_err(ServiceError::Core)?;
+        let written = async {
+            kani_core::file_storage::save_wasm(storage_path, &metadata.id, bytes)
+                .await
+                .map_err(ServiceError::Core)?;
+            kani_core::file_storage::delete_yaml_file(storage_path, &metadata.id)
+                .await
+                .map_err(ServiceError::Core)?;
+            self.upsert_wasm_source_row(&metadata, existing_id).await
+        }
+        .await;
+        let sid = match written {
+            Ok(sid) => sid,
+            Err(e) => {
+                restore_after_failed_install(storage_path, &metadata.id, previous).await;
+                return Err(e);
+            }
+        };
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", metadata.id);
@@ -688,10 +716,6 @@ impl AppService {
             .as_ref()
             .map(|rl| rl.max_hook_requests)
             .unwrap_or(3);
-        let instance_pre = self
-            .wasm_runtime
-            .instantiate_pre(&component)
-            .map_err(ServiceError::Core)?;
         let backend = loader::build_wasm_source(
             self.wasm_runtime.engine().clone(),
             instance_pre,
@@ -907,4 +931,18 @@ fn fingerprint_from_b64(b64: &str) -> std::result::Result<String, String> {
         .try_into()
         .map_err(|_| "Public key must be 32 bytes".to_string())?;
     Ok(signing::key_fingerprint(&arr))
+}
+
+async fn restore_after_failed_install(
+    storage_path: &str,
+    extension_id: &str,
+    previous: kani_core::file_storage::ArtifactSnapshot,
+) {
+    if let Err(e) =
+        kani_core::file_storage::restore_artifacts(storage_path, extension_id, previous).await
+    {
+        tracing::error!(
+            "Install of '{extension_id}' failed and its previous artifacts could not be restored: {e}"
+        );
+    }
 }

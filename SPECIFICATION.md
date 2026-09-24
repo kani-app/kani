@@ -989,7 +989,7 @@ When `pagination` is set, the blueprint must be submitted via `paginated-extract
 
 Blueprints are serialized with **[`postcard`](https://docs.rs/postcard)** (a compact binary format) for the FFI call across the WASM boundary. The `Expr` enum's `serde` derives handle this transparently. Call `blueprint.to_bytes()` (from `BlueprintBuilder::build()`) to get the postcard bytes; the host deserializes via `postcard::from_bytes(&blueprint)`.
 
-**DSL schema versioning.** The binary payload is prefixed with a `u32` schema version (`DSL_SCHEMA_VERSION` constant in `kani-shared/src/ast.rs`). `decode_blueprint` on the host hard-rejects any version mismatch with a human-readable error rather than an opaque decode failure. Adding or changing enum variants changes the postcard layout, so every version bump requires all installed extensions to be rebuilt.
+**DSL schema versioning.** The binary payload is prefixed with a `u32` schema version (`DSL_SCHEMA_VERSION` constant in `kani-shared/src/ast.rs`). `decode_blueprint` on the host accepts the versions listed as readable below and rejects any other with a human-readable "recompile the extension" error rather than an opaque decode failure.
 
 | Version | Change |
 |---------|--------|
@@ -998,8 +998,18 @@ Blueprints are serialized with **[`postcard`](https://docs.rs/postcard)** (a com
 | 3 | Added `Expr::UserFn { name, args }` for pure-script bridge (§3.10). |
 | 4 | Added `endpoint_id: Option<String>` to `RequestDef` for per-endpoint hook dispatch (§3.10). |
 | 5 | Added `endpoint_id: Option<String>` to `Expr::Fetch` so sub-fetches (`then:` / `for_each:` steps) participate in per-endpoint hook dispatch. |
+| 6 | Added `Expr::Arena`, flat storage for large expressions. Appended as a new variant, so version 5 payloads still decode. |
 
-The current version is **5**. Version 1 blueprints (no prefix) are decodable by v2+ hosts for backward compatibility; any other mismatch is a hard error.
+The current version is **6**. The host reads versions **5 and 6**; versions 1–4 are rejected.
+
+The check runs when a blueprint is decoded, which is on each extraction, not at install or load
+time. A WASM extension built for an unreadable version therefore installs and loads, then fails
+every request with the recompile error.
+
+**Compatibility rule.** postcard is not self-describing: appending a variant to an enum leaves
+older payloads decodable, but adding, removing, or reordering a field or variant does not. Within
+1.x, a version bump may only append enum variants, and the host keeps reading every version from
+5 onwards. A change that cannot be expressed that way needs a new variant, not a changed one.
 
 The JSON IM described in §2.2 reflects the logical structure of the AST and is useful for debugging; the wire format is binary, not JSON.
 
@@ -2166,7 +2176,18 @@ The evaluator (`kani-core/src/evaluator/shared.rs`) enforces host-side caps (not
 
 ### 5.3 Selection and supersession
 
-Sources live in a single directory (`wasm_storage_path`). When both `<name>.yaml` and `<name>.wasm` exist for one source, **YAML wins**; the WASM file is retained for rollback and the choice is logged. Load failures (validation, missing capabilities, `min_kani_version`, `schema_version`) leave the row `enabled = 0` with the reason stored in `sources.load_error`.
+Sources live in a single directory (`wasm_storage_path`), one artifact per source. Installing or
+updating a source in one format deletes its artifact in the other, and overwrites the previous
+version in place: **no earlier version is kept**, so there is no automatic rollback. To go back,
+reinstall the older version from its repository.
+
+Both `<name>.yaml` and `<name>.wasm` exist only when an operator has placed them by hand. Then
+**YAML wins**, the choice is logged, and the WASM file is left unused; deleting the YAML file and
+restarting switches the source back to it.
+
+A YAML source that fails at startup (validation, missing capabilities, `min_kani_version`,
+`schema_version`) leaves the row `enabled = 0` with the reason stored in `sources.load_error`. A
+WASM artifact that cannot be compiled is reported as a source-load degradation instead.
 
 ### 5.4 Hot-swap
 
@@ -2213,7 +2234,15 @@ use (TOFU) key pinning.
 
 ### 6.3 Install pipeline
 
-`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change. Repo add/trust/install/update/remove and block/unblock are audit-logged.
+`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change.
+
+Every fallible step that has no side effects (verification, YAML validation, WASM compilation and
+instantiation, capability checks) runs before anything is written. Artifacts are written to a
+staging file and renamed into place, so a crash cannot leave a truncated artifact. The source's
+existing artifacts are read before the write; if writing the file, removing the other format, or
+the row upsert then fails, they are put back exactly as they were and the install returns the
+error. The registry is only touched after the row is committed, and `hot_swap` cannot fail: it
+waits up to 30 s for in-flight calls (§5.4) and then swaps. Repo add/trust/install/update/remove and block/unblock are audit-logged.
 
 ### 6.4 SSE events
 
