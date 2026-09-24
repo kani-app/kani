@@ -1127,7 +1127,9 @@ fn validate_endpoint(
             page_url,
             script_name,
             timeout_ms: body.timeout_ms,
-            auto_scroll: body.auto_scroll.unwrap_or(false),
+            auto_scroll: body
+                .auto_scroll
+                .unwrap_or(kani_shared::types::DEFAULT_BROWSER_AUTO_SCROLL),
         })
     } else {
         Err(errors)

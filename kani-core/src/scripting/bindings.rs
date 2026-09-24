@@ -184,7 +184,13 @@ fn ctx_capture_page_payload(
     script_name: String,
     timeout_ms: i64,
 ) -> Result<Dynamic, Box<rhai::EvalAltResult>> {
-    ctx_capture_page_payload_scrolled(ctx, page_url, script_name, timeout_ms, true)
+    ctx_capture_page_payload_scrolled(
+        ctx,
+        page_url,
+        script_name,
+        timeout_ms,
+        kani_shared::types::DEFAULT_BROWSER_AUTO_SCROLL,
+    )
 }
 
 fn ctx_capture_page_payload_scrolled(

@@ -1971,7 +1971,7 @@ Each hook body is a Rhai expression body (not a function declaration) evaluated 
 | Variable | Type | Description |
 |----------|------|-------------|
 | `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.url = s`, `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`. |
-| `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(...)`. |
+| `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(page_url, script, timeout_ms[, auto_scroll])`, which loads `page_url` in the solver's browser with the named `browser_scripts` entry and returns the string it passes to `passPayload`. `auto_scroll` defaults to `false`, as on browser endpoints (§3.8). |
 | `resp` | `ScriptableResponse` | Available in `on_status` only: `resp.status` (integer), `resp.headers` (map), and `resp.body`, which the hook may reassign. |
 
 `set_query` replaces any existing parameter of that name; `push_query` appends, so a

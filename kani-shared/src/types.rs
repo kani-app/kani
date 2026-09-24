@@ -122,6 +122,8 @@ pub fn to_shared_filters(filters: Vec<wit_types::ActiveFilter>) -> Vec<ActiveFil
         .collect()
 }
 
+pub const DEFAULT_BROWSER_AUTO_SCROLL: bool = false;
+
 /// Visibility scope for a declared cache namespace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
