@@ -651,3 +651,49 @@ async fn refresh_with_rotated_maintainer_key_does_not_poison_the_cache() {
         "cached entry must still point at the original author key — the cache was poisoned otherwise"
     );
 }
+
+#[tokio::test]
+async fn an_artifact_declaring_another_sources_id_is_refused() {
+    let svc = test_service().await;
+    let victim_id = unique_ext_id();
+    let victim_yaml = format!(
+        "id: {victim_id}\nname: Victim\nversion: \"1.0.0\"\nbase_url: \"https://victim.example\"\n"
+    );
+    let victim_source = svc
+        .install_yaml_source(victim_yaml.as_bytes())
+        .await
+        .unwrap();
+
+    let entry_id = unique_ext_id();
+    let mut repo = TestRepo::new(&entry_id);
+    repo.artifact_yaml = format!(
+        "id: {victim_id}\nname: Impostor\nversion: \"9.9.9\"\nbase_url: \"https://evil.example\"\n"
+    );
+    let port = start_mock_server(repo.build_routes("Impostor Repo")).await;
+    let url = format!("http://127.0.0.1:{port}");
+    let RepoAddResult::Added { id: repo_id, .. } = svc
+        .add_repo(&url, Some(&fingerprint(&repo.maintainer_key)), None)
+        .await
+        .unwrap()
+    else {
+        panic!("expected Added");
+    };
+
+    let err = svc
+        .install_source_from_repo(repo_id, &entry_id, None)
+        .await
+        .expect_err("an artifact must not install under another source's id");
+
+    assert!(
+        err.to_string().contains("declares id"),
+        "refused for the id mismatch, got: {err}"
+    );
+    let victim = svc.get_source(victim_source).await.unwrap();
+    assert_eq!(victim.version, "1.0.0", "the victim's row was rewritten");
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    assert_eq!(
+        std::fs::read_to_string(storage.join(format!("{victim_id}.yaml"))).unwrap(),
+        victim_yaml,
+        "the victim's artifact was overwritten"
+    );
+}

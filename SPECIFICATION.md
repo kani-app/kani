@@ -2271,7 +2271,7 @@ use (TOFU) key pinning.
 
 ### 6.3 Install pipeline
 
-`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change.
+`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → check that the artifact's own `id` equals the index entry's `id` (and, on update, the updated source's name) → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change.
 
 Every fallible step that has no side effects (verification, YAML validation, WASM compilation and
 instantiation, capability checks) runs before anything is written. Artifacts are written to a

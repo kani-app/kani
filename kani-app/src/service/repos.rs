@@ -519,12 +519,22 @@ impl AppService {
 
         let source_id = match entry.format.as_str() {
             "yaml" => {
-                self.install_yaml_artifact(&artifact_bytes, &storage_path, existing_source_id)
-                    .await?
+                self.install_yaml_artifact(
+                    &artifact_bytes,
+                    &storage_path,
+                    existing_source_id,
+                    Some(extension_id),
+                )
+                .await?
             }
             "wasm" => {
-                self.install_wasm_artifact(&artifact_bytes, &storage_path, existing_source_id)
-                    .await?
+                self.install_wasm_artifact(
+                    &artifact_bytes,
+                    &storage_path,
+                    existing_source_id,
+                    Some(extension_id),
+                )
+                .await?
             }
             fmt => {
                 return Err(ServiceError::Validation(format!(
@@ -567,7 +577,8 @@ impl AppService {
             .ok_or_else(|| ServiceError::Internal("Failed to convert storage path".to_string()))?
             .to_string();
         drop(settings);
-        self.install_yaml_artifact(bytes, &storage_path, None).await
+        self.install_yaml_artifact(bytes, &storage_path, None, None)
+            .await
     }
 
     async fn install_yaml_artifact(
@@ -575,6 +586,7 @@ impl AppService {
         bytes: &[u8],
         storage_path: &str,
         existing_id: Option<i64>,
+        expected_id: Option<&str>,
     ) -> Result<i64> {
         let text = std::str::from_utf8(bytes).map_err(|_| {
             ServiceError::Validation("YAML artifact is not valid UTF-8".to_string())
@@ -596,6 +608,8 @@ impl AppService {
             ServiceError::Validation(format!("Invalid YAML extension: {msg}"))
         })?;
 
+        self.check_artifact_identity(&validated.id, expected_id, existing_id)
+            .await?;
         crate::install_gating::check_required_capabilities_live(
             &validated.requires_capabilities,
             &self.smart_client,
@@ -654,6 +668,7 @@ impl AppService {
         bytes: &[u8],
         storage_path: &str,
         existing_id: Option<i64>,
+        expected_id: Option<&str>,
     ) -> Result<i64> {
         let bytes_owned = bytes.to_vec();
         let runtime_clone = self.wasm_runtime.clone();
@@ -686,6 +701,8 @@ impl AppService {
                 metadata.id
             )));
         }
+        self.check_artifact_identity(&metadata.id, expected_id, existing_id)
+            .await?;
         crate::install_gating::check_required_capabilities_live(
             &metadata.requires_capabilities,
             &self.smart_client,
@@ -756,6 +773,37 @@ impl AppService {
         }
         self.cache.invalidate_source(sid);
         Ok(sid)
+    }
+
+    /// Refuses an artifact whose own id differs from the repository entry it was installed
+    /// from, or from the source it is updating. Files and rows are keyed by the artifact's
+    /// id, so a mismatch would overwrite a different source.
+    async fn check_artifact_identity(
+        &self,
+        artifact_id: &str,
+        expected_id: Option<&str>,
+        existing_id: Option<i64>,
+    ) -> Result<()> {
+        if let Some(expected) = expected_id
+            && artifact_id != expected
+        {
+            return Err(ServiceError::Validation(format!(
+                "Artifact declares id '{artifact_id}' but the repository lists it as '{expected}'"
+            )));
+        }
+        if let Some(id) = existing_id {
+            let name: Option<String> = sqlx::query_scalar("SELECT name FROM sources WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.db_read)
+                .await?;
+            if name.as_deref() != Some(artifact_id) {
+                return Err(ServiceError::Validation(format!(
+                    "Artifact declares id '{artifact_id}' but is updating source {id} ({})",
+                    name.as_deref().unwrap_or("missing")
+                )));
+            }
+        }
+        Ok(())
     }
 
     async fn stored_version(
