@@ -25,7 +25,8 @@ fn solver_envelope(rendered: &str) -> String {
 
 /// A solver index advertising scripted capture. The capability probe reads this
 /// before dispatching, so a mock that serves only /v1 reads as unreachable.
-const CAPABLE_INDEX: &str = r#"{"msg":"ready","capabilities":["kani.capture/1","kani.capture/2"]}"#;
+const CAPABLE_INDEX: &str =
+    r#"{"msg":"ready","capabilities":["kani.capture/1","kani.capture/2","kani.egress-guard/1"]}"#;
 
 #[tokio::test]
 async fn a_challenge_page_triggers_the_solver_and_replays() {

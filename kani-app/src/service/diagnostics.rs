@@ -95,8 +95,9 @@ impl AppService {
                 SOLVER_EGRESS_GUARD,
                 Severity::Warn,
                 "Browser solver",
-                "The configured solver does not advertise kani.egress-guard/1, so pages it \
-                 loads can reach private, loopback and cloud-metadata addresses on its network.",
+                "The configured solver does not advertise kani.egress-guard/1. Browser sources \
+                 are refused, and pages it loads while solving challenges can reach private, \
+                 loopback and cloud-metadata addresses on its network.",
                 "Run the flaresolverr-kani image as the solver, or keep the solver on a network \
                  with nothing else reachable.",
             ),

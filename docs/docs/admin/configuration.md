@@ -73,8 +73,8 @@ rewriting the extension unless a measured workload requires the change.
 For browser-backed sources behind a managed challenge, run `ghcr.io/kani-app/flaresolverr`, Kani's
 fork of FlareSolverr. It solves the challenge and runs the extension's capture script in the same browser, then reuses
 one cleared session per source and domain. A stock FlareSolverr remains supported for ordinary
-HTTP challenge solving and best-effort cookie replay, but cannot reliably capture device-bound
-pages. Each source's browser toggle disables its browser endpoints.
+HTTP challenge solving and best-effort cookie replay only; browser sources require this image.
+Each source's browser toggle disables its browser endpoints.
 
 **Releases and tags.** The compose file uses `latest`, which follows the fork's main branch and
 changes only when you run `docker compose pull`. Each release is also published as
@@ -85,8 +85,9 @@ matching version.
 
 **The fork keeps its browser off your network.** Pages the solver loads, and every script and
 subresource they fetch, are refused if they resolve to a private, loopback or cloud-metadata
-address. A stock FlareSolverr has no such guard, so Kani raises a **Browser solver** warning in
-**Settings → Diagnostics** while the configured solver lacks it.
+address. A stock FlareSolverr has no such guard: Kani refuses browser-source captures with it,
+still uses it for ordinary challenge solving, and raises a **Browser solver** warning in
+**Settings → Diagnostics** while it is configured.
 
 The `solver` service in `docker-compose.yml` already runs this image. To set it up:
 

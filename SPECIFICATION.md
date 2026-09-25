@@ -2365,7 +2365,7 @@ Changing a grant reloads the source.
 | WASM guest HTTP imports | Yes | Yes |
 | Fetched option sets (§3.4) | Yes (`base_url` host) | Yes |
 | Browser `page_url` (endpoint, WASM guest, hook `ctx.capture_page_payload`) | Yes | Yes |
-| Page scripts and subresources inside the solver browser | No: pages load CDNs and challenge scripts | Yes, by the solver (below) |
+| Page scripts and subresources inside the solver browser | No: pages load CDNs and challenge scripts | Yes, by the solver (below); captures are refused without it |
 | Image proxy (covers, pages) | No: images may come from any CDN | Yes; the owning source's grant applies |
 | Repository index and artifacts | Artifact must share the repo's host | Yes |
 
@@ -2376,11 +2376,17 @@ redirected off its host. A site that redirects to another host (commonly `exampl
 **The solver browser** is a separate process with its own network. Kani checks the page it asks
 the solver to load; the solver (`flaresolverr-kani`) enforces the forbidden-address rule on
 everything that page then fetches, by routing the browser through an egress-guard proxy that
-dials only the address it checked. It advertises this as `kani.egress-guard/1` on `GET /`. A
-stock FlareSolverr has no such guard, and neither does a solver request that supplies its own
-upstream `proxy`. Kani reads the solver's index at startup and whenever the solver setting
-changes, and raises a `solver_egress_guard` warning in Diagnostics while the configured solver
-lacks the capability. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
+dials only the address it checked. It advertises this as `kani.egress-guard/1` on `GET /`.
+
+**Browser captures require the guard.** A capture runs extension-supplied JavaScript in the
+solver's browser, so Kani refuses it (`solver_egress_guard_missing`) unless the solver
+advertises `kani.egress-guard/1`; browser endpoints and hook `ctx.capture_page_payload` fail
+rather than run under a weaker policy. Ordinary challenge solving, which loads the source's own
+page and returns cookies, still works with a stock FlareSolverr, but its browser then operates
+under the **weaker policy**: nothing stops that page's scripts reaching private addresses on the
+solver's network. Kani raises a `solver_egress_guard` warning in Diagnostics while the configured
+solver lacks the capability, reading its index at startup and whenever the solver setting
+changes. A solver request that supplies its own upstream `proxy` is not covered by the guard. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
 challenge scripts from other hosts.
 
 **Secret preferences** are readable by the extension that declares them and may be sent to any

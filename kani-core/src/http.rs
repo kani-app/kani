@@ -291,6 +291,10 @@ pub enum SolverCaptureError {
     /// from `Failed` because the solver itself is healthy: a caller retrying a
     /// harvest should treat this as "try again", not "the solver is broken".
     ScriptProducedNothing(String),
+    /// The solver can capture but does not advertise `kani.egress-guard/1`, so a page it
+    /// loads could reach private addresses on its network. Captures run extension scripts,
+    /// so they are refused rather than run under that weaker policy.
+    MissingEgressGuard,
     Failed(String),
 }
 
@@ -309,6 +313,12 @@ impl std::fmt::Display for SolverCaptureError {
                  the solver's API_KEY"
             ),
             Self::Unreachable => write!(f, "no solver is reachable at the configured URL"),
+            Self::MissingEgressGuard => write!(
+                f,
+                "the configured solver does not advertise kani.egress-guard/1, so a page it \
+                 loads could reach private addresses on its network; browser sources need the \
+                 ghcr.io/kani-app/flaresolverr image"
+            ),
             Self::ScriptProducedNothing(message) => write!(f, "{message}"),
             Self::Failed(message) => write!(f, "{message}"),
         }
@@ -552,6 +562,8 @@ pub struct SmartClient {
     solver_url: Arc<ArcSwap<Option<String>>>,
     solver_sessions: Arc<dashmap::DashMap<String, std::time::Instant>>,
     solver_capture_support: Arc<std::sync::atomic::AtomicU8>,
+    /// Whether the last probe found the solver advertising `kani.egress-guard/1`.
+    solver_egress_guard: Arc<std::sync::atomic::AtomicBool>,
     solver_client: Arc<std::sync::OnceLock<rquest::Client>>,
     pub solving: Arc<dashmap::DashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     pub host_circuits: Arc<dashmap::DashMap<String, Arc<HostCircuit>>>,
@@ -651,6 +663,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(solver_url)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving: Arc::new(dashmap::DashMap::new()),
             host_circuits: Arc::new(dashmap::DashMap::new()),
@@ -682,6 +695,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(solver_url)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving,
             host_circuits,
@@ -1575,6 +1589,10 @@ impl SmartClient {
             .unwrap_or_default();
         let sessions = capabilities.contains(&"kani.capture/2");
         let capture = sessions || capabilities.contains(&"kani.capture/1");
+        self.solver_egress_guard.store(
+            capabilities.contains(&"kani.egress-guard/1"),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         let probe = Self::solver_request(client, url)
             .body(json!({ "cmd": "sessions.list" }).to_string())
@@ -1738,6 +1756,9 @@ impl SmartClient {
         }
         if self.solver_capture_support.load(Ordering::Relaxed) == 2 {
             return Err(SolverCaptureError::Unsupported);
+        }
+        if !self.solver_egress_guard.load(Ordering::Relaxed) {
+            return Err(SolverCaptureError::MissingEgressGuard);
         }
 
         let use_session =
@@ -2163,6 +2184,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(None)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving: Arc::new(dashmap::DashMap::new()),
             host_circuits: Arc::new(dashmap::DashMap::new()),
@@ -2620,13 +2642,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_script_that_never_submits_is_distinguished_from_a_broken_solver() {
+    async fn a_capture_is_refused_when_the_solver_lacks_the_egress_guard() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "msg": "ready",
                 "capabilities": ["kani.capture/1", "kani.capture/2"]
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(body_partial_json(
+                serde_json::json!({"cmd": "sessions.list"}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(body_partial_json(
+                serde_json::json!({"cmd": "kani.capture"}),
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let client = SmartClient::new(Some(server.uri())).unwrap();
+
+        let error = client
+            .solver_capture(
+                "https://sub.example.com/a",
+                "passPayload(1)",
+                1000,
+                None,
+                false,
+            )
+            .await
+            .expect_err("a capture without the guard must be refused");
+
+        assert!(
+            matches!(error, SolverCaptureError::MissingEgressGuard),
+            "got: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_script_that_never_submits_is_distinguished_from_a_broken_solver() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "msg": "ready",
+                "capabilities": ["kani.capture/1", "kani.capture/2", "kani.egress-guard/1"]
             })))
             .mount(&server)
             .await;
@@ -2669,7 +2738,7 @@ mod tests {
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "msg": "ready",
-                "capabilities": ["kani.capture/1", "kani.capture/2"]
+                "capabilities": ["kani.capture/1", "kani.capture/2", "kani.egress-guard/1"]
             })))
             .mount(&server)
             .await;
