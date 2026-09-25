@@ -76,10 +76,12 @@ one cleared session per source and domain. A stock FlareSolverr remains supporte
 HTTP challenge solving and best-effort cookie replay, but cannot reliably capture device-bound
 pages. Each source's browser toggle disables its browser endpoints.
 
-**Pin a release.** Each release is published as `v<upstream version>-kani.<n>`, for example
-`v3.5.0-kani.1`, and the compose file uses one. `latest` follows the fork's main branch, so an
-unpinned solver can change under a running deployment. Upgrade by changing the tag deliberately;
-the fork's changelog lists what each release adds.
+**Releases and tags.** The compose file uses `latest`, which follows the fork's main branch and
+changes only when you run `docker compose pull`. Each release is also published as
+`v<upstream version>-kani.<n>`, for example `v3.5.0-kani.1`. Pin one of those to roll back a
+release that breaks challenge solving, or to hold a known-good solver; the fork's changelog lists
+what each release changes. Kani checks the solver's capabilities at runtime, so it does not need a
+matching version.
 
 **The fork keeps its browser off your network.** Pages the solver loads, and every script and
 subresource they fetch, are refused if they resolve to a private, loopback or cloud-metadata
