@@ -1008,14 +1008,24 @@ Blueprints are serialized with **[`postcard`](https://docs.rs/postcard)** (a com
 
 The current version is **6**. The host reads versions **5 and 6**; versions 1–4 are rejected.
 
-The check runs when a blueprint is decoded, which is on each extraction, not at install or load
-time. A WASM extension built for an unreadable version therefore installs and loads, then fails
-every request with the recompile error.
+**Compatibility rule.** A WASM extension depends on the host in two independent ways, and each
+has its own rule. Both are checked when an artifact is installed, reloaded, and loaded at startup,
+so an incompatible extension is refused up front instead of failing on its first request.
 
-**Compatibility rule.** postcard is not self-describing: appending a variant to an enum leaves
-older payloads decodable, but adding, removing, or reordering a field or variant does not. Within
-1.x, a version bump may only append enum variants, and the host keeps reading every version from
-5 onwards. A change that cannot be expressed that way needs a new variant, not a changed one.
+- *Blueprint format.* postcard is not self-describing: appending a variant to an enum leaves
+  older payloads decodable, but adding, removing, or reordering a field or variant does not.
+  Within 1.x, a version bump may only append enum variants, and the host keeps reading every
+  version from 5 onwards. A change that cannot be expressed that way needs a new variant, not a
+  changed one. The extension's metadata records the version it was built with
+  (`dsl_schema_version`); install and reload refuse an unreadable one, and at startup it is
+  registered as a load degradation for that source. `decode_blueprint` still checks the prefix on
+  every extraction, which covers extensions built before the version was recorded.
+- *WIT imports.* The `kani:extension` world is unversioned. Within 1.x it only grows: new
+  functions and interfaces may be added, and an existing function's name, parameters, and results
+  never change and are never removed. An extension built against an older world therefore still
+  links. Every path links the component against the host's imports before running it, so an
+  extension that imports something this host lacks (built for a newer Kani) is refused with the
+  linker's error, never started.
 
 The JSON IM described in §2.2 reflects the logical structure of the AST and is useful for debugging; the wire format is binary, not JSON.
 

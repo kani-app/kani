@@ -735,6 +735,20 @@ impl AppService {
                         let meta = inst.get_metadata().await.ok().and_then(|raw| {
                             serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                         });
+                        if let Some(m) = &meta
+                            && let Err(reason) = crate::install_gating::check_dsl_schema_version(
+                                m.dsl_schema_version,
+                            )
+                        {
+                            degradation_registry.register(
+                                &degradations::ids::source_load(&source.name),
+                                degradations::Severity::Error,
+                                format!("Source '{}'", source.name),
+                                format!("{} cannot be loaded: {reason}", wasm_path.display()),
+                                "Reinstall the extension from its repository, or rebuild it.",
+                            );
+                            continue;
+                        }
                         let max_hk = meta
                             .as_ref()
                             .and_then(|m| m.rate_limit.as_ref())

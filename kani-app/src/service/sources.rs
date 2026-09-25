@@ -320,6 +320,10 @@ impl AppService {
                     let meta = inst.get_metadata().await.ok().and_then(|raw| {
                         serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                     });
+                    if let Some(m) = &meta {
+                        crate::install_gating::check_dsl_schema_version(m.dsl_schema_version)
+                            .map_err(ServiceError::Validation)?;
+                    }
                     let max_hk = meta
                         .as_ref()
                         .and_then(|m| m.rate_limit.as_ref())
@@ -1310,6 +1314,8 @@ impl AppService {
             let raw_meta = inst.get_metadata().await.map_err(ServiceError::Core)?;
             let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw_meta)
                 .map_err(|e| ServiceError::Internal(format!("Invalid extension metadata: {e}")))?;
+            crate::install_gating::check_dsl_schema_version(meta.dsl_schema_version)
+                .map_err(ServiceError::Validation)?;
             let schema = inst.get_preferences().await.ok();
             (meta, schema)
         };

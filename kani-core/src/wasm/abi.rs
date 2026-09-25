@@ -22,10 +22,11 @@ fn decode_blueprint(bytes: &[u8]) -> Result<kani_shared::ast::Blueprint, String>
     }
     let (version, rest) = postcard::take_from_bytes::<u32>(bytes)
         .map_err(|e| format!("Invalid blueprint header: {}", e))?;
-    if !matches!(version, 5 | kani_shared::ast::DSL_SCHEMA_VERSION) {
+    if !kani_shared::ast::is_readable_dsl_schema_version(version) {
         return Err(format!(
-            "Blueprint DSL schema version {} is not supported (host accepts 5 or {}); recompile the extension",
+            "Blueprint DSL schema version {} is not supported (host accepts {} to {}); recompile the extension",
             version,
+            kani_shared::ast::MIN_READABLE_DSL_SCHEMA_VERSION,
             kani_shared::ast::DSL_SCHEMA_VERSION,
         ));
     }

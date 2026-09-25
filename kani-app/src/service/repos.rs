@@ -734,6 +734,8 @@ impl AppService {
         self.check_artifact_identity(&metadata.id, expected_id, existing_id)
             .await?;
         check_artifact_gating(&metadata.id, metadata.min_kani_version.as_deref())?;
+        crate::install_gating::check_dsl_schema_version(metadata.dsl_schema_version)
+            .map_err(ServiceError::Validation)?;
         crate::install_gating::check_required_capabilities_live(
             &metadata.requires_capabilities,
             &self.smart_client,
