@@ -1066,7 +1066,7 @@ filters: FilterList
 preferences: PreferenceList
 option_sets: OptionSetMap   # Named, reusable option lists referenced via `options_ref`
 id_encoding: IdEncodingBlock  # Composite ID encode/decode for manga and/or chapter IDs
-cache: CacheMap              # Named cache namespaces this extension wants the host to manage
+cache: CacheMap              # Cache namespaces its hook scripts may use (§3.2)
 chapter_sort: ChapterSortBlock # Optional. Chapter sort options exposed to the host.
 
 # === Scripting (optional) ===
@@ -1176,22 +1176,31 @@ Codegen decodes the incoming `manga_id`/`chapter_id` function argument once at t
 
 #### Cache Namespaces
 
-The top-level `cache` block declares named cache namespaces an extension intends to use, separate from the per-key `cache::*` calls described in [§4 Extension Cache Interface](#4-extension-cache-interface):
+The top-level `cache` block declares the namespaces an extension's hook scripts may store values
+in (§3.10). A hook that names any other namespace fails with a script error, so the number of
+namespaces an extension can create, and with it its total cache storage, is bounded by what it
+declares.
 
 ```yaml
 cache:
+  auth:
+    ttl: 3600            # Seconds; the default and maximum entry lifetime. Default 3600, max 30 days
   search_results:
-    scope: extension       # extension (default) | installation | user
-    ttl: 1800               # Seconds; default 3600, max 30 days
-    max_entries: 200         # Optional cap; unset = backend default
-    key_template: "search:{query}:{page}"  # Optional, free-form; interpreted by the consuming runtime
+    ttl: 1800
+    max_entries: 200     # Optional; lowers the host's per-namespace limit of 4096
 ```
 
-Each entry is validated (non-empty name, no `:`/`/`, `ttl` ≤ 30 days, non-empty `key_template` when present) and emitted by codegen as a `kani_shared::CacheNamespace` entry in a generated `pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace]`.
+Validation rules: at most 16 namespaces; names are non-empty and contain no `:` or `/`;
+`ttl` ≤ 30 days; `max_entries` between 1 and 4096. `ttl: 0` sets no maximum.
 
-**The registry is declarative only.** Nothing in the host reads it: `scope`, `ttl`, `max_entries`
-and `key_template` do not change how entries are stored or expired. Hook scripts pass their own
-TTL to `ctx.cache_put`, and every entry follows §4.
+Declarations reach the host through `ExtensionMetadata.cache` (and directly from an interpreted
+YAML source), so they apply to generated WASM extensions too.
+
+**Caches are instance-wide.** Kani's source preferences, including `secret: true` credentials,
+belong to the source, not to a user, and background work such as scans and downloads runs with
+no user at all. An auth token a hook caches is therefore shared by every user of the source. That
+is intended: all users of a source act as one account on the upstream site. Per-user source
+accounts are a possible future feature, not a cache setting.
 
 #### Extension Metadata
 
@@ -2024,12 +2033,14 @@ The body must return a `HookAction` value:
 
 #### Cache in hook scripts
 
-The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-object.
+The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-object. Every
+`namespace` must be declared in the extension's `cache:` block (§3.2); any other namespace is a
+script error.
 
 | Method | Description |
 |--------|-------------|
 | `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `()` if absent or expired; test with `== ()`. |
-| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value. A TTL of `0` never expires (§4.1); a negative TTL removes the entry. |
+| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value. The TTL is held to the namespace's declared `ttl`: `0` takes the declared value, a longer TTL is shortened to it, and a negative TTL removes the entry. The namespace's `max_entries` applies. |
 | `ctx.cache_delete(namespace, key)` | Remove an entry. |
 
 `namespace` is prefixed with the extension's own namespace before it reaches the
@@ -2092,6 +2103,10 @@ metadata:
   rate_limit:
     max_hook_requests: 2
 
+cache:
+  auth:
+    ttl: 3600
+
 pre_request: |
   let token = ctx.cache_get("auth", "token");
   if token != () {
@@ -2140,23 +2155,22 @@ return nothing: a cache write that fails is dropped rather than failing the call
 ### 4.2 Namespace and backend
 
 All extension cache entries live in one SQLite table (`extension_cache`), keyed by namespace and
-key, so they persist across restarts. The namespace is the extension id followed by `:`.
+key, so they persist across restarts. An extension's own namespace (used by the WIT calls above)
+is its id followed by `:`; each hook namespace it declares (§3.2) is that prefix followed by the
+declared name. Fetched option sets (§3.4) are cached under the host namespace
+`fetched_opts:{source_id}`. All of these are shared by every user of the source (§3.2).
 
 **A version change clears the cache.** When an install, an update, or the startup scan records a
 version different from the stored one, the host deletes every namespace beginning with
 `"<id>:"` (the extension's own and its hooks') and the source's `fetched_opts:{source_id}`
 namespace. Reinstalling the same version keeps the cache.
 
-Hook scripts share the extension's namespace, with the script-supplied namespace appended
-(§3.10). Fetched option sets (§3.4) are cached under the host namespace `fetched_opts:{source_id}`.
-
-The `scope` of a declared cache namespace (§3.2 [Cache Namespaces](#cache-namespaces)) is not
-read by the host; every entry behaves as described here.
-
 ### 4.3 Capacity limits
 
-Each namespace is capped at 4 MB and 4096 entries. When a write would exceed either cap, the
-entries closest to expiry are evicted first. Neither cap is configurable.
+Each namespace is capped at 4 MB and 4096 entries; a declared `max_entries` lowers the entry cap
+for that namespace. When a write would exceed a cap, the entries closest to expiry are evicted
+first. An extension has its own namespace plus at most 16 declared ones, so its total cache
+storage is bounded at 68 MB.
 
 ### 4.4 Usage in Rust Extensions
 

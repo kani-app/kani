@@ -17,6 +17,8 @@ pub struct HookScripts {
     pub endpoint_pre_request: std::collections::BTreeMap<String, String>,
     pub endpoint_on_status:
         std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    /// Cache namespaces the hooks may use; any other namespace is refused.
+    pub cache: std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits>,
 }
 
 impl HookScripts {
@@ -35,6 +37,8 @@ pub struct HookRegistry {
     global_on_status: HashMap<String, AST>,
     endpoint_pre_request: HashMap<String, AST>,
     endpoint_on_status: HashMap<String, HashMap<String, AST>>,
+    cache_namespaces:
+        std::sync::Arc<std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits>>,
 }
 
 impl HookRegistry {
@@ -105,6 +109,7 @@ impl HookRegistry {
 
         Ok(Self {
             engine,
+            cache_namespaces: std::sync::Arc::new(scripts.cache.clone()),
             global_pre_request,
             global_on_status,
             endpoint_pre_request,
@@ -117,6 +122,10 @@ impl HookRegistry {
         req: &mut ScriptableRequest,
         ctx: ScriptableCtx,
     ) -> Result<HookAction, String> {
+        let ctx = ScriptableCtx {
+            cache_namespaces: std::sync::Arc::clone(&self.cache_namespaces),
+            ..ctx
+        };
         let endpoint_id = req.endpoint_id.as_deref().unwrap_or("");
         let ast = self
             .endpoint_pre_request
@@ -154,6 +163,10 @@ impl HookRegistry {
         resp: &mut ScriptableResponse,
         ctx: ScriptableCtx,
     ) -> Result<HookAction, String> {
+        let ctx = ScriptableCtx {
+            cache_namespaces: std::sync::Arc::clone(&self.cache_namespaces),
+            ..ctx
+        };
         let endpoint_id = req.endpoint_id.as_deref().unwrap_or("");
         let status = resp.status as u16;
 
@@ -226,6 +239,7 @@ mod tests {
             browser_scripts: None,
             browser_profile_key: None,
             allowed_host: crate::wasm::AllowedHost::MetadataOnly,
+            cache_namespaces: std::sync::Arc::default(),
         }
     }
 
@@ -619,5 +633,29 @@ mod tests {
                 .unwrap();
             assert_eq!(resp.body, expected, "{endpoint_id} {status}");
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn hooks_may_use_only_declared_cache_namespaces() {
+        let hook = |ns: &str| HookScripts {
+            pre_request: Some(format!(r#"ctx.cache_put("{ns}", "k", "v", 60); proceed()"#)),
+            cache: std::collections::BTreeMap::from([(
+                "auth".to_string(),
+                kani_shared::CacheNamespaceLimits {
+                    ttl_seconds: 3600,
+                    max_entries: None,
+                },
+            )]),
+            ..Default::default()
+        };
+        let declared = HookRegistry::compile(&hook("auth")).unwrap();
+        let mut req = dummy_req(None);
+        assert!(declared.run_pre_request(&mut req, dummy_ctx()).is_ok());
+
+        let undeclared = HookRegistry::compile(&hook("other")).unwrap();
+        let err = undeclared
+            .run_pre_request(&mut req, dummy_ctx())
+            .unwrap_err();
+        assert!(err.contains("not declared"), "got: {err}");
     }
 }

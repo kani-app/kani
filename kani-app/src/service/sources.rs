@@ -33,6 +33,7 @@ pub(super) fn compile_hook_registry(
         on_status: metadata.on_status.clone(),
         endpoint_pre_request: metadata.endpoint_pre_request.clone(),
         endpoint_on_status: metadata.endpoint_on_status.clone(),
+        cache: metadata.cache.clone(),
     };
     if scripts.is_empty() {
         return None;

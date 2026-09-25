@@ -148,6 +148,7 @@ impl YamlSource {
             on_status: config.on_status.clone(),
             endpoint_pre_request: config.endpoint_pre_request.clone(),
             endpoint_on_status: config.endpoint_on_status.clone(),
+            cache: config.cache_limits(),
         };
         let hook_registry = if hook_scripts.pre_request.is_some()
             || !hook_scripts.on_status.is_empty()
@@ -557,6 +558,8 @@ impl YamlSource {
             on_status: self.config.on_status.clone(),
             endpoint_pre_request: self.config.endpoint_pre_request.clone(),
             endpoint_on_status: self.config.endpoint_on_status.clone(),
+            cache: self.config.cache_limits(),
+            dsl_schema_version: Some(kani_shared::ast::DSL_SCHEMA_VERSION),
         };
         serde_json::to_string(&meta).map_err(Error::Json)
     }

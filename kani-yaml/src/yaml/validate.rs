@@ -390,6 +390,14 @@ fn validate_cache(
     let mut errors = Vec::new();
     let mut entries = Vec::new();
 
+    if cache.len() > kani_shared::MAX_CACHE_NAMESPACES {
+        errors.push(YamlError::Validation(format!(
+            "cache: at most {} namespaces may be declared, found {}",
+            kani_shared::MAX_CACHE_NAMESPACES,
+            cache.len()
+        )));
+    }
+
     for (name, entry) in cache {
         if name.is_empty() {
             errors.push(YamlError::Validation(
@@ -407,20 +415,19 @@ fn validate_cache(
             )));
         }
 
-        if let Some(key_template) = &entry.key_template
-            && key_template.is_empty()
+        if let Some(max) = entry.max_entries
+            && !(1..=kani_shared::MAX_CACHE_NAMESPACE_ENTRIES).contains(&max)
         {
             errors.push(YamlError::Validation(format!(
-                "cache.{name}: 'key_template' must not be empty when present"
+                "cache.{name}: max_entries must be between 1 and {}",
+                kani_shared::MAX_CACHE_NAMESPACE_ENTRIES
             )));
         }
 
         entries.push(ValidatedCacheEntry {
             name: name.clone(),
-            scope: entry.scope,
             ttl: entry.ttl,
             max_entries: entry.max_entries,
-            key_template: entry.key_template.clone(),
         });
     }
 

@@ -353,6 +353,27 @@ fn hook_blocks() -> Vec<HookBlock> {
             }
         }
         let pure = string_map(doc.get("scripts").and_then(|s| s.get("pure")));
+        hooks.cache = doc
+            .get("cache")
+            .and_then(Yaml::as_mapping)
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(name, entry)| {
+                        let limits = kani_shared::CacheNamespaceLimits {
+                            ttl_seconds: entry
+                                .get("ttl")
+                                .and_then(Yaml::as_u64)
+                                .map_or(3600, |t| t as u32),
+                            max_entries: entry
+                                .get("max_entries")
+                                .and_then(Yaml::as_u64)
+                                .map(|m| m as u32),
+                        };
+                        Some((name.as_str()?.to_owned(), limits))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         hooks.shared = pure.clone();
         if !hooks.is_empty() || !pure.is_empty() {
             blocks.push(HookBlock {
@@ -376,6 +397,7 @@ fn hook_ctx() -> kani_core::scripting::bindings::ScriptableCtx {
         browser_scripts: None,
         browser_profile_key: None,
         allowed_host: kani_core::wasm::AllowedHost::MetadataOnly,
+        cache_namespaces: std::sync::Arc::default(),
     }
 }
 

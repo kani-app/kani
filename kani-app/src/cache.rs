@@ -369,7 +369,15 @@ impl CacheBackend for SqliteCache {
         .map(|(v,)| v)
     }
 
-    async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
+    async fn put_limited(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Duration,
+        max_entries: usize,
+    ) {
+        let max_rows = (max_entries as i64).clamp(1, NS_MAX_ROWS);
         let expires_at = now_secs() + kani_core::cache::effective_ttl(ttl).as_secs() as i64;
 
         let _ = sqlx::query(
@@ -393,7 +401,7 @@ impl CacheBackend for SqliteCache {
         .bind(namespace)
         .bind(namespace)
         .bind(namespace)
-        .bind(NS_MAX_ROWS)
+        .bind(max_rows)
         .execute(&self.pool)
         .await;
 
@@ -480,6 +488,23 @@ mod tests {
         .await
         .unwrap();
         SqliteCache::new(pool)
+    }
+
+    #[tokio::test]
+    async fn sqlite_put_limited_evicts_down_to_max_entries() {
+        let cache = sqlite_cache().await;
+        for (key, ttl) in [("a", 100), ("b", 200), ("c", 300)] {
+            cache
+                .put_limited("ns", key, b"v".to_vec(), Duration::from_secs(ttl), 2)
+                .await;
+        }
+        assert_eq!(
+            cache.get("ns", "a").await,
+            None,
+            "the soonest to expire is evicted"
+        );
+        assert!(cache.get("ns", "b").await.is_some());
+        assert!(cache.get("ns", "c").await.is_some());
     }
 
     #[tokio::test]

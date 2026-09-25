@@ -22,7 +22,25 @@ pub fn effective_ttl(ttl: Duration) -> Duration {
 #[async_trait::async_trait]
 pub trait CacheBackend: Send + Sync + 'static {
     async fn get(&self, namespace: &str, key: &str) -> Option<Vec<u8>>;
-    async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration);
+    async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
+        self.put_limited(
+            namespace,
+            key,
+            value,
+            ttl,
+            kani_shared::MAX_CACHE_NAMESPACE_ENTRIES as usize,
+        )
+        .await
+    }
+    /// As [`CacheBackend::put`], evicting down to `max_entries` (never above the host limit).
+    async fn put_limited(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Duration,
+        max_entries: usize,
+    );
     async fn delete(&self, namespace: &str, key: &str);
     async fn clear_namespace(&self, namespace: &str);
     /// Removes every namespace whose name starts with `prefix`.
@@ -75,11 +93,12 @@ impl NamespaceState {
             .map(|e| e.value.as_slice())
     }
 
-    fn put(&mut self, key: String, value: Vec<u8>, expires_at: Instant) {
+    fn put(&mut self, key: String, value: Vec<u8>, expires_at: Instant, max_entries: usize) {
         self.delete(&key);
         let byte_len = value.len();
+        let max_entries = max_entries.clamp(1, DEFAULT_NAMESPACE_MAX_ENTRIES);
         while self.total_bytes + byte_len >= DEFAULT_NAMESPACE_MAX_BYTES
-            || self.entries.len() >= DEFAULT_NAMESPACE_MAX_ENTRIES
+            || self.entries.len() >= max_entries
         {
             if let Some(evicted) = self.entries.pop_front() {
                 self.total_bytes = self.total_bytes.saturating_sub(evicted.value.len());
@@ -176,7 +195,14 @@ impl CacheBackend for InMemoryCache {
         })
     }
 
-    async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
+    async fn put_limited(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Duration,
+        max_entries: usize,
+    ) {
         let expires_at = Instant::now() + effective_ttl(ttl);
         while self.total_bytes() + value.len() > self.max_global_bytes {
             self.evict_lru_globally();
@@ -187,7 +213,7 @@ impl CacheBackend for InMemoryCache {
             .value()
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .put(key.to_string(), value, expires_at);
+            .put(key.to_string(), value, expires_at, max_entries);
     }
 
     async fn delete(&self, namespace: &str, key: &str) {
@@ -253,6 +279,22 @@ mod tests {
         assert_eq!(cache.get("a:auth", "k").await, None);
         assert!(cache.get("ab:", "k").await.is_some());
         assert!(cache.get("b:a:", "k").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn put_limited_evicts_down_to_max_entries() {
+        let cache = InMemoryCache::new();
+        let ttl = Duration::from_secs(60);
+        for key in ["a", "b", "c"] {
+            cache.put_limited("ns", key, b"v".to_vec(), ttl, 2).await;
+        }
+        assert_eq!(
+            cache.get("ns", "a").await,
+            None,
+            "the oldest entry is evicted"
+        );
+        assert!(cache.get("ns", "b").await.is_some());
+        assert!(cache.get("ns", "c").await.is_some());
     }
 
     #[tokio::test]

@@ -158,37 +158,6 @@ pub fn take_auto_scroll(init_script: &str) -> (bool, &str) {
     }
 }
 
-/// Visibility scope for a declared cache namespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "host", serde(rename_all = "snake_case"))]
-pub enum CacheScope {
-    /// Shared across every installation of this extension.
-    Extension,
-    /// Scoped to a single installed instance of this extension.
-    Installation,
-    /// Scoped to the requesting user.
-    User,
-}
-
-/// A cache namespace declared by an extension via the YAML `cache:` block.
-/// Emitted by codegen as a `static` registry; the runtime call-sites that
-/// read/write entries under this namespace are owned by the Rhai scripting
-/// cluster (`pre_request:` hooks).
-///
-/// Holds `&'static str` rather than `String` so codegen can emit it as a
-/// `const`-evaluable literal inside a `static` array; this means it cannot
-/// derive `Deserialize` (no borrowed-from-input lifetime is `'static`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "host", derive(Serialize))]
-pub struct CacheNamespace {
-    pub name: &'static str,
-    pub scope: CacheScope,
-    pub ttl_seconds: u32,
-    pub max_entries: Option<u32>,
-    pub key_template: Option<&'static str>,
-}
-
 /// Builds a [`FilterList`](crate::wit_types::FilterList) from semicolon-separated
 /// filter declarations. A declaration may provide separate identifier and label
 /// expressions or use one expression for both; selection options accept either
@@ -1923,40 +1892,6 @@ mod tests {
             languages: Some(r#"["en","ja"]"#.into()),
             schema_version: 1,
         });
-    }
-
-    #[test]
-    fn cache_scope_json_round_trip_all_variants() {
-        json_rt(&CacheScope::Extension);
-        json_rt(&CacheScope::Installation);
-        json_rt(&CacheScope::User);
-    }
-
-    #[test]
-    fn cache_namespace_serializes_declared_fields() {
-        let ns = CacheNamespace {
-            name: "search_results",
-            scope: CacheScope::Extension,
-            ttl_seconds: 1800,
-            max_entries: Some(200),
-            key_template: Some("search:{query}:{page}"),
-        };
-        let s = serde_json::to_string(&ns).unwrap();
-        assert!(s.contains("search_results"));
-        assert!(s.contains("1800"));
-    }
-
-    #[test]
-    fn cache_namespace_equality() {
-        let a = CacheNamespace {
-            name: "ns",
-            scope: CacheScope::User,
-            ttl_seconds: 60,
-            max_entries: None,
-            key_template: None,
-        };
-        let b = a;
-        assert_eq!(a, b);
     }
 
     #[test]
