@@ -72,7 +72,8 @@ services:
   # JavaScript, so it is unpublished: only kani reaches it, at
   # http://solver:8191. API_KEY plus KANI_SOLVER_SECRET admits anything else.
   solver:
-    image: ghcr.io/kani-app/flaresolverr:latest
+    # Pinned so an upgrade is deliberate; `latest` follows the fork's master.
+    image: ghcr.io/kani-app/flaresolverr:v3.5.0-kani.1
     # ports:
     #   - "127.0.0.1:8191:8191"
     environment:

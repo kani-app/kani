@@ -87,7 +87,9 @@ parsing, cache, preference, extraction, and optional scripting capabilities. An 
 `unrestricted_http` is not restricted to its declared base host. Browser-based sources send
 extension-authored JavaScript to the solver, which executes it in a browser holding a per-source
 profile — so the solver must stay private, and `KANI_SOLVER_SECRET` should be set whenever anything
-else can route to it.
+else can route to it. Use the `ghcr.io/kani-app/flaresolverr` image: its browser refuses private,
+loopback and metadata addresses, so a page cannot use it to reach your network. A solver without
+that guard raises a **Browser solver** warning in Diagnostics.
 
 Use signed repositories, verify TOFU fingerprints out of band, block untrusted repository URLs,
 and set `KANI_SOURCE_INSTALL_ALLOWED=false` for a fixed-source deployment.

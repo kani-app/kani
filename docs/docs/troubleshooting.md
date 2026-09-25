@@ -57,7 +57,9 @@ restarts can hide the process or job that holds the transaction.
 2. Check whether the upstream site is reachable from the server.
 3. Refresh the trusted repository and review an available update.
 4. For browser-based sources, use **Test connection** in Settings → Advanced to confirm the solver
-   supports capture scripts.
+   supports capture scripts. A **Browser solver** warning in Diagnostics means the solver is not the
+   `ghcr.io/kani-app/flaresolverr` image, or is an older release without the egress guard; switch
+   to a current tag and save Settings → Advanced to re-check.
 5. Test search, manga details, chapters, and pages independently.
 
 An upstream layout change generally requires an extension update. Preserve the failing URL and a
