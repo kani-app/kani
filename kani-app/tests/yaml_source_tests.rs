@@ -926,8 +926,24 @@ endpoints:
 
     let yaml_v2 = yaml_v1.replace("1.0.0", "2.0.0");
     std::fs::write(storage_path.join("reload-test-source.yaml"), &yaml_v2).unwrap();
+    svc.ext_cache
+        .put(
+            "reload-test-source:auth",
+            "k",
+            b"v".to_vec(),
+            std::time::Duration::from_secs(600),
+        )
+        .await;
 
     svc.reload_source(source_id).await.unwrap();
+
+    assert!(
+        svc.ext_cache
+            .get("reload-test-source:auth", "k")
+            .await
+            .is_none(),
+        "a version change found on reload clears the cache"
+    );
 
     let version: String = sqlx::query_scalar("SELECT version FROM sources WHERE id = ?")
         .bind(source_id)

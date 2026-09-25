@@ -2170,8 +2170,8 @@ is its id followed by `:`; each hook namespace it declares (§3.2) is that prefi
 declared name. Fetched option sets (§3.4) are cached under the host namespace
 `fetched_opts:{source_id}`. All of these are shared by every user of the source (§3.2).
 
-**A version change clears the cache.** When an install, an update, or the startup scan records a
-version different from the stored one, the host deletes every namespace beginning with
+**A version change clears the cache.** When an install, an update, a reload, or the startup scan
+records a version different from the stored one, the host deletes every namespace beginning with
 `"<id>:"` (the extension's own and its hooks') and the source's `fetched_opts:{source_id}`
 namespace. Reinstalling the same version keeps the cache.
 
@@ -2309,12 +2309,20 @@ the row upsert then fails, they are put back exactly as they were and the instal
 error. The registry is only touched after the row is committed, and `hot_swap` cannot fail: it
 waits up to 30 s for in-flight calls (§5.4) and then swaps. Repo add/trust/install/update/remove and block/unblock are audit-logged.
 
+**The file and the row are not one transaction.** The rename and the row upsert are separate
+steps, so a crash between them leaves the new artifact on disk under the old row. The artifact
+on disk is therefore authoritative. At startup every artifact's own metadata is read and its row's
+`version`, `base_url` and `unrestricted_http` are rewritten to match; when the version changed,
+the extension's cache is cleared as it would be on an update (§4). Reloading a source applies the
+same rule. A file whose declared id differs from the source it is stored under is not loaded
+under that source and is reported as a `source_load` degradation.
+
 **Every install path runs this pipeline.** A manual install (`POST /rest/sources/yaml`,
 `/yaml/fetch`, `/wasm`, `/wasm/fetch`) skips only the repository steps (index lookup, hash and
 signature) and finds or creates the source row by the artifact's own id. Replacing a specific
 source (`POST /rest/sources/{id}/wasm`, `/{id}/wasm/fetch`) requires the artifact to declare that
 source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_version`, id form
-(§3.9) and capability checks apply on every path; an artifact that fails any of them, or does not
+(§3.9), blueprint schema version (§2.4) and capability checks apply on every path; an artifact that fails any of them, or does not
 compile, is a `400` and changes nothing.
 
 ### 6.4 SSE events

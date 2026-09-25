@@ -721,6 +721,8 @@ impl AppService {
                     }
                 };
 
+                let mut base_url = source.base_url.clone();
+                let mut unrestricted_http = source.unrestricted_http;
                 let (pure_registry, hook_registry, max_hook_requests) = {
                     let mut inst = kani_core::sources::SourceInstance::new(
                         global_smart_client.clone(),
@@ -735,19 +737,32 @@ impl AppService {
                         let meta = inst.get_metadata().await.ok().and_then(|raw| {
                             serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                         });
-                        if let Some(m) = &meta
-                            && let Err(reason) = crate::install_gating::check_dsl_schema_version(
+                        if let Some(m) = &meta {
+                            let loadable = match crate::install_gating::check_dsl_schema_version(
                                 m.dsl_schema_version,
-                            )
-                        {
-                            degradation_registry.register(
-                                &degradations::ids::source_load(&source.name),
-                                degradations::Severity::Error,
-                                format!("Source '{}'", source.name),
-                                format!("{} cannot be loaded: {reason}", wasm_path.display()),
-                                "Reinstall the extension from its repository, or rebuild it.",
-                            );
-                            continue;
+                            ) {
+                                Ok(()) => sources::reconcile_wasm_row(
+                                    &pool,
+                                    ext_cache.as_ref(),
+                                    &source,
+                                    m,
+                                )
+                                .await
+                                .map_err(|e| e.to_string()),
+                                Err(reason) => Err(reason),
+                            };
+                            if let Err(reason) = loadable {
+                                degradation_registry.register(
+                                    &degradations::ids::source_load(&source.name),
+                                    degradations::Severity::Error,
+                                    format!("Source '{}'", source.name),
+                                    format!("{} cannot be loaded: {reason}", wasm_path.display()),
+                                    "Reinstall the extension from its repository, or rebuild it.",
+                                );
+                                continue;
+                            }
+                            base_url.clone_from(&m.base_url);
+                            unrestricted_http = m.unrestricted_http;
                         }
                         let max_hk = meta
                             .as_ref()
@@ -780,8 +795,8 @@ impl AppService {
                     wasm_runtime.engine().clone(),
                     instance_pre,
                     local_network::client_for(&pool, source.id, &global_smart_client).await,
-                    Some(source.base_url),
-                    source.unrestricted_http,
+                    Some(base_url),
+                    unrestricted_http,
                     source.browser_enabled,
                     prefs,
                     std::sync::Arc::clone(&ext_cache),

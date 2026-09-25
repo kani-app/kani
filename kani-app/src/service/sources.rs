@@ -24,6 +24,39 @@ pub(super) fn compile_pure_registry(
     }
 }
 
+pub(super) async fn reconcile_wasm_row(
+    db: &sqlx::SqlitePool,
+    ext_cache: &dyn kani_core::cache::CacheBackend,
+    source: &Source,
+    metadata: &kani_shared::ExtensionMetadata,
+) -> Result<()> {
+    if metadata.id != source.name {
+        return Err(ServiceError::Validation(format!(
+            "the artifact declares id '{}' but is stored as source '{}'",
+            metadata.id, source.name
+        )));
+    }
+    if source.version == metadata.version
+        && source.base_url == metadata.base_url
+        && source.unrestricted_http == metadata.unrestricted_http
+    {
+        return Ok(());
+    }
+    sqlx::query!(
+        "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ? WHERE id = ?",
+        metadata.version,
+        metadata.base_url,
+        metadata.unrestricted_http,
+        source.id
+    )
+    .execute(db)
+    .await?;
+    if source.version != metadata.version {
+        crate::cache::invalidate_extension_cache(ext_cache, &source.name, source.id).await;
+    }
+    Ok(())
+}
+
 pub(super) fn compile_hook_registry(
     metadata: &kani_shared::ExtensionMetadata,
 ) -> Option<std::sync::Arc<kani_core::scripting::HookRegistry>> {
@@ -1172,6 +1205,14 @@ impl AppService {
                         )
                         .execute(db)
                         .await?;
+                        if version_changed {
+                            crate::cache::invalidate_extension_cache(
+                                ext_cache,
+                                &canonical_id,
+                                existing.id,
+                            )
+                            .await;
+                        }
                         if was_deleted {
                             sqlx::query!(
                                 "UPDATE manga SET is_orphaned = FALSE WHERE source_id = ?",
@@ -1284,7 +1325,7 @@ impl AppService {
 
         let yaml_path = storage_path.join(format!("{}.yaml", source.name));
         if yaml_path.exists() {
-            return self.reload_yaml_source(id, &source.name, &yaml_path).await;
+            return self.reload_yaml_source(&source, &yaml_path).await;
         }
 
         let wasm_path = storage_path.join(format!("{}.wasm", source.name));
@@ -1320,15 +1361,7 @@ impl AppService {
             (meta, schema)
         };
 
-        sqlx::query!(
-            "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ? WHERE id = ?",
-            metadata.version,
-            metadata.base_url,
-            metadata.unrestricted_http,
-            id
-        )
-        .execute(&self.db)
-        .await?;
+        reconcile_wasm_row(&self.db, self.ext_cache.as_ref(), &source, &metadata).await?;
 
         let pure_registry = compile_pure_registry(&metadata);
         let hook_registry = compile_hook_registry(&metadata);
@@ -1366,12 +1399,8 @@ impl AppService {
         Ok(())
     }
 
-    async fn reload_yaml_source(
-        &self,
-        id: i64,
-        source_name: &str,
-        yaml_path: &std::path::Path,
-    ) -> Result<()> {
+    async fn reload_yaml_source(&self, source: &Source, yaml_path: &std::path::Path) -> Result<()> {
+        let (id, source_name) = (source.id, source.name.as_str());
         let text = tokio::fs::read_to_string(yaml_path)
             .await
             .map_err(|e| ServiceError::Internal(format!("Failed to read YAML: {e}")))?;
@@ -1401,6 +1430,10 @@ impl AppService {
         )
         .execute(&self.db)
         .await?;
+        if source.version != validated.version {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), source_name, id)
+                .await;
+        }
 
         let prefs = self.load_pref_map(id).await.unwrap_or_default();
         let browser_enabled = self.browser_enabled_flag(id).await;
