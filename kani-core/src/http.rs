@@ -496,9 +496,15 @@ const REDIRECT_LIMIT: usize = 10;
 
 /// The one SSRF egress decision, applied to the first request and to every redirect
 /// hop: refuse a forbidden IP literal, the hole the DNS-only resolver never sees.
-/// `allow_loopback` (tests only) exempts loopback literals and nothing else.
-fn egress_forbidden(allow_loopback: &std::sync::atomic::AtomicBool, url: &str) -> bool {
+/// A host the source has been granted is exempt; `allow_loopback` (tests only) exempts
+/// loopback literals and nothing else.
+fn egress_forbidden(
+    allow_loopback: &std::sync::atomic::AtomicBool,
+    grants: &crate::network::LocalGrants,
+    url: &str,
+) -> bool {
     crate::network::is_forbidden_url_host(url)
+        && !grants.permits_url(url)
         && !(allow_loopback.load(std::sync::atomic::Ordering::Relaxed)
             && crate::network::is_loopback_url_host(url))
 }
@@ -508,6 +514,7 @@ fn egress_forbidden(allow_loopback: &std::sync::atomic::AtomicBool, url: &str) -
 /// source's host policy would not allow as a first request.
 fn ssrf_aware_redirect_policy(
     allow_loopback: Arc<std::sync::atomic::AtomicBool>,
+    grants: Arc<crate::network::LocalGrants>,
     allowed_host: Option<crate::wasm::AllowedHost>,
 ) -> rquest::redirect::Policy {
     rquest::redirect::Policy::custom(move |attempt| {
@@ -516,7 +523,7 @@ fn ssrf_aware_redirect_policy(
                 "too many redirects",
             ));
         }
-        if egress_forbidden(&allow_loopback, &attempt.uri.to_string()) {
+        if egress_forbidden(&allow_loopback, &grants, &attempt.uri.to_string()) {
             return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(
                 "redirect to a forbidden host refused",
             ));
@@ -558,6 +565,10 @@ pub struct SmartClient {
     /// server on loopback; other forbidden ranges stay refused. Shared with the
     /// redirect policy closure so it is read live.
     allow_loopback_egress: Arc<std::sync::atomic::AtomicBool>,
+    /// Private hosts this client may reach on behalf of one source ([`Self::with_local_grants`]).
+    local_grants: Arc<crate::network::LocalGrants>,
+    /// Whether the inner client follows redirects itself, so a granted copy keeps the same shape.
+    follows_redirects: bool,
 }
 
 impl SmartClient {
@@ -592,22 +603,46 @@ impl SmartClient {
         self
     }
 
-    pub fn new(solver_url: Option<String>) -> Result<Self> {
-        let resolver = ValidatingResolver::new()?;
-        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        // Auto-following client (source extraction). The redirect policy validates
-        // every hop for SSRF; send_request keeps its simple loop.
-        let client = rquest::Client::builder()
+    /// Builds the underlying client. `follows_redirects` selects the auto-following,
+    /// SSRF-checked policy (source extraction) or none (`safe_get` follows by hand).
+    fn build_inner(
+        follows_redirects: bool,
+        allow_loopback: &Arc<std::sync::atomic::AtomicBool>,
+        grants: &Arc<crate::network::LocalGrants>,
+    ) -> Result<rquest::Client> {
+        let resolver = ValidatingResolver::new()?.with_grants(Arc::clone(grants));
+        let redirect = if follows_redirects {
+            ssrf_aware_redirect_policy(Arc::clone(allow_loopback), Arc::clone(grants), None)
+        } else {
+            rquest::redirect::Policy::none()
+        };
+        Ok(rquest::Client::builder()
             .emulation(rquest_util::Emulation::Chrome130)
-            .redirect(ssrf_aware_redirect_policy(
-                Arc::clone(&allow_loopback_egress),
-                None,
-            ))
+            .redirect(redirect)
             .dns_resolver(Arc::new(resolver))
             .pool_idle_timeout(std::time::Duration::from_secs(300))
             .pool_max_idle_per_host(100)
             .timeout(std::time::Duration::from_secs(35))
-            .build()?;
+            .build()?)
+    }
+
+    /// A copy of this client that may also reach the private hosts one source has been
+    /// granted. Rate limits, circuits and stored credentials stay shared with the original.
+    pub fn with_local_grants(&self, grants: crate::network::LocalGrants) -> Result<Self> {
+        let grants = Arc::new(grants);
+        let client =
+            Self::build_inner(self.follows_redirects, &self.allow_loopback_egress, &grants)?;
+        Ok(Self {
+            client,
+            local_grants: grants,
+            ..self.clone()
+        })
+    }
+
+    pub fn new(solver_url: Option<String>) -> Result<Self> {
+        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let local_grants = Arc::new(crate::network::LocalGrants::default());
+        let client = Self::build_inner(true, &allow_loopback_egress, &local_grants)?;
 
         let (circuit_event_tx, _) = tokio::sync::broadcast::channel(32);
         Ok(Self {
@@ -625,6 +660,8 @@ impl SmartClient {
             timings: Timings::default(),
             budgets: Budgets::default(),
             allow_loopback_egress,
+            local_grants,
+            follows_redirects: true,
         })
     }
 
@@ -635,15 +672,9 @@ impl SmartClient {
         host_circuits: Arc<dashmap::DashMap<String, Arc<HostCircuit>>>,
         circuit_event_tx: tokio::sync::broadcast::Sender<CircuitOpenedEvent>,
     ) -> Result<Self> {
-        let resolver = ValidatingResolver::new()?;
-        let client = rquest::Client::builder()
-            .emulation(rquest_util::Emulation::Chrome130)
-            .redirect(rquest::redirect::Policy::none())
-            .dns_resolver(Arc::new(resolver))
-            .pool_idle_timeout(std::time::Duration::from_secs(300))
-            .pool_max_idle_per_host(100)
-            .timeout(std::time::Duration::from_secs(35))
-            .build()?;
+        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let local_grants = Arc::new(crate::network::LocalGrants::default());
+        let client = Self::build_inner(false, &allow_loopback_egress, &local_grants)?;
 
         Ok(Self {
             client,
@@ -659,7 +690,9 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_loopback_egress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            allow_loopback_egress,
+            local_grants,
+            follows_redirects: false,
         })
     }
 
@@ -976,12 +1009,16 @@ impl SmartClient {
         &self,
         allowed_host: crate::wasm::AllowedHost,
     ) -> rquest::redirect::Policy {
-        ssrf_aware_redirect_policy(Arc::clone(&self.allow_loopback_egress), Some(allowed_host))
+        ssrf_aware_redirect_policy(
+            Arc::clone(&self.allow_loopback_egress),
+            Arc::clone(&self.local_grants),
+            Some(allowed_host),
+        )
     }
 
     /// Refuses a first hop to a forbidden IP literal, which the validating resolver never sees.
     fn refuse_forbidden_egress(&self, url: &str) -> Result<()> {
-        if egress_forbidden(&self.allow_loopback_egress, url) {
+        if egress_forbidden(&self.allow_loopback_egress, &self.local_grants, url) {
             return Err(crate::error::Error::Other(format!(
                 "request to a forbidden host refused: {url}"
             )));
@@ -1216,7 +1253,11 @@ impl SmartClient {
 
                 // Re-validate the redirect TARGET for SSRF (same decision the
                 // auto-follow policy makes — the resolver never sees an IP literal).
-                if egress_forbidden(&self.allow_loopback_egress, next.as_str()) {
+                if egress_forbidden(
+                    &self.allow_loopback_egress,
+                    &self.local_grants,
+                    next.as_str(),
+                ) {
                     return Err(crate::error::Error::Other(format!(
                         "redirect to a forbidden host refused: {next}"
                     )));
@@ -2131,6 +2172,8 @@ impl SmartClient {
             timings: Timings::default(),
             budgets: Budgets::default(),
             allow_loopback_egress: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            local_grants: Arc::default(),
+            follows_redirects: false,
         })
     }
 }
@@ -3172,6 +3215,36 @@ mod tests {
             format!("{err:?}").contains("forbidden host"),
             "refused at the redirect, got: {err:?}"
         );
+    }
+
+    #[test]
+    fn a_grant_exempts_only_its_own_host_from_the_egress_rule() {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        let grants = crate::network::LocalGrants::parse(&["10.0.0.5:8080".to_string()]).unwrap();
+        assert!(!egress_forbidden(&never, &grants, "http://10.0.0.5:8080/x"));
+        assert!(egress_forbidden(&never, &grants, "http://10.0.0.5:9090/x"));
+        assert!(egress_forbidden(&never, &grants, "http://10.0.0.6:8080/x"));
+        assert!(egress_forbidden(&never, &grants, "http://169.254.169.254/"));
+        let none = crate::network::LocalGrants::default();
+        assert!(egress_forbidden(&never, &none, "http://10.0.0.5:8080/x"));
+    }
+
+    #[tokio::test]
+    async fn a_granted_client_keeps_refusing_ungranted_private_hosts() {
+        let base = SmartClient::new(None).unwrap();
+        let granted = base
+            .with_local_grants(
+                crate::network::LocalGrants::parse(&["10.0.0.5:8080".to_string()]).unwrap(),
+            )
+            .unwrap();
+        let Err(err) = granted.safe_get("http://10.0.0.6:8080/", None).await else {
+            panic!("an ungranted private host was reached");
+        };
+        assert!(err.to_string().contains("forbidden host"), "got: {err}");
+        let Err(err) = base.safe_get("http://10.0.0.5:8080/", None).await else {
+            panic!("the base client must not inherit the grant");
+        };
+        assert!(err.to_string().contains("forbidden host"), "got: {err}");
     }
 
     #[tokio::test]

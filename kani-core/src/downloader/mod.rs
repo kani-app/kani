@@ -106,6 +106,9 @@ pub struct DownloadTask {
     pub library_path: PathBuf,
     pub save_path: PathBuf,
     pub comic_info: Option<crate::comic_info::ComicInfo>,
+    /// The source's own client when it differs from the manager's, e.g. one honouring a
+    /// local-network grant. `None` uses the manager's client.
+    pub http_client: Option<SmartClient>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -617,6 +620,7 @@ impl DownloaderManager {
             library_path,
             save_path,
             comic_info,
+            http_client,
         } = task;
 
         let safe_name = sanitize_filename(&name);
@@ -722,7 +726,7 @@ impl DownloaderManager {
         let on_page = Arc::new(on_page);
         let active_ref = self.active.clone();
         let tx = self.progress_tx.clone();
-        let client = self.smart_client.clone();
+        let client = http_client.unwrap_or_else(|| self.smart_client.clone());
 
         let mut stream = stream::iter(pages)
             .map(|page| {
@@ -1052,6 +1056,7 @@ mod tests {
             library_path,
             save_path: save_path.clone(),
             comic_info: None,
+            http_client: None,
         };
 
         let result = mgr

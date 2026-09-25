@@ -301,7 +301,7 @@ pub(super) async fn get_local_manga_details(
     } else {
         d.manga
             .cover_url
-            .map(|url| sign_image_url(&url, &d.source.base_url, &state, None))
+            .map(|url| sign_image_url(&url, &d.source.base_url, d.source.id, &state, None))
     };
     let display_name = d
         .manga

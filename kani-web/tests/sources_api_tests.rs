@@ -277,3 +277,101 @@ async fn install_wasm_rejects_bytes_that_are_not_an_extension() {
         .unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn an_admin_can_grant_a_source_local_hosts() {
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "komga").await;
+
+    let res = app
+        .clone()
+        .oneshot(put_json(
+            &format!("/rest/sources/{id}/local-hosts"),
+            &cookie,
+            serde_json::json!({ "hosts": ["komga.lan:25600", " 192.168.1.20 "] }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(
+        body_json(res).await["hosts"],
+        serde_json::json!(["komga.lan:25600", "192.168.1.20"])
+    );
+
+    let res = app
+        .oneshot(authed_get(
+            &format!("/rest/sources/{id}/local-hosts"),
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        body_json(res).await["hosts"],
+        serde_json::json!(["komga.lan:25600", "192.168.1.20"])
+    );
+}
+
+#[tokio::test]
+async fn local_hosts_require_authentication() {
+    let (app, _, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "komga").await;
+    let res = app
+        .oneshot(
+            axum::http::Request::builder()
+                .uri(format!("/rest/sources/{id}/local-hosts"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn a_regular_user_cannot_grant_local_hosts() {
+    let state = common::test_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "komga").await;
+    let (username, password) = common::create_regular_user(&state, "reader").await;
+    let app = common::build_test_app(state).await;
+    let cookie = common::login(&app, username, password).await;
+    let res = app
+        .oneshot(put_json(
+            &format!("/rest/sources/{id}/local-hosts"),
+            &cookie,
+            serde_json::json!({ "hosts": ["komga.lan"] }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_host_that_cannot_be_granted_is_refused_and_nothing_is_stored() {
+    let (app, cookie, state) = common::admin_app_with_state().await;
+    let id = kani_shared_test::insert_source(&state.db, "komga").await;
+    for host in [
+        "127.0.0.1",
+        "169.254.169.254",
+        "localhost",
+        "http://komga.lan/",
+    ] {
+        let res = app
+            .clone()
+            .oneshot(put_json(
+                &format!("/rest/sources/{id}/local-hosts"),
+                &cookie,
+                serde_json::json!({ "hosts": ["komga.lan", host] }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{host}");
+    }
+    let res = app
+        .oneshot(authed_get(
+            &format!("/rest/sources/{id}/local-hosts"),
+            &cookie,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(body_json(res).await["hosts"], serde_json::json!([]));
+}

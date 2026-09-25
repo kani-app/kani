@@ -86,9 +86,17 @@ impl AppService {
             headers.insert(rquest::header::REFERER, v);
         }
 
+        let source_id: Option<i64> = sqlx::query_scalar("SELECT source_id FROM manga WHERE id = ?")
+            .bind(manga_row_id.0)
+            .fetch_optional(&self.db_read)
+            .await?;
+        let client = match source_id {
+            Some(id) => self.proxy_client_for_source(id).await,
+            None => self.proxy_client.clone(),
+        };
         let response = tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            self.proxy_client.safe_get(cover_url, Some(headers)),
+            client.safe_get(cover_url, Some(headers)),
         )
         .await
         .map_err(|_| ServiceError::Internal("Cover download timed out".into()))??;

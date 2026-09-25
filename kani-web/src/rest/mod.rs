@@ -14,12 +14,13 @@ use crate::{
         PasswordResetRequestBody, PreviewDownloadRulesRequest, PreviewMigrationRequest, ProxyQuery,
         RenameCategoryRequest, ReorderCategoriesRequest, ReorderDownloadRulesRequest,
         ScanMangaRequest, SearchMangaRequest, SendTestEmailBody, SetChapterNoteRequest,
-        SetChapterProgressRequest, SetMangaCategoriesRequest, SetMangaTrackingRequest,
-        SetPreferenceRequest, SetReadStatusRequest, SetScanlatorModeRequest,
-        SetScanlatorPrefRequest, SetTrackerConfigRequest, SetTrackerMappingRequest, SolverTestBody,
-        ToggleAutoDownloadRequest, ToggleEnabledRequest, ToggleFavouritedRequest,
-        ToggleSelectRequest, TokenQuery, TrackerAuthUrlQuery, TrackerCallbackQuery,
-        TrackerSearchQuery, UpdateDownloadRuleRequest, UpdateFromRepoRequest, UpdateSource,
+        SetChapterProgressRequest, SetLocalHostsRequest, SetMangaCategoriesRequest,
+        SetMangaTrackingRequest, SetPreferenceRequest, SetReadStatusRequest,
+        SetScanlatorModeRequest, SetScanlatorPrefRequest, SetTrackerConfigRequest,
+        SetTrackerMappingRequest, SolverTestBody, ToggleAutoDownloadRequest, ToggleEnabledRequest,
+        ToggleFavouritedRequest, ToggleSelectRequest, TokenQuery, TrackerAuthUrlQuery,
+        TrackerCallbackQuery, TrackerSearchQuery, UpdateDownloadRuleRequest, UpdateFromRepoRequest,
+        UpdateSource,
     },
     permissions::AuthRequirement,
     state::AppState,
@@ -73,8 +74,20 @@ pub(crate) mod ui_themes;
 pub(crate) mod volumes;
 pub(crate) mod webhooks;
 
-fn sign_image_url(url: &str, referer: &str, state: &AppState, transform: Option<&str>) -> String {
-    crate::proxy::make_proxy_url(url, referer, &state.proxy_secret, transform)
+fn sign_image_url(
+    url: &str,
+    referer: &str,
+    source_id: i64,
+    state: &AppState,
+    transform: Option<&str>,
+) -> String {
+    crate::proxy::make_proxy_url(
+        url,
+        referer,
+        Some(source_id),
+        &state.proxy_secret,
+        transform,
+    )
 }
 
 /// Without `h`, [`serve_manga_cover`] can only answer `max-age=3600`; a matching
@@ -518,8 +531,13 @@ pub(crate) async fn image_proxy(
     headers: HeaderMap,
     ValidatedQuery(query): ValidatedQuery<ProxyQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let (url, referer) = crate::proxy::unseal_proxy_token(&query.token, &state.proxy_secret)
-        .ok_or_else(|| AppError::Other("Invalid or expired proxy token".into()))?;
+    let (source_id, url, referer) =
+        crate::proxy::unseal_proxy_token_with_source(&query.token, &state.proxy_secret)
+            .ok_or_else(|| AppError::Other("Invalid or expired proxy token".into()))?;
+    let client = match source_id {
+        Some(id) => state.proxy_client_for_source(id).await,
+        None => state.proxy_client.clone(),
+    };
 
     let transform_hint = query.transform.as_deref().filter(|s| !s.is_empty());
     let target_w: Option<u32> = query.w.filter(|&w| w > 0 && w <= 4096);
@@ -559,12 +577,15 @@ pub(crate) async fn image_proxy(
         .unwrap_or_else(|| url.clone());
 
     if let Some(range) = headers.get(header::RANGE) {
-        return proxy_range_request(&state, &url, &referer, &host, &etag, range).await;
+        return proxy_range_request(&state, &client, &url, &referer, &host, &etag, range).await;
     }
 
     let canonical = crate::proxy::canonical_proxy_key(&url);
     let cache_key = {
         let mut key = canonical;
+        if let Some(id) = source_id {
+            key = format!("{key}|s:{id}");
+        }
         if let Some(t) = transform_hint {
             key = format!("{}|t:{}", key, t);
         }
@@ -616,7 +637,7 @@ pub(crate) async fn image_proxy(
 
                     let fetch = tokio::time::timeout(
                         cfg.request_timeout,
-                        state.proxy_client.safe_get(&url, Some(req_headers)),
+                        client.safe_get(&url, Some(req_headers)),
                     )
                     .await;
 
@@ -809,6 +830,7 @@ pub(crate) async fn image_proxy(
 
 async fn proxy_range_request(
     state: &AppState,
+    client: &kani_core::http::SmartClient,
     url: &str,
     referer: &str,
     host: &str,
@@ -847,7 +869,7 @@ async fn proxy_range_request(
 
     let resp = tokio::time::timeout(
         state.proxy_config.request_timeout,
-        state.proxy_client.safe_get(url, Some(req_headers)),
+        client.safe_get(url, Some(req_headers)),
     )
     .await
     .map_err(|_| AppError::Other("Upstream timed out on range request".into()))?

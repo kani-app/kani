@@ -20,6 +20,13 @@ pub(crate) struct UpdateSource {
 }
 
 #[derive(garde::Validate, Deserialize, Debug, utoipa::ToSchema)]
+pub(crate) struct SetLocalHostsRequest {
+    /// Private hosts the source may reach, each `host` or `host:port`. Empty revokes the grant.
+    #[garde(length(max = 32), inner(length(min = 1, max = 255)))]
+    pub hosts: Vec<String>,
+}
+
+#[derive(garde::Validate, Deserialize, Debug, utoipa::ToSchema)]
 pub(crate) struct FetchWasmRequest {
     #[garde(length(min = 1, max = 2048), custom(validate_https_url))]
     pub url: String,

@@ -767,3 +767,42 @@ async fn a_reserved_id_is_refused_on_every_install_path() {
         "refused as reserved, got: {err}"
     );
 }
+
+#[tokio::test]
+async fn a_local_grant_opens_its_host_to_its_own_source_only() {
+    use std::time::Duration;
+    let svc = test_service().await;
+    let granted = kani_shared_test::insert_source(&svc.db, "granted-src").await;
+    let other = kani_shared_test::insert_source(&svc.db, "other-src").await;
+    svc.set_source_local_hosts(
+        granted,
+        vec!["192.0.2.10:8080".into()],
+        kani_app::ids::UserId(1),
+    )
+    .await
+    .unwrap();
+
+    let refused = |client: kani_core::http::SmartClient| async move {
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            client.safe_get("http://192.0.2.10:8080/cover.jpg", None),
+        )
+        .await
+        {
+            Ok(Err(e)) => e.to_string().contains("forbidden host"),
+            _ => false,
+        }
+    };
+    assert!(
+        !refused(svc.proxy_client_for_source(granted).await).await,
+        "the granted source's client must be allowed to try the host"
+    );
+    assert!(
+        refused(svc.proxy_client_for_source(other).await).await,
+        "another source must still be refused"
+    );
+    assert!(
+        refused(svc.proxy_client.clone()).await,
+        "the shared client is unchanged"
+    );
+}

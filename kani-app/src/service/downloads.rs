@@ -339,6 +339,7 @@ impl AppService {
             library_path,
             save_path,
             comic_info: Some(comic_info),
+            http_client: Some(self.smart_client_for_source(record.source_id).await),
         })
     }
 

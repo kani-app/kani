@@ -516,6 +516,16 @@ export async function setSourceDownloadConcurrency(sid, value) {
   return _req('PUT', `/sources/${sid}/download-concurrency`, { body: { value } });
 }
 
+/** @param {number} sid @returns {Promise<{hosts: string[]}>} */
+export async function getSourceLocalHosts(sid) {
+  return _req('GET', `/sources/${sid}/local-hosts`);
+}
+
+/** @param {number} sid @param {string[]} hosts @returns {Promise<{hosts: string[]}>} */
+export async function setSourceLocalHosts(sid, hosts) {
+  return _req('PUT', `/sources/${sid}/local-hosts`, { body: { hosts } });
+}
+
 /** @param {number} sid @param {boolean} enabled */
 export async function setSourceBrowserEnabled(sid, enabled) {
   return _req('PUT', `/sources/${sid}/browser-enabled`, { body: { enabled } });

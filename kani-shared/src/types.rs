@@ -1162,6 +1162,7 @@ pub struct RecentUpdate {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecentUpdateItem {
     pub manga_id: i64,
+    pub source_id: i64,
     pub manga_name: String,
     pub cover_url: Option<String>,
     #[serde(skip)]

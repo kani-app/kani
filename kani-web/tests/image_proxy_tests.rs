@@ -25,7 +25,13 @@ fn fast_proxy_config() -> ProxyConfig {
 }
 
 fn signed_get(state: &AppState, upstream_url: &str, cookie: &str) -> Request<Body> {
-    let signed = make_proxy_url(upstream_url, "http://ref.test/", &state.proxy_secret, None);
+    let signed = make_proxy_url(
+        upstream_url,
+        "http://ref.test/",
+        None,
+        &state.proxy_secret,
+        None,
+    );
     authed_get(&signed, cookie)
 }
 
@@ -217,6 +223,7 @@ async fn an_upstream_that_ignores_range_still_serves_the_reader() {
     let signed = make_proxy_url(
         &origin.url("/img.jpg"),
         "http://ref.test/",
+        None,
         &state.proxy_secret,
         None,
     );

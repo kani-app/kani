@@ -64,3 +64,17 @@ extension begins requiring a newer host capability.
 
 See [Extension repositories](extension-repositories.md) and
 [Extension authoring](../extension-authoring/yaml-schema.md).
+
+## Self-hosted sources on your network
+
+Kani refuses to let a source reach private, loopback or cloud-metadata addresses, so a public
+extension cannot use it to probe your LAN. For a source that should talk to your own server,
+such as a Komga instance, an administrator can grant it specific hosts: open the source's
+settings and list them under **Local network hosts**, one per line as `host` or `host:port`
+(for example `komga.lan:25600` or `192.168.1.20:25600`).
+
+The grant applies to that source alone, including its cover and page images and downloads, and
+LAN names resolve through the server's own DNS and `/etc/hosts`. Loopback (`localhost`,
+`127.0.0.1`) and link-local addresses cannot be granted; if the server runs on the same machine,
+use the machine's LAN address and make sure the server listens on it.
+

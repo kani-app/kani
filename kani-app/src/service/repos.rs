@@ -675,7 +675,7 @@ impl AppService {
         let browser_enabled = self.browser_enabled_flag(sid).await;
         let backend = loader::build_yaml_source(
             Arc::new(validated),
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, sid, &self.smart_client).await,
             Arc::clone(&self.ext_cache),
             ns,
             prefs,
@@ -783,7 +783,7 @@ impl AppService {
         let backend = loader::build_wasm_source(
             self.wasm_runtime.engine().clone(),
             instance_pre,
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, sid, &self.smart_client).await,
             Some(metadata.base_url),
             metadata.unrestricted_http,
             self.browser_enabled_flag(sid).await,

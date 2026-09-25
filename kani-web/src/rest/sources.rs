@@ -26,6 +26,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/sources/{id}/browser-enabled", put(set_browser_enabled))
         .route(
+            "/sources/{id}/local-hosts",
+            get(get_local_hosts).put(set_local_hosts),
+        )
+        .route(
             "/sources/{id}/popular/{page}/{page_size}",
             get(get_popular_manga),
         )
@@ -320,6 +324,54 @@ pub(super) async fn get_metadata(
 }
 
 #[utoipa::path(
+    get, path = "/rest/sources/{id}/local-hosts",
+    params(("id" = i64, Path, description = "Source ID")),
+    responses(
+        (status = 200, description = "Private hosts this source may reach"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Source not found"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn get_local_hosts(
+    _: AuthGuard<crate::permissions::guards::AdminManage>,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<impl IntoResponse, AppError> {
+    Ok(Json(
+        json!({ "hosts": state.get_source_local_hosts(id).await? }),
+    ))
+}
+
+#[utoipa::path(
+    put, path = "/rest/sources/{id}/local-hosts",
+    params(("id" = i64, Path, description = "Source ID")),
+    request_body = SetLocalHostsRequest,
+    responses(
+        (status = 200, description = "Grant replaced; the source is reloaded with it"),
+        (status = 400, description = "An entry is not a host or cannot be granted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Source not found"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn set_local_hosts(
+    AuthGuard(user, _): AuthGuard<crate::permissions::guards::AdminManage>,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    ValidatedJson(payload): ValidatedJson<SetLocalHostsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let hosts = state
+        .set_source_local_hosts(id, payload.hosts, user.id)
+        .await?;
+    Ok(Json(json!({ "hosts": hosts })))
+}
+
+#[utoipa::path(
     post, path = "/rest/sources/{id}/wasm",
     params(("id" = i64, Path, description = "Source ID")),
     request_body(content = inline(serde_json::Value), description = "Multipart form with WASM file field", content_type = "multipart/form-data"),
@@ -560,7 +612,7 @@ pub(super) async fn get_popular_manga(
     let mut list: crate::types::MangaList = serde_json::from_str(&json_str)?;
     for item in &mut list.manga {
         if let Some(ref url) = item.cover_url.clone() {
-            item.cover_url = Some(sign_image_url(url, &base_url, &state, None));
+            item.cover_url = Some(sign_image_url(url, &base_url, id, &state, None));
         }
     }
     Ok(Json(list))
@@ -600,7 +652,7 @@ pub(super) async fn search_manga(
     let mut list: crate::types::MangaList = serde_json::from_str(&json_str)?;
     for item in &mut list.manga {
         if let Some(ref url) = item.cover_url.clone() {
-            item.cover_url = Some(sign_image_url(url, &base_url, &state, None));
+            item.cover_url = Some(sign_image_url(url, &base_url, id, &state, None));
         }
     }
     Ok(Json(list))
@@ -629,7 +681,7 @@ pub(super) async fn get_manga_details(
     let mut info: crate::types::MangaInfo = serde_json::from_str(&json_str)?;
     info.cover_url = info
         .cover_url
-        .map(|url| sign_image_url(&url, &base_url, &state, None));
+        .map(|url| sign_image_url(&url, &base_url, id, &state, None));
     info.description_html = info
         .description
         .as_deref()
@@ -760,7 +812,7 @@ pub(super) async fn get_pages(
     let json_str = state.get_pages(id, &manga_id, &chapter_id).await?;
     let mut contents: crate::types::ChapterContents = serde_json::from_str(&json_str)?;
     for page in &mut contents.pages {
-        page.url = sign_image_url(&page.url, &base_url, &state, page.transform.as_deref());
+        page.url = sign_image_url(&page.url, &base_url, id, &state, page.transform.as_deref());
     }
     Ok(Json(contents))
 }

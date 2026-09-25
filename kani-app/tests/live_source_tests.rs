@@ -291,7 +291,7 @@ async fn a_server_that_ignores_range_still_yields_a_usable_measurement() {
         .collect();
 
     let score = svc
-        .probe_page_quality(&urls, 3)
+        .probe_page_quality(0, &urls, 3)
         .await
         .expect("an uncooperative server must still produce a measurement");
 
@@ -317,7 +317,7 @@ async fn an_honoured_range_reports_the_full_page_size_not_the_slice() {
     let urls: Vec<String> = (0..3)
         .map(|i| origin.url(&format!("/img/ch-1-{i}.jpg")))
         .collect();
-    let score = svc.probe_page_quality(&urls, 3).await.unwrap();
+    let score = svc.probe_page_quality(0, &urls, 3).await.unwrap();
 
     let expected = (full_len * 3) as f64 / ((1600.0 * 2400.0 * 3.0) / 1_000_000.0);
     let ratio = score.bytes_per_megapixel as f64 / expected;
@@ -420,7 +420,7 @@ async fn a_truncated_header_does_not_poison_the_measurement() {
         origin.url("/img/b.jpg"),
         origin.url("/img/c.jpg"),
     ];
-    let score = svc.probe_page_quality(&urls, 3).await.unwrap();
+    let score = svc.probe_page_quality(0, &urls, 3).await.unwrap();
 
     assert_eq!(
         score.median_long_edge_px, 2400,
@@ -446,7 +446,7 @@ async fn a_chapter_of_entirely_unreadable_pages_yields_no_measurement() {
         .collect::<Vec<_>>();
 
     assert!(
-        svc.probe_page_quality(&urls, 3).await.is_none(),
+        svc.probe_page_quality(0, &urls, 3).await.is_none(),
         "nothing readable must produce no score, so the caller can tell \
          'not measured' from 'measured as zero'"
     );
@@ -467,7 +467,7 @@ async fn a_page_the_server_refuses_is_skipped_without_failing_the_probe() {
         .collect::<Vec<_>>();
 
     let score = svc
-        .probe_page_quality(&urls, 3)
+        .probe_page_quality(0, &urls, 3)
         .await
         .expect("two readable pages are enough to measure");
     assert_eq!(score.median_long_edge_px, 2400);
@@ -497,7 +497,7 @@ async fn a_body_that_stops_short_of_its_announced_length_is_not_measured_as_tiny
         .collect::<Vec<_>>();
 
     let score = svc
-        .probe_page_quality(&urls, 3)
+        .probe_page_quality(0, &urls, 3)
         .await
         .expect("an interrupted page must not sink the whole probe");
     assert_eq!(score.median_long_edge_px, 2400);
@@ -518,7 +518,7 @@ async fn a_greyscale_png_is_read_as_conclusively_monochrome_from_its_header() {
         .iter()
         .map(|n| origin.url(&format!("/img/{n}.png")))
         .collect::<Vec<_>>();
-    let score = svc.probe_page_quality(&urls, 3).await.unwrap();
+    let score = svc.probe_page_quality(0, &urls, 3).await.unwrap();
 
     assert_eq!(
         score.colour,
@@ -545,7 +545,7 @@ async fn a_greyscale_jpeg_is_honestly_reported_as_unknown_not_guessed_monochrome
         .iter()
         .map(|n| origin.url(&format!("/img/{n}.jpg")))
         .collect::<Vec<_>>();
-    let score = svc.probe_page_quality(&urls, 3).await.unwrap();
+    let score = svc.probe_page_quality(0, &urls, 3).await.unwrap();
 
     assert_eq!(
         score.colour,
@@ -576,7 +576,7 @@ async fn encoder_quality_is_read_from_the_header_and_ordered_correctly() {
             .iter()
             .map(|n| origin.url(&format!("/img/{label}-{n}.jpg")))
             .collect::<Vec<_>>();
-        let score = svc.probe_page_quality(&urls, 3).await.unwrap();
+        let score = svc.probe_page_quality(0, &urls, 3).await.unwrap();
         measured.push(score.median_encoder_quality.expect("JPEG quality readable"));
     }
 
@@ -606,7 +606,7 @@ async fn a_range_request_survives_a_redirect() {
 
     let svc = test_service().await;
     let score = svc
-        .probe_page_quality(&[origin.url("/img/a.jpg")], 1)
+        .probe_page_quality(0, &[origin.url("/img/a.jpg")], 1)
         .await
         .expect("the probe must still read the redirected page");
 

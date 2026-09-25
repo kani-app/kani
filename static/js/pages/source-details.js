@@ -283,6 +283,11 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
   );
   const [dlConcurrencySaving, setDlConcurrencySaving] = useState(false);
 
+  const canGrantLocal = hasPermission('admin:manage');
+  const [localHosts, setLocalHosts] = useState('');
+  const [localHostsSaving, setLocalHostsSaving] = useState(false);
+  const [localHostsError, setLocalHostsError] = useState(/** @type {string|null} */ (null));
+
   const [health, setHealth] = useState(/** @type {any|null} */ (null));
   const [healthLoading, setHealthLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -296,6 +301,11 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
       }
     }).catch(() => {}).finally(() => setHealthLoading(false));
     api.getSourceCapabilities(sid).then(setCapabilities).catch(() => {});
+    if (canGrantLocal) {
+      api.getSourceLocalHosts(sid)
+        .then(r => setLocalHosts((r.hosts ?? []).join('\n')))
+        .catch(() => {});
+    }
   }, [sid]);
 
   async function toggleEnabled(val) {
@@ -318,6 +328,20 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
       await api.setSourceDownloadConcurrency(sid, val);
     } finally {
       setDlConcurrencySaving(false);
+    }
+  }
+
+  async function handleSaveLocalHosts() {
+    const hosts = localHosts.split('\n').map(h => h.trim()).filter(Boolean);
+    setLocalHostsSaving(true);
+    setLocalHostsError(null);
+    try {
+      const saved = await api.setSourceLocalHosts(sid, hosts);
+      setLocalHosts((saved.hosts ?? []).join('\n'));
+    } catch (e) {
+      setLocalHostsError(/** @type {any} */ (e)?.message ?? t('common.error.failed'));
+    } finally {
+      setLocalHostsSaving(false);
     }
   }
 
@@ -519,6 +543,34 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
                     disabled=${dlConcurrencySaving}
                     onClick=${handleSaveDlConcurrency}
                   >${dlConcurrencySaving ? t('common.saving') : t('common.save')}</button>
+                </div>
+              </div>
+            </div>
+          `}
+
+          ${canGrantLocal && html`
+            <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
+              <div class="flex flex-col gap-2">
+                <div>
+                  <p class="text-sm font-medium text-text">${t('source.local_hosts.title')}</p>
+                  <p class="text-xs text-text-muted mt-0.5">${t('source.local_hosts.desc')}</p>
+                </div>
+                <textarea
+                  class="input text-sm font-mono"
+                  rows="3"
+                  aria-label=${t('source.local_hosts.title')}
+                  placeholder=${t('source.local_hosts.placeholder')}
+                  value=${localHosts}
+                  disabled=${localHostsSaving}
+                  onInput=${(/** @type {any} */ e) => setLocalHosts(e.target.value)}
+                ></textarea>
+                ${localHostsError && html`<p class="text-xs text-danger">${localHostsError}</p>`}
+                <div class="flex justify-end">
+                  <button
+                    class="btn-secondary btn-sm"
+                    disabled=${localHostsSaving}
+                    onClick=${handleSaveLocalHosts}
+                  >${localHostsSaving ? t('common.saving') : t('common.save')}</button>
                 </div>
               </div>
             </div>

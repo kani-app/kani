@@ -276,7 +276,8 @@ impl AppService {
                 let browser_enabled = self.browser_enabled_flag(id).await;
                 let backend = loader::build_yaml_source(
                     std::sync::Arc::new(ext),
-                    self.smart_client.clone(),
+                    crate::service::local_network::client_for(&self.db, id, &self.smart_client)
+                        .await,
                     std::sync::Arc::clone(&self.ext_cache),
                     format!("{}:", source.name),
                     prefs,
@@ -337,7 +338,7 @@ impl AppService {
             let backend = loader::build_wasm_source(
                 self.wasm_runtime.engine().clone(),
                 instance_pre,
-                self.smart_client.clone(),
+                crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
                 Some(source.base_url),
                 source.unrestricted_http,
                 browser_enabled,
@@ -1335,7 +1336,7 @@ impl AppService {
             self.wasm_runtime
                 .instantiate_pre(&component)
                 .map_err(ServiceError::Core)?,
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
             Some(metadata.base_url.clone()),
             metadata.unrestricted_http,
             self.browser_enabled_flag(id).await,
@@ -1400,7 +1401,7 @@ impl AppService {
         let ns = format!("{}:", validated.id);
         let backend = loader::build_yaml_source(
             std::sync::Arc::new(validated),
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
             std::sync::Arc::clone(&self.ext_cache),
             ns,
             prefs,

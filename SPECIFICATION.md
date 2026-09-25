@@ -2338,8 +2338,24 @@ to the first request and to every redirect hop.
    `169.254.169.254`), CGNAT, multicast, documentation and reserved ranges are refused whatever
    the host policy allows. For a hostname, the validating resolver filters the addresses it
    resolves to at connect time, so DNS rebinding cannot change the answer after the check. For an
-   IP literal, the URL itself is checked before connecting. No setting turns this off; there is
-   no supported way to point a source at a LAN or loopback address.
+   IP literal, the URL itself is checked before connecting.
+
+**Local-network grants.** An administrator can allow one installed source to reach named private
+hosts, for a self-hosted server such as Komga on the LAN: `PUT /rest/sources/{id}/local-hosts`
+with entries of the form `host` or `host:port` (a port-less entry covers every port). Extensions
+cannot grant themselves anything. A grant:
+
+- exempts only the listed hosts, and only for that source: its requests, sub-fetches, hooks,
+  option sets, cover and page images through the proxy, downloads and quality probes all use a
+  client carrying the grant, and every other source's client is unchanged;
+- resolves a granted name through the system resolver, so LAN names and `/etc/hosts` work, and
+  pins the connection to the addresses it checked;
+- never opens loopback (Kani itself), link-local (including `169.254.169.254`), unspecified or
+  multicast addresses, whether named directly or reached through DNS;
+- is still subject to the host policy: a restricted source reaches a granted host only if it is
+  the source's `base_url` host.
+
+Changing a grant reloads the source.
 
 | Path | Host policy | Forbidden addresses |
 |------|-------------|---------------------|
@@ -2350,7 +2366,7 @@ to the first request and to every redirect hop.
 | Fetched option sets (§3.4) | Yes (`base_url` host) | Yes |
 | Browser `page_url` (endpoint, WASM guest, hook `ctx.capture_page_payload`) | Yes | Yes |
 | Page scripts and subresources inside the solver browser | No: pages load CDNs and challenge scripts | Yes, by the solver (below) |
-| Image proxy (covers, pages) | No: images may come from any CDN | Yes |
+| Image proxy (covers, pages) | No: images may come from any CDN | Yes; the owning source's grant applies |
 | Repository index and artifacts | Artifact must share the repo's host | Yes |
 
 **Redirects** are held to both checks on every hop: a restricted source's request may not be

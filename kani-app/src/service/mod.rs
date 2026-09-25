@@ -49,6 +49,7 @@ mod id_repair;
 pub mod import;
 pub mod integrity;
 pub mod library;
+pub mod local_network;
 pub mod manifest_capture;
 pub mod metadata_provider;
 pub mod migration;
@@ -96,6 +97,9 @@ pub struct AppService {
     pub downloader: DownloaderManager,
     pub smart_client: kani_core::http::SmartClient,
     pub proxy_client: kani_core::http::SmartClient,
+    /// Per-source (extraction, image) clients that honour a source's local-network grant.
+    pub(crate) source_clients:
+        Arc<dashmap::DashMap<i64, (kani_core::http::SmartClient, kani_core::http::SmartClient)>>,
     pub refresh_tx: tokio::sync::broadcast::Sender<AppEvent>,
     pub refresh_task: Arc<tokio::sync::Mutex<Option<tokio::task::AbortHandle>>>,
     pub cache: RequestCache,
@@ -663,7 +667,7 @@ impl AppService {
                         }
                         loader::build_yaml_source(
                             std::sync::Arc::new(ext),
-                            global_smart_client.clone(),
+                            local_network::client_for(&pool, source.id, &global_smart_client).await,
                             std::sync::Arc::clone(&ext_cache),
                             ns,
                             prefs,
@@ -761,7 +765,7 @@ impl AppService {
                 loader::build_wasm_source(
                     wasm_runtime.engine().clone(),
                     instance_pre,
-                    global_smart_client.clone(),
+                    local_network::client_for(&pool, source.id, &global_smart_client).await,
                     Some(source.base_url),
                     source.unrestricted_http,
                     source.browser_enabled,
@@ -910,6 +914,7 @@ impl AppService {
             downloader,
             smart_client: global_smart_client,
             proxy_client,
+            source_clients: Arc::default(),
             refresh_tx,
             refresh_task,
             cache,
@@ -1111,6 +1116,7 @@ impl AppService {
             downloader,
             smart_client,
             proxy_client,
+            source_clients: Arc::default(),
             refresh_tx,
             refresh_task: Arc::new(tokio::sync::Mutex::new(None)),
             cache: RequestCache::new(),
@@ -1188,7 +1194,7 @@ impl AppService {
                     let prefs = Self::load_pref_map_static(&self.db, source_id).await?;
                     let backend = crate::source::loader::build_yaml_source(
                         std::sync::Arc::new(ext),
-                        self.smart_client.clone(),
+                        local_network::client_for(&self.db, source_id, &self.smart_client).await,
                         std::sync::Arc::clone(&self.ext_cache),
                         format!("{source_name}:"),
                         prefs,
@@ -1235,7 +1241,7 @@ impl AppService {
                     let prefs = Self::load_pref_map_static(&self.db, source_id).await?;
                     let backend = crate::source::loader::build_yaml_source(
                         std::sync::Arc::new(ext),
-                        self.smart_client.clone(),
+                        local_network::client_for(&self.db, source_id, &self.smart_client).await,
                         std::sync::Arc::clone(&self.ext_cache),
                         format!("{source_name}:"),
                         prefs,
