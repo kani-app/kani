@@ -77,4 +77,3 @@ The grant applies to that source alone, including its cover and page images and 
 LAN names resolve through the server's own DNS and `/etc/hosts`. Loopback (`localhost`,
 `127.0.0.1`) and link-local addresses cannot be granted; if the server runs on the same machine,
 use the machine's LAN address and make sure the server listens on it.
-
