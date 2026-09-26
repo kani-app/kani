@@ -386,14 +386,10 @@ fn proxy_jitter(cfg: &crate::proxy::ProxyConfig) -> std::time::Duration {
     std::time::Duration::from_millis(rand::rng().random_range(0u64..max_ms))
 }
 
+/// 522 and 523 are Cloudflare's "origin timed out" and "origin unreachable": the CDN is up
+/// but its origin briefly is not, which is as transient as a 502.
 fn is_retryable_proxy_status(status: rquest::StatusCode) -> bool {
-    matches!(
-        status,
-        rquest::StatusCode::TOO_MANY_REQUESTS
-            | rquest::StatusCode::BAD_GATEWAY
-            | rquest::StatusCode::SERVICE_UNAVAILABLE
-            | rquest::StatusCode::GATEWAY_TIMEOUT
-    )
+    matches!(status.as_u16(), 429 | 502 | 503 | 504 | 522 | 523)
 }
 
 async fn host_semaphore(
