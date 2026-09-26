@@ -407,18 +407,17 @@ impl CacheBackend for SqliteCache {
 
         let _ = sqlx::query(
             "DELETE FROM extension_cache WHERE namespace = ? AND key IN (
-                SELECT key FROM extension_cache WHERE namespace = ?
-                ORDER BY expires_at ASC
-                LIMIT MAX(0, (
-                    SELECT MAX(0, SUM(LENGTH(value)) - ?) / MAX(1, AVG(LENGTH(value)))
+                SELECT key FROM (
+                    SELECT key, SUM(LENGTH(value)) OVER (
+                        ORDER BY expires_at DESC, key ROWS UNBOUNDED PRECEDING
+                    ) AS kept
                     FROM extension_cache WHERE namespace = ?
-                ))
+                ) WHERE kept > ?
              )",
         )
         .bind(namespace)
         .bind(namespace)
         .bind(NS_MAX_BYTES)
-        .bind(namespace)
         .execute(&self.pool)
         .await;
     }
@@ -505,6 +504,44 @@ mod tests {
         );
         assert!(cache.get("ns", "b").await.is_some());
         assert!(cache.get("ns", "c").await.is_some());
+    }
+
+    async fn namespace_bytes(cache: &SqliteCache, ns: &str) -> i64 {
+        sqlx::query_scalar(
+            "SELECT COALESCE(SUM(LENGTH(value)), 0) FROM extension_cache WHERE namespace = ?",
+        )
+        .bind(ns)
+        .fetch_one(&cache.pool)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn sqlite_namespace_never_exceeds_its_byte_cap() {
+        let cache = sqlite_cache().await;
+        let mb = |n: f64| vec![0u8; (n * 1024.0 * 1024.0) as usize];
+
+        cache
+            .put("ns", "old", mb(3.0), Duration::from_secs(100))
+            .await;
+        cache
+            .put("ns", "new", mb(1.5), Duration::from_secs(200))
+            .await;
+        assert!(namespace_bytes(&cache, "ns").await <= NS_MAX_BYTES);
+        assert_eq!(
+            cache.get("ns", "old").await,
+            None,
+            "the soonest to expire is evicted"
+        );
+        assert!(cache.get("ns", "new").await.is_some());
+
+        cache
+            .put("big", "k", mb(5.0), Duration::from_secs(100))
+            .await;
+        assert!(
+            namespace_bytes(&cache, "big").await <= NS_MAX_BYTES,
+            "a value larger than the cap is not kept"
+        );
     }
 
     #[tokio::test]

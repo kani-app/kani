@@ -1212,6 +1212,52 @@ mod html_tests {
     }
 
     #[tokio::test]
+    async fn spec_json_im_filter_example_keeps_only_matching_links() {
+        const LINKS: &str = r#"<html><body><div class="chapters">
+            <a class="chapter-link" href="/c/1">Chapter 1</a>
+            <a class="chapter-link active" href="/c/2">Chapter 2</a>
+            <a class="chapter-link" href="/c/3">Chapter 3</a>
+        </div></body></html>"#;
+        let filtered = |rhs: Expr| Expr::Map {
+            target: Box::new(Expr::Filter {
+                target: Box::new(Expr::Select {
+                    target: Box::new(Expr::SelfRef),
+                    selector: "a.chapter-link".into(),
+                }),
+                filter: Box::new(Expr::BinaryOperation {
+                    op: Op::Eq,
+                    lhs: Box::new(Expr::HasClass {
+                        target: Box::new(Expr::Var("$item".into())),
+                        class: "active".into(),
+                    }),
+                    rhs: Box::new(rhs),
+                }),
+            }),
+            transform: Box::new(Expr::Text {
+                target: Box::new(Expr::Var("$item".into())),
+            }),
+        };
+
+        let rows = html_rows(
+            LINKS,
+            "div.chapters",
+            vec![
+                field("spec", filtered(Expr::Bool(true))),
+                field("old", filtered(Expr::Literal("true".into()))),
+            ],
+            vec![],
+        )
+        .await;
+
+        assert_eq!(rows[0]["spec"], serde_json::json!(["Chapter 2"]));
+        assert_eq!(
+            rows[0]["old"],
+            serde_json::json!([]),
+            "the old example matched nothing"
+        );
+    }
+
+    #[tokio::test]
     async fn children_of_element() {
         let rows = html_rows(
             MANGA_HTML,

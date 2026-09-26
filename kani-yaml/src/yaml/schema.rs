@@ -61,7 +61,7 @@ pub struct YamlExtension {
     /// Pure Rhai scripts callable from the DSL via `.user.<name>(args...)`.
     #[serde(default)]
     pub scripts: ScriptsBlock,
-    /// Rhai script body to run before every HTTP request for this source.
+    /// Rhai script body run before each request whose endpoint has no `pre_request` of its own.
     #[serde(default)]
     pub pre_request: Option<String>,
     /// Rhai script bodies keyed by HTTP status pattern ("401", "5xx", "default").
