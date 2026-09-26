@@ -29,6 +29,10 @@ pub struct ScriptableCtx {
     pub http: Option<crate::http::SmartClient>,
     pub browser_scripts: Option<Arc<crate::scripting::BrowserScriptRegistry>>,
     pub browser_profile_key: Option<String>,
+    pub allowed_host: crate::wasm::AllowedHost,
+    /// Declared cache namespaces; the hook registry fills this before running a hook.
+    pub cache_namespaces:
+        Arc<std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits>>,
 }
 
 impl std::fmt::Debug for dyn crate::cache::CacheBackend {
@@ -141,15 +145,41 @@ fn scoped_namespace(ctx: &ScriptableCtx, namespace: &str) -> String {
     format!("{}{}", ctx.cache_namespace, namespace)
 }
 
-fn ctx_cache_get(ctx: &mut ScriptableCtx, namespace: String, key: String) -> Dynamic {
+fn declared_limits(
+    ctx: &ScriptableCtx,
+    namespace: &str,
+) -> Result<kani_shared::CacheNamespaceLimits, Box<rhai::EvalAltResult>> {
+    ctx.cache_namespaces.get(namespace).copied().ok_or_else(|| {
+        format!("cache namespace '{namespace}' is not declared in the extension's `cache:` block")
+            .into()
+    })
+}
+
+/// A requested TTL held to the namespace's declared one: 0 takes the declared TTL, and a
+/// declared TTL of 0 sets no cap.
+fn capped_ttl(requested: u64, declared: u32) -> u64 {
+    let declared = u64::from(declared);
+    match (requested, declared) {
+        (_, 0) => requested,
+        (0, _) => declared,
+        _ => requested.min(declared),
+    }
+}
+
+fn ctx_cache_get(
+    ctx: &mut ScriptableCtx,
+    namespace: String,
+    key: String,
+) -> Result<Dynamic, Box<rhai::EvalAltResult>> {
+    declared_limits(ctx, &namespace)?;
     let namespace = scoped_namespace(ctx, &namespace);
     let result = tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(ctx.cache_backend.get(&namespace, &key))
     });
-    match result {
+    Ok(match result {
         Some(bytes) => Dynamic::from(String::from_utf8_lossy(&bytes).to_string()),
         None => Dynamic::from(()),
-    }
+    })
 }
 
 fn ctx_cache_put(
@@ -158,24 +188,58 @@ fn ctx_cache_put(
     key: String,
     value: String,
     ttl_secs: i64,
-) {
+) -> Result<(), Box<rhai::EvalAltResult>> {
+    let limits = declared_limits(ctx, &namespace)?;
     let namespace = scoped_namespace(ctx, &namespace);
-    let dur = Duration::from_secs(ttl_secs.max(0) as u64);
+    let max_entries = limits
+        .max_entries
+        .unwrap_or(kani_shared::MAX_CACHE_NAMESPACE_ENTRIES) as usize;
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(ctx.cache_backend.put(
-            &namespace,
-            &key,
-            value.into_bytes(),
-            dur,
-        ))
+        let backend = &ctx.cache_backend;
+        tokio::runtime::Handle::current().block_on(async {
+            match u64::try_from(ttl_secs) {
+                Ok(secs) => {
+                    let ttl = Duration::from_secs(capped_ttl(secs, limits.ttl_seconds));
+                    backend
+                        .put_limited(&namespace, &key, value.into_bytes(), ttl, max_entries)
+                        .await
+                }
+                Err(_) => backend.delete(&namespace, &key).await,
+            }
+        })
     });
+    Ok(())
 }
 
-fn ctx_cache_delete(ctx: &mut ScriptableCtx, namespace: String, key: String) {
+fn ctx_cache_delete(
+    ctx: &mut ScriptableCtx,
+    namespace: String,
+    key: String,
+) -> Result<(), Box<rhai::EvalAltResult>> {
+    declared_limits(ctx, &namespace)?;
     let namespace = scoped_namespace(ctx, &namespace);
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(ctx.cache_backend.delete(&namespace, &key))
     });
+    Ok(())
+}
+
+/// Applies the source's host policy, and the forbidden-address rule, to a page a capture
+/// would load. Shared by the hook binding and the WASM guest import.
+pub(crate) fn check_capture_target(
+    allowed_host: &crate::wasm::AllowedHost,
+    page_url: &str,
+) -> Result<(), String> {
+    let url = page_url
+        .parse::<url::Url>()
+        .map_err(|error| format!("Invalid browser page URL: {error}"))?;
+    allowed_host.allows_host(url.host_str().unwrap_or_default())?;
+    if crate::network::is_forbidden_url_host(page_url) {
+        return Err(format!(
+            "browser capture of a forbidden host refused: {page_url}"
+        ));
+    }
+    Ok(())
 }
 
 fn ctx_capture_page_payload(
@@ -184,7 +248,13 @@ fn ctx_capture_page_payload(
     script_name: String,
     timeout_ms: i64,
 ) -> Result<Dynamic, Box<rhai::EvalAltResult>> {
-    ctx_capture_page_payload_scrolled(ctx, page_url, script_name, timeout_ms, true)
+    ctx_capture_page_payload_scrolled(
+        ctx,
+        page_url,
+        script_name,
+        timeout_ms,
+        kani_shared::types::DEFAULT_BROWSER_AUTO_SCROLL,
+    )
 }
 
 fn ctx_capture_page_payload_scrolled(
@@ -194,6 +264,7 @@ fn ctx_capture_page_payload_scrolled(
     timeout_ms: i64,
     auto_scroll: bool,
 ) -> Result<Dynamic, Box<rhai::EvalAltResult>> {
+    check_capture_target(&ctx.allowed_host, &page_url).map_err(Box::<rhai::EvalAltResult>::from)?;
     let handle = ctx.v8_process.as_ref().ok_or_else(|| {
         Box::<rhai::EvalAltResult>::from("browser runtime unavailable in this context")
     })?;
@@ -307,6 +378,8 @@ mod tests {
                 &map,
             ))),
             browser_profile_key: Some("test-source".to_string()),
+            allowed_host: crate::wasm::AllowedHost::Restricted("example.com".into()),
+            cache_namespaces: Arc::default(),
         }
     }
 
@@ -319,7 +392,51 @@ mod tests {
             http: None,
             browser_scripts: None,
             browser_profile_key: None,
+            allowed_host: crate::wasm::AllowedHost::MetadataOnly,
+            cache_namespaces: Arc::new(
+                ["ns", "shared"]
+                    .into_iter()
+                    .map(|name| {
+                        (
+                            name.to_string(),
+                            kani_shared::CacheNamespaceLimits {
+                                ttl_seconds: 3600,
+                                max_entries: None,
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
         }
+    }
+
+    #[test]
+    fn capture_page_payload_refuses_another_host() {
+        let mut c = ctx(None, &[("fetch", "passPayload('{}')")]);
+        let err =
+            ctx_capture_page_payload(&mut c, "https://other.example".into(), "fetch".into(), 1000)
+                .unwrap_err();
+        assert!(
+            err.to_string().contains("may only contact"),
+            "expected the host policy to refuse, got: {err}"
+        );
+    }
+
+    #[test]
+    fn capture_page_payload_refuses_a_forbidden_address_even_when_unrestricted() {
+        let mut c = ctx(None, &[("fetch", "passPayload('{}')")]);
+        c.allowed_host = crate::wasm::AllowedHost::Unrestricted;
+        let err = ctx_capture_page_payload(
+            &mut c,
+            "http://169.254.169.254/latest/meta-data/".into(),
+            "fetch".into(),
+            1000,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("forbidden host"),
+            "expected the forbidden-address rule to refuse, got: {err}"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -329,8 +446,8 @@ mod tests {
         let mut a = ctx_in(&backend, "source-a:");
         let mut b = ctx_in(&backend, "source-b:");
 
-        ctx_cache_put(&mut a, "shared".into(), "k".into(), "secret-a".into(), 60);
-        let leaked = ctx_cache_get(&mut b, "shared".into(), "k".into());
+        ctx_cache_put(&mut a, "shared".into(), "k".into(), "secret-a".into(), 60).unwrap();
+        let leaked = ctx_cache_get(&mut b, "shared".into(), "k".into()).unwrap();
 
         assert!(
             leaked.is_unit(),
@@ -344,16 +461,71 @@ mod tests {
             Arc::new(crate::cache::InMemoryCache::new());
         let mut a = ctx_in(&backend, "source-a:");
 
-        ctx_cache_put(&mut a, "ns".into(), "k".into(), "value".into(), 60);
+        ctx_cache_put(&mut a, "ns".into(), "k".into(), "value".into(), 60).unwrap();
         assert_eq!(
             ctx_cache_get(&mut a, "ns".into(), "k".into())
+                .unwrap()
                 .into_string()
                 .ok(),
             Some("value".to_string())
         );
 
-        ctx_cache_delete(&mut a, "ns".into(), "k".into());
-        assert!(ctx_cache_get(&mut a, "ns".into(), "k".into()).is_unit());
+        ctx_cache_delete(&mut a, "ns".into(), "k".into()).unwrap();
+        assert!(
+            ctx_cache_get(&mut a, "ns".into(), "k".into())
+                .unwrap()
+                .is_unit()
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_undeclared_namespace_is_refused() {
+        let backend: Arc<dyn crate::cache::CacheBackend> =
+            Arc::new(crate::cache::InMemoryCache::new());
+        let mut a = ctx_in(&backend, "source-a:");
+        let errors = [
+            ctx_cache_get(&mut a, "other".into(), "k".into()).map(|_| ()),
+            ctx_cache_put(&mut a, "other".into(), "k".into(), "v".into(), 60),
+            ctx_cache_delete(&mut a, "other".into(), "k".into()),
+        ];
+        for result in errors {
+            let err = result.unwrap_err().to_string();
+            assert!(err.contains("'other' is not declared"), "got: {err}");
+        }
+        assert!(backend.get("source-a:other", "k").await.is_none());
+    }
+
+    #[test]
+    fn a_ttl_is_held_to_the_declared_one() {
+        for (requested, declared, expected) in [
+            (0, 3600, 3600),
+            (60, 3600, 60),
+            (86_400, 3600, 3600),
+            (60, 0, 60),
+            (0, 0, 0),
+        ] {
+            assert_eq!(
+                capped_ttl(requested, declared),
+                expected,
+                "{requested} vs {declared}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_negative_ttl_removes_the_entry() {
+        let backend: Arc<dyn crate::cache::CacheBackend> =
+            Arc::new(crate::cache::InMemoryCache::new());
+        let mut a = ctx_in(&backend, "source-a:");
+
+        ctx_cache_put(&mut a, "ns".into(), "k".into(), "value".into(), 60).unwrap();
+        ctx_cache_put(&mut a, "ns".into(), "k".into(), "stale".into(), -1).unwrap();
+
+        assert!(
+            ctx_cache_get(&mut a, "ns".into(), "k".into())
+                .unwrap()
+                .is_unit()
+        );
     }
 
     #[test]

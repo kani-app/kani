@@ -4,7 +4,7 @@ use super::*;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/sources", get(list_sources).post(add_source))
+        .route("/sources", get(list_sources))
         .route("/sources/health", get(get_sources_health))
         .route("/sources/active_ids", get(get_active_source_ids))
         .route("/sources/metadata-providers", get(list_metadata_providers))
@@ -15,6 +15,8 @@ pub fn router() -> Router<AppState> {
         .route("/sources/{id}/metadata", get(get_metadata))
         .route("/sources/{id}/wasm", post(upload_wasm))
         .route("/sources/{id}/wasm/fetch", post(fetch_wasm))
+        .route("/sources/wasm", post(install_wasm))
+        .route("/sources/wasm/fetch", post(install_wasm_from_url))
         .route("/sources/yaml", post(install_yaml))
         .route("/sources/yaml/fetch", post(fetch_yaml))
         .route("/sources/{id}/reload", post(reload_source_handler))
@@ -23,6 +25,10 @@ pub fn router() -> Router<AppState> {
             put(set_download_concurrency),
         )
         .route("/sources/{id}/browser-enabled", put(set_browser_enabled))
+        .route(
+            "/sources/{id}/local-hosts",
+            get(get_local_hosts).put(set_local_hosts),
+        )
         .route(
             "/sources/{id}/popular/{page}/{page_size}",
             get(get_popular_manga),
@@ -101,26 +107,6 @@ pub(super) async fn list_sources(
     State(svc): State<Arc<dyn SourceDomain>>,
 ) -> Result<impl IntoResponse, AppError> {
     Ok(Json(svc.list_sources().await?))
-}
-
-#[utoipa::path(
-    post, path = "/rest/sources",
-    request_body = CreateSource,
-    responses(
-        (status = 201, description = "Source slot created; returns new ID"),
-        (status = 401, description = "Not authenticated"),
-        (status = 403, description = "Insufficient permissions"),
-    ),
-    security(("session" = [])),
-    tag = "sources"
-)]
-pub(super) async fn add_source(
-    AuthGuard(user, _): AuthGuard<crate::permissions::guards::SourceInstall>,
-    State(svc): State<Arc<dyn SourceDomain>>,
-    ValidatedJson(payload): ValidatedJson<CreateSource>,
-) -> Result<impl IntoResponse, AppError> {
-    let id = svc.add_source(&payload.name, user.id).await?;
-    Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
 }
 
 #[utoipa::path(
@@ -338,6 +324,54 @@ pub(super) async fn get_metadata(
 }
 
 #[utoipa::path(
+    get, path = "/rest/sources/{id}/local-hosts",
+    params(("id" = i64, Path, description = "Source ID")),
+    responses(
+        (status = 200, description = "Private hosts this source may reach"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Source not found"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn get_local_hosts(
+    _: AuthGuard<crate::permissions::guards::AdminManage>,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<impl IntoResponse, AppError> {
+    Ok(Json(
+        json!({ "hosts": state.get_source_local_hosts(id).await? }),
+    ))
+}
+
+#[utoipa::path(
+    put, path = "/rest/sources/{id}/local-hosts",
+    params(("id" = i64, Path, description = "Source ID")),
+    request_body = SetLocalHostsRequest,
+    responses(
+        (status = 200, description = "Grant replaced; the source is reloaded with it"),
+        (status = 400, description = "An entry is not a host or cannot be granted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 404, description = "Source not found"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn set_local_hosts(
+    AuthGuard(user, _): AuthGuard<crate::permissions::guards::AdminManage>,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    ValidatedJson(payload): ValidatedJson<SetLocalHostsRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let hosts = state
+        .set_source_local_hosts(id, payload.hosts, user.id)
+        .await?;
+    Ok(Json(json!({ "hosts": hosts })))
+}
+
+#[utoipa::path(
     post, path = "/rest/sources/{id}/wasm",
     params(("id" = i64, Path, description = "Source ID")),
     request_body(content = inline(serde_json::Value), description = "Multipart form with WASM file field", content_type = "multipart/form-data"),
@@ -360,12 +394,17 @@ pub(super) async fn upload_wasm(
             "Source installation is disabled by the administrator".into(),
         ));
     }
-    let source = state.get_source(id).await?;
+    state.get_source(id).await?;
+    let bytes = read_wasm_field(&mut multipart).await?;
+    state.update_wasm_source(id, bytes.as_ref()).await?;
+    Ok(StatusCode::OK)
+}
 
+async fn read_wasm_field(multipart: &mut Multipart) -> Result<bytes::Bytes, AppError> {
     let field = multipart
         .next_field()
         .await?
-        .ok_or_else(|| AppError::InternalServerError("no file field in upload".into()))?;
+        .ok_or_else(|| AppError::ValidationError("no file field in upload".into()))?;
 
     let content_length = field
         .headers()
@@ -373,18 +412,67 @@ pub(super) async fn upload_wasm(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<usize>().ok());
 
-    let bytes: bytes::Bytes = kani_core::http::collect_bytes_limited(
+    Ok(kani_core::http::collect_bytes_limited(
         Box::pin(field.map_err(|e| kani_core::error::Error::Other(e.to_string()))),
         content_length,
         MAX_WASM_BYTES,
     )
-    .await?;
+    .await?)
+}
 
-    state
-        .install_source(id, &source.name, bytes.as_ref(), crate::KANI_VERSION)
-        .await?;
+#[utoipa::path(
+    post, path = "/rest/sources/wasm",
+    request_body(content = inline(serde_json::Value), description = "Multipart form with WASM file field", content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "WASM extension installed; returns its source ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 400, description = "Invalid WASM extension"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn install_wasm(
+    _: AuthGuard<crate::permissions::guards::SourceInstall>,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, AppError> {
+    if !crate::SOURCE_INSTALL_ALLOWED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(AppError::Forbidden(
+            "Source installation is disabled by the administrator".into(),
+        ));
+    }
+    let bytes = read_wasm_field(&mut multipart).await?;
+    let id = state.install_wasm_source(bytes.as_ref()).await?;
+    Ok(Json(json!({ "id": id })))
+}
 
-    Ok(StatusCode::OK)
+#[utoipa::path(
+    post, path = "/rest/sources/wasm/fetch",
+    request_body = FetchWasmRequest,
+    responses(
+        (status = 200, description = "WASM fetched from URL and installed; returns its source ID"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Insufficient permissions"),
+        (status = 400, description = "Invalid WASM extension"),
+    ),
+    security(("session" = [])),
+    tag = "sources"
+)]
+pub(super) async fn install_wasm_from_url(
+    _: AuthGuard<crate::permissions::guards::SourceInstall>,
+    State(state): State<AppState>,
+    ValidatedJson(payload): ValidatedJson<FetchWasmRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if !crate::SOURCE_INSTALL_ALLOWED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err(AppError::Forbidden(
+            "Source installation is disabled by the administrator".into(),
+        ));
+    }
+    let response = state.proxy_client.safe_get(&payload.url, None).await?;
+    let bytes = response.bytes_limited(MAX_WASM_BYTES).await?;
+    let id = state.install_wasm_source(&bytes).await?;
+    Ok(Json(json!({ "id": id })))
 }
 
 #[utoipa::path(
@@ -410,15 +498,13 @@ pub(super) async fn fetch_wasm(
             "Source installation is disabled by the administrator".into(),
         ));
     }
-    let source = state.get_source(id).await?;
+    state.get_source(id).await?;
 
     let response = state.proxy_client.safe_get(&payload.url, None).await?;
 
     let bytes = response.bytes_limited(MAX_WASM_BYTES).await?;
 
-    state
-        .install_source(id, &source.name, &bytes, crate::KANI_VERSION)
-        .await?;
+    state.update_wasm_source(id, &bytes).await?;
 
     Ok(StatusCode::OK)
 }
@@ -430,7 +516,7 @@ pub(super) async fn fetch_wasm(
         (status = 200, description = "Interpreted-YAML extension installed"),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Insufficient permissions"),
-        (status = 422, description = "Invalid YAML extension"),
+        (status = 400, description = "Invalid YAML extension"),
     ),
     security(("session" = [])),
     tag = "sources"
@@ -458,7 +544,7 @@ pub(super) async fn install_yaml(
         (status = 200, description = "YAML fetched from URL and installed"),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Insufficient permissions"),
-        (status = 422, description = "Invalid YAML extension"),
+        (status = 400, description = "Invalid YAML extension"),
     ),
     security(("session" = [])),
     tag = "sources"
@@ -526,7 +612,7 @@ pub(super) async fn get_popular_manga(
     let mut list: crate::types::MangaList = serde_json::from_str(&json_str)?;
     for item in &mut list.manga {
         if let Some(ref url) = item.cover_url.clone() {
-            item.cover_url = Some(sign_image_url(url, &base_url, &state, None));
+            item.cover_url = Some(sign_image_url(url, &base_url, id, &state, None));
         }
     }
     Ok(Json(list))
@@ -566,7 +652,7 @@ pub(super) async fn search_manga(
     let mut list: crate::types::MangaList = serde_json::from_str(&json_str)?;
     for item in &mut list.manga {
         if let Some(ref url) = item.cover_url.clone() {
-            item.cover_url = Some(sign_image_url(url, &base_url, &state, None));
+            item.cover_url = Some(sign_image_url(url, &base_url, id, &state, None));
         }
     }
     Ok(Json(list))
@@ -595,7 +681,7 @@ pub(super) async fn get_manga_details(
     let mut info: crate::types::MangaInfo = serde_json::from_str(&json_str)?;
     info.cover_url = info
         .cover_url
-        .map(|url| sign_image_url(&url, &base_url, &state, None));
+        .map(|url| sign_image_url(&url, &base_url, id, &state, None));
     info.description_html = info
         .description
         .as_deref()
@@ -726,7 +812,7 @@ pub(super) async fn get_pages(
     let json_str = state.get_pages(id, &manga_id, &chapter_id).await?;
     let mut contents: crate::types::ChapterContents = serde_json::from_str(&json_str)?;
     for page in &mut contents.pages {
-        page.url = sign_image_url(&page.url, &base_url, &state, page.transform.as_deref());
+        page.url = sign_image_url(&page.url, &base_url, id, &state, page.transform.as_deref());
     }
     Ok(Json(contents))
 }
@@ -1304,9 +1390,6 @@ mod tests {
             }])
         }
         async fn get_source(&self, _: i64) -> kani_app::error::Result<Source> {
-            unimplemented!()
-        }
-        async fn add_source(&self, _: &str, _: UserId) -> kani_app::error::Result<i64> {
             unimplemented!()
         }
         async fn update_source(

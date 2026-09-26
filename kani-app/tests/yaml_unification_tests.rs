@@ -60,7 +60,9 @@ fn interpreted(origin_base: &str) -> SourceBackend {
     config.base_url = origin_base.to_string();
     loader::build_yaml_source(
         Arc::new(config),
-        SmartClient::new(None).unwrap(),
+        SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(InMemoryCache::new()),
         "fixture-gen:".into(),
         HashMap::new(),
@@ -95,7 +97,9 @@ fn compiled(origin_base: &str) -> Option<SourceBackend> {
     Some(loader::build_wasm_source(
         engine,
         instance_pre,
-        SmartClient::new(None).unwrap(),
+        SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         None,
         true,
         false,

@@ -2,6 +2,10 @@
 
 This document defines the extraction DSL, JSON intermediate model (IM), and YAML extension format.
 
+Every DSL expression in this document's unlabelled and `yaml` code blocks is parsed and evaluated
+by `kani-core/tests/spec_examples.rs`. A block that sketches a schema rather than showing an example
+is preceded by `<!-- schema sketch: not an executable example -->`.
+
 ---
 
 ## 1. Extraction DSL
@@ -19,7 +23,7 @@ Each expression extracts one value from a document element.
 
 **Numeric literals:** Integer or float: `0`, `2`, `3.14`, `-1`
 
-**Keywords:** `let`, `self`, `dom`, `json`, `index`, `null`, `true`, `false`, `if`, `then`, `else`, `pref`, `merge`, `format`
+**Keywords:** `let`, `self`, `dom`, `json`, `index`, `null`, `true`, `false`, `if`, `then`, `else`, `pref`, `scalar`, `merge`, `format`
 
 **Operators:** `.` (method chain), `=` (binding), `;` (statement separator), `,` (argument separator), `{` `}` (map literal), `(` `)` (grouping/call), `+` `-` `*` `/` (arithmetic), `==` `!=` `<` `>` `<=` `>=` (comparison), `&&` `||` (logical)
 
@@ -46,6 +50,7 @@ atom           = "self"
                | "dom" "(" string ")"
                | "json" "(" string ")"
                | "pref" "(" string ")"
+               | "scalar" "(" string ")"
                | "index" "(" ")"
                | "merge" "(" "[" [ expr { "," expr } ] "]" ")"
                | "format" "(" string [ "," expr { "," expr } ] ")"
@@ -114,7 +119,6 @@ These are the starting points for extraction chains:
 |--------|-----------|-------------|-------------|
 | `.attr("name")` | Element | String/Null | Get the value of an HTML attribute. Returns `Null` if the attribute doesn't exist. |
 | `.text()` | Element | String | Get the combined text content of the element and all descendants. Returns empty string if no text. |
-| `.inner_html()` | Element | String | Get the inner HTML of the element as a string. |
 | `.select("selector")` | Element | List&lt;Element&gt; | Select all matching descendant elements. Returns an empty `List` if none match. |
 | `.first("selector")` | Element | Element/Null | Select the first matching descendant element, or `Null` if none match. |
 | `.inner_html()` | Element | String | Get the inner HTML of the element as a raw HTML string. |
@@ -148,7 +152,7 @@ These are the starting points for extraction chains:
 
 | Method | Input Type | Return Type | Description |
 |--------|-----------|-------------|-------------|
-| `.at(n)` | List | Any | Get the element at index `n`. Negative indices count from the end: `-1` is the last element. Returns an error if out of bounds (`.fallback()` does not catch errors — guard with `if`/`.matches()` when the index may be absent). Works on any `List`, including results from `.split()`, `.select()`, and `.children()`. |
+| `.at(n)` | List | Any | Get the element at index `n`. Negative indices count from the end: `-1` is the last element. Returns `Null` if out of bounds, so an absent segment or capture group can be defaulted with `.fallback()`. Works on any `List`, including results from `.split()`, `.select()`, and `.children()`. |
 | `.join("delim")` | List&lt;String&gt; | String | Join a list of strings into a single string using `delim` as the separator. `Null` elements are skipped. |
 | `.take(n)` | List | List | Return the first `n` elements. Returns the whole list if `n` exceeds its length. |
 | `.skip(n)` | List | List | Drop the first `n` elements and return the rest. Returns an empty list if `n` exceeds the length. |
@@ -232,14 +236,17 @@ The following methods operate on `Json` values from `json()` or a JSON-mode blue
 #### User Script Methods
 
 Pure functions declared in `scripts.pure:` (§3.10) are callable from any DSL expression via `.user.<name>(args...)`.
+Each entry is Rhai source that must define a function with the same name as its key; the host
+calls that function by name. The same definitions are also prepended to every hook body, so hooks
+can call them too.
 
 | Syntax | Description |
 |--------|-------------|
 | `.user.<name>()` | Call the named pure function with no arguments. Receiver (the value before the dot) is passed as the first argument. |
 | `.user.<name>(arg1, arg2, ...)` | Call with additional arguments. Each argument is a DSL expression evaluated before the call. |
 
-**Null propagation:** If the receiver or an argument evaluates to `Null`, the call returns `Null`
-without invoking the Rhai function.
+**Null propagation:** If the receiver evaluates to `Null`, the call returns `Null` without invoking
+the Rhai function. A `Null` in any other argument is passed to the script as `()`.
 
 **Constraints:** Pure functions use the Rhai sandbox described in §3.10 but cannot access `req`,
 `ctx`, or `HookAction` constructors. Supported input and output types are `String`, `Int`, `Number`,
@@ -251,8 +258,11 @@ without invoking the Rhai function.
 scripts:
   pure:
     slugify: |
-      let s = arg0.to_lower();
-      s.replace(" ", "-")
+      fn slugify(title) {
+        let slug = title.to_lower();
+        slug.replace(" ", "-");
+        slug
+      }
 
 endpoints:
   popular:
@@ -270,7 +280,7 @@ self.attr("href").split("/").at(2)
 **Multi-step with variable binding:**
 ```
 let $base = dom("meta[property='og:url']").attr("content").split("/manga").at(0);
-self.select("img.cover").attr("src").prepend($base)
+self.first("img.cover").attr("src").prepend($base)
 ```
 
 **Status mapping:**
@@ -337,11 +347,6 @@ self.select("a.tag").map($item.text().trim()).filter($item.matches("[^\s]")).joi
 ```
 let $n = dom("span.count").text().trim().parse_int().fallback(0);
 "/api/items?count=".append($n.to_string())
-```
-
-**Dynamic JSON field access (language preference):**
-```
-json("/data/attributes/title").get(pref(language)).str().fallback(json("/data/attributes/title/en").str())
 ```
 
 **Find first matching element in a JSON array:**
@@ -526,7 +531,7 @@ Each `Expr` node is encoded as a JSON object with a `"op"` field identifying the
 { "op": "at", "target": { ... }, "index": 2 }
 ```
 
-`"index"` may be negative: `-1` is the last element. Returns an error if out of bounds (not null).
+`"index"` may be negative: `-1` is the last element. Returns `Null` if out of bounds.
 
 #### String Operations
 
@@ -870,6 +875,8 @@ Reads the named value from the document-level `scalars` map, computed before per
 
 Evaluates each subfield expression to a string, joins the results with `delimiter`, then encodes the concatenated value with `encoding`. The result is a single string suitable for use as a composite identifier.
 
+Decoding splits on the first `n - 1` delimiters, so only the **last** subfield may contain the delimiter. If any earlier subfield contains it, evaluation fails with an `encoded_field` error rather than producing an ID that would decode into the wrong parts. Order `fields` so a free-text value such as a slug comes last, or choose a delimiter the source never emits.
+
 `"encoding"` is one of:
 
 | Value | Encoding |
@@ -897,7 +904,7 @@ Evaluates each subfield expression to a string, joins the results with `delimite
 
 `"method"` is one of `"Get"`, `"Post"`, `"Put"`, `"Delete"`. `"kind"` is `"Html"` or `"Json"` and determines how the fetched response is parsed before the sub-blueprint is applied. The sub-blueprint is a full blueprint object (§2.3). The host evaluates `url_expr`, fetches the URL (subject to the SSRF `AllowedHost` gate and the per-extension I/O budget), and returns the first row of the sub-extraction as a `Json` value, or `Null` if the result is empty. Nesting `fetch` inside another fetch's sub-blueprint is rejected at evaluation time.
 
-`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). The hook runtime uses it to dispatch per-endpoint `pre_request:` / `on_status:` hooks (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
+`"endpoint_id"` is an optional string identifying the logical source endpoint that owns this sub-fetch. Codegen sets it automatically to `"<parent_endpoint>/<merge_as>"` for `then:` and `for_each:` steps (e.g. `"manga_details/chapters"`). It is exposed to hooks as `req.endpoint_id`, and a sub-fetch runs its parent endpoint's per-endpoint hooks (§3.10). Available in the Rust builder via `Expr::fetch_html(url_expr, blueprint)` / `Expr::fetch_json(...)` followed by `.with_endpoint_id(id)`.
 
 #### User Function Call
 
@@ -911,7 +918,7 @@ Calls a pure function registered under `scripts.pure:` by name. Produced by the 
 }
 ```
 
-`"name"` matches a key in `ExtensionMetadata.scripts.pure`. `"args"` is the evaluated argument list; the receiver (the value before `.user.`) is always prepended as `args[0]` by the parser. Null propagation applies: if any arg is `Null`, the host returns `Null` without calling the function. The function runs in the Rhai pure sandbox (§3.10 sandbox limits).
+`"name"` matches a key in `ExtensionMetadata.scripts.pure`. `"args"` is the evaluated argument list; the receiver (the value before `.user.`) is always prepended as `args[0]` by the parser. Null propagation applies to the receiver only: if `args[0]` is `Null`, the host returns `Null` without calling the function; any other `Null` argument is passed to the script as `()`. The function runs in the Rhai pure sandbox (§3.10 sandbox limits).
 
 ### 2.3 Blueprint Encoding
 
@@ -988,7 +995,7 @@ When `pagination` is set, the blueprint must be submitted via `paginated-extract
 
 Blueprints are serialized with **[`postcard`](https://docs.rs/postcard)** (a compact binary format) for the FFI call across the WASM boundary. The `Expr` enum's `serde` derives handle this transparently. Call `blueprint.to_bytes()` (from `BlueprintBuilder::build()`) to get the postcard bytes; the host deserializes via `postcard::from_bytes(&blueprint)`.
 
-**DSL schema versioning.** The binary payload is prefixed with a `u32` schema version (`DSL_SCHEMA_VERSION` constant in `kani-shared/src/ast.rs`). `decode_blueprint` on the host hard-rejects any version mismatch with a human-readable error rather than an opaque decode failure. Adding or changing enum variants changes the postcard layout, so every version bump requires all installed extensions to be rebuilt.
+**DSL schema versioning.** The binary payload is prefixed with a `u32` schema version (`DSL_SCHEMA_VERSION` constant in `kani-shared/src/ast.rs`). `decode_blueprint` on the host accepts the versions listed as readable below and rejects any other with a human-readable "recompile the extension" error rather than an opaque decode failure.
 
 | Version | Change |
 |---------|--------|
@@ -997,8 +1004,28 @@ Blueprints are serialized with **[`postcard`](https://docs.rs/postcard)** (a com
 | 3 | Added `Expr::UserFn { name, args }` for pure-script bridge (§3.10). |
 | 4 | Added `endpoint_id: Option<String>` to `RequestDef` for per-endpoint hook dispatch (§3.10). |
 | 5 | Added `endpoint_id: Option<String>` to `Expr::Fetch` so sub-fetches (`then:` / `for_each:` steps) participate in per-endpoint hook dispatch. |
+| 6 | Added `Expr::Arena`, flat storage for large expressions. Appended as a new variant, so version 5 payloads still decode. |
 
-The current version is **5**. Version 1 blueprints (no prefix) are decodable by v2+ hosts for backward compatibility; any other mismatch is a hard error.
+The current version is **6**. The host reads versions **5 and 6**; versions 1–4 are rejected.
+
+**Compatibility rule.** A WASM extension depends on the host in two independent ways, and each
+has its own rule. Both are checked when an artifact is installed, reloaded, and loaded at startup,
+so an incompatible extension is refused up front instead of failing on its first request.
+
+- *Blueprint format.* postcard is not self-describing: appending a variant to an enum leaves
+  older payloads decodable, but adding, removing, or reordering a field or variant does not.
+  Within 1.x, a version bump may only append enum variants, and the host keeps reading every
+  version from 5 onwards. A change that cannot be expressed that way needs a new variant, not a
+  changed one. The extension's metadata records the version it was built with
+  (`dsl_schema_version`); install and reload refuse an unreadable one, and at startup it is
+  registered as a load degradation for that source. `decode_blueprint` still checks the prefix on
+  every extraction, which covers extensions built before the version was recorded.
+- *WIT imports.* The `kani:extension` world is unversioned. Within 1.x it only grows: new
+  functions and interfaces may be added, and an existing function's name, parameters, and results
+  never change and are never removed. An extension built against an older world therefore still
+  links. Every path links the component against the host's imports before running it, so an
+  extension that imports something this host lacks (built for a newer Kani) is refused with the
+  linker's error, never started.
 
 The JSON IM described in §2.2 reflects the logical structure of the AST and is useful for debugging; the wire format is binary, not JSON.
 
@@ -1010,6 +1037,7 @@ The YAML format is the developer-facing representation of a kani extension. It i
 
 ### 3.1 Top-Level Structure
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 # === Required metadata ===
 id: string              # Unique extension identifier (lowercase, alphanumeric + hyphens)
@@ -1048,13 +1076,13 @@ filters: FilterList
 preferences: PreferenceList
 option_sets: OptionSetMap   # Named, reusable option lists referenced via `options_ref`
 id_encoding: IdEncodingBlock  # Composite ID encode/decode for manga and/or chapter IDs
-cache: CacheMap              # Named cache namespaces this extension wants the host to manage
+cache: CacheMap              # Cache namespaces its hook scripts may use (§3.2)
 chapter_sort: ChapterSortBlock # Optional. Chapter sort options exposed to the host.
 
 # === Scripting (optional) ===
 scripts:
   pure:                        # Named pure Rhai functions callable from the DSL via `.user.<name>()`
-    <name>: string             # Rhai expression body; receives args as arg0, arg1, ...
+    <name>: string             # Rhai source defining `fn <name>(...)`; also shared with hooks
 
 pre_request: string            # Top-level Rhai hook body: runs before every HTTP request (§3.10)
 on_status:                     # Top-level Rhai hook bodies keyed by status pattern (§3.10)
@@ -1069,6 +1097,7 @@ Each endpoint corresponds to a method in the `manga-provider` WIT interface. The
 
 #### Common Endpoint Fields
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 endpoint_name:
   # --- Request construction ---
@@ -1144,7 +1173,7 @@ fields:
     slug: 'self.attr("data-slug")'
 ```
 
-This compiles to an `encoded_field` expression that evaluates each subfield, joins the results with `delimiter`, and encodes the joined string per `encoding`.
+This compiles to an `encoded_field` expression that evaluates each subfield, joins the results with `delimiter`, and encodes the joined string per `encoding`. Only the last field may contain `delimiter`; see [`encoded_field`](#composite-id-encoding-encoded_field).
 
 **Decoding (unpacking a composite ID in a route or query):** reference an individual subfield with a dotted placeholder `$<role>.<field>$`, e.g.:
 
@@ -1157,18 +1186,31 @@ Codegen decodes the incoming `manga_id`/`chapter_id` function argument once at t
 
 #### Cache Namespaces
 
-The top-level `cache` block declares named cache namespaces an extension intends to use, separate from the per-key `cache::*` calls described in [§4 Extension Cache Interface](#4-extension-cache-interface):
+The top-level `cache` block declares the namespaces an extension's hook scripts may store values
+in (§3.10). A hook that names any other namespace fails with a script error, so the number of
+namespaces an extension can create, and with it its total cache storage, is bounded by what it
+declares.
 
 ```yaml
 cache:
+  auth:
+    ttl: 3600            # Seconds; the default and maximum entry lifetime. Default 3600, max 30 days
   search_results:
-    scope: extension       # extension (default) | installation | user
-    ttl: 1800               # Seconds; default 3600, max 30 days
-    max_entries: 200         # Optional cap; unset = backend default
-    key_template: "search:{query}:{page}"  # Optional, free-form; interpreted by the consuming runtime
+    ttl: 1800
+    max_entries: 200     # Optional; lowers the host's per-namespace limit of 4096
 ```
 
-Each entry is validated (non-empty name, no `:`/`/`, `ttl` ≤ 30 days, non-empty `key_template` when present) and emitted by codegen as a `kani_shared::CacheNamespace` entry in a generated `pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace]`. This phase only declares the registry — the runtime call-sites that read/write entries under a declared namespace (driven by Rhai `pre_request:` hooks) are owned by the Rhai scripting extension cluster.
+Validation rules: at most 16 namespaces; names are non-empty and contain no `:` or `/`;
+`ttl` ≤ 30 days; `max_entries` between 1 and 4096. `ttl: 0` sets no maximum.
+
+Declarations reach the host through `ExtensionMetadata.cache` (and directly from an interpreted
+YAML source), so they apply to generated WASM extensions too.
+
+**Caches are instance-wide.** Kani's source preferences, including `secret: true` credentials,
+belong to the source, not to a user, and background work such as scans and downloads runs with
+no user at all. An auth token a hook caches is therefore shared by every user of the source. That
+is intended: all users of a source act as one account on the upstream site. Per-user source
+accounts are a possible future feature, not a cache setting.
 
 #### Extension Metadata
 
@@ -1237,18 +1279,18 @@ endpoints:
   search:
     route: "https://example.com/search"
     fields:
-      id: "dom('.id').text()"
-      title: "dom('.title').text()"
+      id: 'self.first(".id").text()'
+      title: 'self.first(".title").text()'
     for_each:
       - endpoint: manga_details    # Name of another declared endpoint; its blueprint is used.
-        url_expr: "dom('.link').attr('href')"  # DSL expression (evaluated per-element for for_each).
+        url_expr: 'self.first(".link").attr("href")'  # DSL expression (evaluated per-element for for_each).
         merge_as: details          # Output field / binding name.
         on_failure: skip           # "skip" | "fail" | "<dsl fallback expr>" (default: "fail").
     then:
       - endpoint: manga_details
-        url_expr: "dom('.banner-link').attr('href')"
+        url_expr: 'dom(".banner-link").attr("href")'
         merge_as: banner_info
-        on_failure: "lit(\"\")"    # DSL fallback expression on error.
+        on_failure: '""'           # DSL fallback expression on error.
 ```
 
 **`on_failure`** controls what happens when the sub-fetch or extraction fails:
@@ -1262,7 +1304,8 @@ so a sub-endpoint whose container matches several elements silently contributes 
 the first.
 
 **`deduplicate_by`** is a DSL expression evaluated against each *main-result* row once
-its sub-fetch has merged in. Rows repeating an earlier row's key are dropped, the first
+its sub-fetch has merged in; the row is a JSON object, so `self` and `json()` both address
+it. Rows repeating an earlier row's key are dropped, the first
 occurrence is kept, and the original order is preserved. Use it where a source lists the
 same entry under several categories on one page and only the sub-fetch reveals they are
 the same.
@@ -1270,15 +1313,15 @@ the same.
 ```yaml
     for_each:
       - endpoint: manga_details
-        url_expr: "dom('.link').attr('href')"
+        url_expr: 'self.first(".link").attr("href")'
         merge_as: details
-        deduplicate_by: "json('/details/canonical_id').text()"
+        deduplicate_by: 'self.ptr("/details/canonical_id").str()'
 ```
 
 It is applied by the host after extraction, so it is available to **interpreted YAML
 sources only**. A generated Rust extension builds its blueprint in the guest, where the
-key cannot be evaluated; `kani-cli generate` rejects a source that sets it rather than
-emitting a crate that ignores it.
+key cannot be evaluated; `kani-cli generate` and factory `kani-cli build` reject a source that
+sets it rather than emitting a crate that ignores it (§5).
 
 Sub-fetch parallelism is not configurable per step. Every request a source makes,
 including sub-fetches, is bounded by `metadata.rate_limit.max_concurrent` (default 4).
@@ -1326,7 +1369,7 @@ popular:
         .fallback("Unknown Title")
     cover_url:
       expr: |
-        let $filename = self.ptr("/relationships").find("type", "cover_art").ptr("/attributes/fileName").str()
+        let $filename = self.ptr("/relationships").find("type", "cover_art").ptr("/attributes/fileName").str();
         if $filename != null
           then format("https://cdn.example.com/covers/{}/{}{}", self.ptr("/id").str(), $filename, pref("cover_size").fallback(".512.jpg"))
           else null
@@ -1343,10 +1386,10 @@ search:
     page: $page$
   container: ".grid.gap-3 > div"
   fields:
-    id: 'self.select("a").attr("href").split("/").at(2)'
+    id: 'self.first("a").attr("href").split("/").at(2)'
     title: 'self.first(".line-clamp-2").text()'
     cover_url:
-      expr: 'self.select("img").attr("data-src")'
+      expr: 'self.first("img").attr("data-src")'
       optional: true
 ```
 
@@ -1526,12 +1569,12 @@ option_sets:
     options_fetched_by:      # Lazily resolved by the host at filter-panel render time
       route: "/api/tags"
       type: json              # "html" (default) or "json"
-      container: "$.tags"
-      fields:
-        name: 'self.field("name").text()'
-        value: 'self.field("id").text()'
-        adult: 'self.field("adult").text()'  # Any extra fields are available for nsfw_field
-      nsfw_field: adult        # Optional. Options where this field is "true"/"1" are dropped unless NSFW is allowed
+      container: "/tags"      # JSON Pointer (json) or CSS selector (html)
+      fields:                 # JSON Pointers (json) or "selector|attr" specs (html) — not DSL
+        name: "/name"
+        value: "/id"
+        adult: "/adult"        # Any extra fields are available for nsfw_field
+      nsfw_field: adult        # Optional. Options flagged by this field are dropped
       cache:
         ttl: 600               # Seconds, max 30 days
         key: tags-v1
@@ -1550,13 +1593,13 @@ filters:
 
 A `Static` option set (a plain YAML sequence) is resolved and inlined directly into the generated `filter_list!`/`preference_list!` call at codegen time.
 
-A `Fetched` option set (`options_fetched_by`) declares a remote source for the options. Codegen emits an empty options list for the filter itself but also generates a `get_fetched_option_sets()` WIT export returning a JSON array of `FilterFetchDef` records. The host calls this at filter-panel render time, fetches each route using `SmartClient`, parses the response per `container` + `fields`, and injects the resolved options back into the returned `FilterList`. Results are cached in the host's `ext_cache` under the key `"fetched_opts:{source_id}"` with the TTL from the `cache:` block (default 300 s).
+A `Fetched` option set (`options_fetched_by`) declares a remote source for the options. Codegen emits an empty options list for the filter itself but also generates a `get_fetched_option_sets()` WIT export returning a JSON array of `FilterFetchDef` records. The host calls this at filter-panel render time, fetches each route using `SmartClient`, parses the response per `container` + `fields`, and injects the resolved options back into the returned `FilterList`. Results are cached in the host's `ext_cache` under the namespace `fetched_opts:{source_id}`, keyed by `cache.key` (or the option set's name when there is no `cache:` block). The TTL is `cache.ttl`: 3600 s if the block omits it, 300 s if there is no block, and `0` never expires (§4.1).
 
 **`fields` format:**
 - For HTML (`type: html`): values are CSS selectors yielding text. Attribute extraction uses `"selector|attribute"` (e.g., `"a|href"`); `"self"` or `"self|attr"` refers to the container element.
 - For JSON (`type: json`): values are JSON Pointer paths (e.g., `/name`, `/meta/id`).
 
-**NSFW filtering:** Set `nsfw_field` on an `options_fetched_by` block to the name of a field in the `fields` map. Options where that field's value is `"true"` or `"1"` are dropped by the host unless the source/install permits NSFW content. The field name is embedded in the emitted `FilterFetchDef` JSON.
+**NSFW filtering:** Set `nsfw_field` on an `options_fetched_by` block to the name of a field in the `fields` map. For HTML, options where that field's text is `"true"` or `"1"` are dropped; for JSON, options where it is the boolean `true` are dropped. They are dropped regardless of the source's or user's NSFW setting. The field name is embedded in the emitted `FilterFetchDef` JSON.
 
 **Filter-to-query mapping:** When an endpoint receives filters, the codegen needs to know how to convert active filter values into query parameters. This is defined in the endpoint:
 
@@ -1630,8 +1673,13 @@ preferences:
     options_ref: tags    # Resolve options from a top-level `option_sets` entry (see §3.4)
 ```
 
+**`secret: true`** hides the value in the UI (a password field) and nowhere else. The extension
+reads it like any other preference and may send it to any host it is allowed to contact (§7);
+the settings page says so under the field.
+
 ### 3.6 Complete Schema Reference
 
+<!-- schema sketch: not an executable example -->
 ```yaml
 # Top-level fields
 id: string                      # Required. Extension identifier.
@@ -1776,7 +1824,7 @@ option_sets:
       route: string
       type: "html" | "json"        # Default: "html"
       container: string
-      fields: map<string, string>  # DSL expressions, evaluated per resolved option
+      fields: map<string, string>  # JSON Pointers (json) or "selector|attr" specs (html); not DSL
       cache:
         ttl: integer                # Seconds. Default: 3600. Max: 30 days.
         key: string
@@ -1805,7 +1853,7 @@ pagination:
 # Scripting (top-level, optional; see §3.10)
 scripts:
   pure:
-    <name>: string                   # Rhai function body (arg0, arg1, ... as params)
+    <name>: string                   # Rhai source defining `fn <name>(...)`; also shared with hooks
 
 pre_request: string                  # Rhai hook body; runs before every source-level HTTP request
 on_status:                           # Rhai hook bodies by status pattern
@@ -1813,7 +1861,7 @@ on_status:                           # Rhai hook bodies by status pattern
 
 # Per-endpoint hooks (subset of above, on any endpoint block)
 # endpoints.<name>:
-#   pre_request: string              # Overrides source-level pre_request for this endpoint
+#   pre_request: string              # Replaces source-level pre_request for this endpoint
 #   on_status:
 #     <pattern>: string
 ```
@@ -1864,9 +1912,12 @@ Code generation emits `capture_page_payload` with the configured script and time
 runtime manages the solver session, `passPayload` injection, `AllowedHost` checks, and resource
 limits.
 
-**Compiled-tier limitation:** Code generation emits `capture_page_payload` but does not extract its
-result; `kani-cli/src/codegen/endpoints.rs::try_emit_browser_fetch` remains unimplemented. The
-interpreted backend (§5.1) extracts the captured payload as a standard JSON endpoint.
+Both backends extract the captured payload as a standard JSON endpoint: the interpreted backend
+(§5.1) directly, and generated code by passing it to `extract::json`.
+
+Auto-scroll defaults to `false` everywhere: browser endpoints, the hook `ctx.capture_page_payload`,
+and a Rust extension's `v8_context::capture_page_payload`. A Rust extension opts in with
+`capture_page_payload_configured(url, script, timeout_ms, true)`.
 
 ```yaml
 browser_scripts:
@@ -1886,11 +1937,11 @@ endpoints:
     auto_scroll: true             # Optional. Default: false. Periodically scrolls the
                                   # page so lazy-loaded content is present before the
                                   # payload is captured. Browser endpoints only.
-    container: ":root"
+    container: ""                 # The payload is JSON, so address its root with a pointer.
     fields:
-      id:   { expr: "json(\"/id\").text()" }
-      title: { expr: "json(\"/title\").text()" }
-      status: { expr: "json(\"/status\").text()" }
+      id: 'self.ptr("/id").str()'
+      title: 'self.ptr("/title").str()'
+      status: 'self.ptr("/status").str()'
 ```
 
 **`browser_scripts`:** top-level map from script name to JavaScript source. Each script is written to `src/scripts/<name>.js` in the generated crate and accessed via `static SCRIPT_<NAME>: &str = include_str!("scripts/<name>.js")`. Scripts that do not call `passPayload` produce a warning during validation.
@@ -1914,7 +1965,10 @@ endpoints:
 The `kani-cli validate` command checks:
 
 1. **Required fields present:** `id`, `name`, `version`, `base_url` must all be set.
-2. **ID format:** Must match `[a-z][a-z0-9-]*` (lowercase, starts with letter).
+2. **ID format:** Must match `[a-z][a-z0-9-]*` (lowercase, starts with letter). The host enforces
+   the same rule on a WASM extension's metadata id at install. Ids name artifact files, source rows
+   and cache namespaces, so a separator such as `:` or `_` would let two extensions' namespaces
+   collide.
 3. **Version format:** Must be valid semver.
 4. **Base URL format:** Must be a valid URL with scheme.
 5. **DSL syntax:** All DSL strings must parse without errors.
@@ -1944,16 +1998,25 @@ defined under `scripts.pure:` (see §1.5).
 Hooks can be declared at two levels:
 
 - **Source-level** — top-level `pre_request:` / `on_status:` keys; fire on every HTTP request made by this extension.
-- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); fire only when the request's `endpoint_id` matches this endpoint's name. Per-endpoint hooks receive the same sandbox bindings and override the source-level hook for that status code/event.
+- **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); apply to that endpoint's requests and to its `then:` / `for_each:` sub-fetches. Per-endpoint hooks receive the same sandbox bindings.
 
-Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form `"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`), enabling per-endpoint hooks to target them specifically.
+#### Dispatch
 
-#### Execution order
+Exactly one hook body runs per event. A per-endpoint hook **replaces** the source-level hook; the
+two never both run.
 
-1. Source-level `pre_request` runs first (if present).
-2. Per-endpoint `pre_request` runs second (if present and `endpoint_id` matches).
-3. The (possibly mutated) request is sent.
-4. On response, source-level `on_status` is checked by key, then per-endpoint `on_status`.
+Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form
+`"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`). Hooks are looked up for the
+full id first, then for the parent (the part before `/`), then at source level. No endpoint can be
+named with a `/`, so in practice a sub-fetch runs its parent's hooks. A hook that must treat the
+sub-fetch differently can branch on `req.endpoint_id`.
+
+1. `pre_request`: the first hook found for the full id, the parent endpoint, or the source level,
+   in that order; otherwise nothing.
+2. The (possibly mutated) request is sent.
+3. `on_status`: each map, in the same order, is searched for the exact status (`"401"`), then
+   its class (`"4xx"`), then `"default"`. The first match runs. A per-endpoint map with no
+   matching key falls through to the next level rather than suppressing it.
 
 #### Sandbox bindings
 
@@ -1961,9 +2024,9 @@ Each hook body is a Rhai expression body (not a function declaration) evaluated 
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`, `req.set_body(s)`. |
-| `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(...)`. |
-| `response` | `ScriptableResponse` | Available in `on_status` only: `response.status` (integer), `response.header(k)`. |
+| `req` | `ScriptableRequest` | Mutable HTTP request. Read `req.url`, `req.method`, `req.endpoint_id`, `req.headers`, `req.queries`. Mutate with `req.url = s`, `req.set_header(k,v)`, `req.remove_header(k)`, `req.set_query(k,v)`, `req.push_query(k,v)`, `req.remove_query(k)`. |
+| `ctx` | `ScriptableCtx` | Context: `ctx.pref(key)`, the cache methods below, and `ctx.capture_page_payload(page_url, script, timeout_ms[, auto_scroll])`, which loads `page_url` in the solver's browser with the named `browser_scripts` entry and returns the string it passes to `passPayload`. `auto_scroll` defaults to `false`, as on browser endpoints (§3.8). |
+| `resp` | `ScriptableResponse` | Available in `on_status` only: `resp.status` (integer), `resp.headers` (map), and `resp.body`, which the hook may reassign. |
 
 `set_query` replaces any existing parameter of that name; `push_query` appends, so a
 source that expects a repeated key (`?tag=a&tag=b`) needs `push_query`.
@@ -1980,12 +2043,14 @@ The body must return a `HookAction` value:
 
 #### Cache in hook scripts
 
-The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-object.
+The cache methods are registered directly on `ctx`. There is no `ctx.cache` sub-object. Every
+`namespace` must be declared in the extension's `cache:` block (§3.2); any other namespace is a
+script error.
 
 | Method | Description |
 |--------|-------------|
-| `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `""` if absent. |
-| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value with a TTL. A TTL below zero is clamped to zero. |
+| `ctx.cache_get(namespace, key)` | Retrieve a string value. Returns `()` if absent or expired; test with `== ()`. |
+| `ctx.cache_put(namespace, key, value, ttl_seconds)` | Store a string value. The TTL is held to the namespace's declared `ttl`: `0` takes the declared value, a longer TTL is shortened to it, and a negative TTL removes the entry. The namespace's `max_entries` applies. |
 | `ctx.cache_delete(namespace, key)` | Remove an entry. |
 
 `namespace` is prefixed with the extension's own namespace before it reaches the
@@ -2048,9 +2113,13 @@ metadata:
   rate_limit:
     max_hook_requests: 2
 
+cache:
+  auth:
+    ttl: 3600
+
 pre_request: |
   let token = ctx.cache_get("auth", "token");
-  if token != "" {
+  if token != () {
     req.set_header("Authorization", "Bearer " + token);
   }
   proceed()
@@ -2074,37 +2143,44 @@ endpoints:
 
 ## 4. Extension Cache Interface
 
-Extensions can store and retrieve values across invocations using the host-provided `cache` WIT interface. The cache is namespaced per extension and version, preventing cross-extension data leakage and stale reads after an upgrade.
+Extensions can store and retrieve values across invocations using the host-provided `cache` WIT
+interface. Each extension has its own namespace, so one extension cannot read another's entries.
 
 ### 4.1 Operations
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `cache::get(key)` | `string → option<string>` | Retrieve a value by key. Returns `None` if absent or expired. |
-| `cache::put(key, value, ttl_seconds)` | `string, string, u64 → ()` | Store a value with a TTL. Pass `0` for no expiry (evicted only by capacity limits). |
-| `cache::delete(key)` | `string → ()` | Remove a specific key immediately. |
-| `cache::clear_namespace()` | `→ ()` | Remove all keys for this extension's namespace. |
+| WIT function | Guest wrapper (`kani_shared::host_abi::cache`) | Description |
+|--------------|-----------------------------------------------|-------------|
+| `get(key: string) -> option<list<u8>>` | `get(key: &str) -> Option<Vec<u8>>` | Retrieve a value. `None` if absent or expired. |
+| `put(key: string, value: list<u8>, ttl-secs: u32)` | `put(key: &str, value: Vec<u8>, ttl_secs: u32)` | Store a value. A TTL of `0` means the entry never expires; it leaves only by capacity eviction or deletion. |
+| `delete(key: string)` | `delete(key: &str)` | Remove one entry. |
+| `clear()` | `clear()` | Remove every entry in this extension's namespace. |
 
-**`get_or_insert`** is a host-side convenience provided by the `CacheBackend` trait that composes `get` + `put`: retrieve a value if present, otherwise compute it and store it with a TTL. This is used internally by the hook runtime (§3.10) for auth-token caching. It is not exposed as a separate WIT export — scripts in §3.10 express the same pattern via `ctx.cache_get` + `ctx.cache_put`.
+Values are raw bytes; extensions encode structured values themselves (e.g. JSON). The wrappers
+return nothing: a cache write that fails is dropped rather than failing the call.
 
-All values are serialized as strings at the boundary. Extensions are responsible for encoding/decoding structured values (e.g. JSON).
+**`get_or_insert`** is a host-side convenience on the `CacheBackend` trait that composes `get` +
+`put`. It is not exposed over WIT; hook scripts express the same pattern with `ctx.cache_get` +
+`ctx.cache_put` (§3.10).
 
-### 4.2 Scopes
+### 4.2 Namespace and backend
 
-The `scope` declared in the extension metadata controls the backend and key namespace:
+All extension cache entries live in one SQLite table (`extension_cache`), keyed by namespace and
+key, so they persist across restarts. An extension's own namespace (used by the WIT calls above)
+is its id followed by `:`; each hook namespace it declares (§3.2) is that prefix followed by the
+declared name. Fetched option sets (§3.4) are cached under the host namespace
+`fetched_opts:{source_id}`. All of these are shared by every user of the source (§3.2).
 
-| Scope | Backend | Lifetime | Key prefix |
-|-------|---------|----------|------------|
-| `session` | In-memory (per process) | Until server restart | `{ext_id}:{version}:session:` |
-| `extension` | SQLite | Persistent across restarts | `{ext_id}:{version}:ext:` |
-| `installation` | SQLite | Persistent, per installation | `{ext_id}:{version}:{install_id}:inst:` |
+**A version change clears the cache.** When an install, an update, a reload, or the startup scan
+records a version different from the stored one, the host deletes every namespace beginning with
+`"<id>:"` (the extension's own and its hooks') and the source's `fetched_opts:{source_id}`
+namespace. Reinstalling the same version keeps the cache.
 
-The version component means cache entries are automatically isolated between extension upgrades — a v2 extension will never read v1's cached data.
+### 4.3 Capacity limits
 
-### 4.3 Capacity Limits
-
-- **In-memory (`session`):** Global ceiling of `KANI_EXTENSION_CACHE_MAX_MB` (default 64 MB) across all extensions. LRU eviction within the global budget.
-- **SQLite (`extension` / `installation`):** Per-namespace cap of 4 MB / 4096 rows (configurable). LRU eviction within the namespace when the cap is reached.
+Each namespace is capped at 4 MB and 4096 entries; a declared `max_entries` lowers the entry cap
+for that namespace. When a write would exceed a cap, the entries closest to expiry are evicted
+first. An extension has its own namespace plus at most 16 declared ones, so its total cache
+storage is bounded at 68 MB.
 
 ### 4.4 Usage in Rust Extensions
 
@@ -2112,20 +2188,21 @@ The version component means cache entries are automatically isolated between ext
 use kani_shared::host_abi::cache;
 
 // Store the fetched cover CDN base URL for 10 minutes
-cache::put("cdn_base", &cdn_url, 600)?;
+cache::put("cdn_base", cdn_url.as_bytes().to_vec(), 600);
 
 // Retrieve on subsequent calls
-if let Some(base) = cache::get("cdn_base")? {
-    // use cached value
+if let Some(base) = cache::get("cdn_base") {
+    // use cached bytes
 }
 
 // Invalidate on auth refresh
-cache::delete("auth_token")?;
+cache::delete("auth_token");
 ```
 
 ### 4.5 TTL and Pruning
 
-Expired entries are not returned by `cache::get` and are pruned by a background job running every 10 minutes (`spawn_cache_prune`). There is no guarantee of exact expiry timing — entries may persist slightly past their TTL until the next prune cycle, but will never be returned to callers after expiry.
+Expired entries are never returned by `get`. A background job (`spawn_cache_prune`) deletes them
+every 10 minutes, so they may occupy space until the next prune.
 
 ## 5. Runtime Backends
 
@@ -2137,6 +2214,16 @@ dispatch interface.
 |---------|----------|-----------|-----------|
 | `Wasm`  | `<name>.wasm` | `wasm32-unknown-unknown` → `wasm-opt` → component | leased WASM instance over the WIT boundary |
 | `Yaml`  | `<name>.yaml` | none (parsed at load) | host-native blueprint evaluation, no WIT call |
+
+A YAML source can run either way: interpreted as-is, or compiled to a WASM crate by
+`kani-cli generate` / `build`. The two differ only where this table says so. Code generation
+rejects a source that uses an interpreted-only feature (`reject_interpreted_only` in
+`kani-cli/src/commands/generate.rs`) rather than producing a crate that ignores it. Add any newly
+found difference here and to that check.
+
+| Feature | Interpreted YAML | Generated WASM |
+|---------|------------------|----------------|
+| `for_each[].deduplicate_by` (§3.2) | Supported | Rejected at generation |
 
 ### 5.1 Interpreted YAML backend
 
@@ -2154,7 +2241,18 @@ The evaluator (`kani-core/src/evaluator/shared.rs`) enforces host-side caps (not
 
 ### 5.3 Selection and supersession
 
-Sources live in a single directory (`wasm_storage_path`). When both `<name>.yaml` and `<name>.wasm` exist for one source, **YAML wins**; the WASM file is retained for rollback and the choice is logged. Load failures (validation, missing capabilities, `min_kani_version`, `schema_version`) leave the row `enabled = 0` with the reason stored in `sources.load_error`.
+Sources live in a single directory (`wasm_storage_path`), one artifact per source. Installing or
+updating a source in one format deletes its artifact in the other, and overwrites the previous
+version in place: **no earlier version is kept**, so there is no automatic rollback. To go back,
+reinstall the older version from its repository.
+
+Both `<name>.yaml` and `<name>.wasm` exist only when an operator has placed them by hand. Then
+**YAML wins**, the choice is logged, and the WASM file is left unused; deleting the YAML file and
+restarting switches the source back to it.
+
+A YAML source that fails at startup (validation, missing capabilities, `min_kani_version`,
+`schema_version`) leaves the row `enabled = 0` with the reason stored in `sources.load_error`. A
+WASM artifact that cannot be compiled is reported as a source-load degradation instead.
 
 ### 5.4 Hot-swap
 
@@ -2201,7 +2299,31 @@ use (TOFU) key pinning.
 
 ### 6.3 Install pipeline
 
-`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change. Repo add/trust/install/update/remove and block/unblock are audit-logged.
+`install_or_update_from_repo` (serialized per extension id by an install lock): locate the manifest entry → check `min_kani_version` → download the artifact through the SSRF-protected client with size caps (`MAX_INDEX_BYTES` 1 MiB, `MAX_ARTIFACT_BYTES` 10 MiB) → verify `sha256` → verify the author Ed25519 signature → check that the artifact's own `id` equals the index entry's `id` (and, on update, the updated source's name) → **only then** write the file (`save_yaml`/`save_wasm`, both path-traversal guarded) → upsert the `sources` row (`name` is UNIQUE) → `registry.insert` (new) or `registry.hot_swap` (update). A verification failure writes no file and makes no DB change.
+
+Every fallible step that has no side effects (verification, YAML validation, WASM compilation and
+instantiation, capability checks) runs before anything is written. Artifacts are written to a
+staging file and renamed into place, so a crash cannot leave a truncated artifact. The source's
+existing artifacts are read before the write; if writing the file, removing the other format, or
+the row upsert then fails, they are put back exactly as they were and the install returns the
+error. The registry is only touched after the row is committed, and `hot_swap` cannot fail: it
+waits up to 30 s for in-flight calls (§5.4) and then swaps. Repo add/trust/install/update/remove and block/unblock are audit-logged.
+
+**The file and the row are not one transaction.** The rename and the row upsert are separate
+steps, so a crash between them leaves the new artifact on disk under the old row. The artifact
+on disk is therefore authoritative. At startup every artifact's own metadata is read and its row's
+`version`, `base_url` and `unrestricted_http` are rewritten to match; when the version changed,
+the extension's cache is cleared as it would be on an update (§4). Reloading a source applies the
+same rule. A file whose declared id differs from the source it is stored under is not loaded
+under that source and is reported as a `source_load` degradation.
+
+**Every install path runs this pipeline.** A manual install (`POST /rest/sources/yaml`,
+`/yaml/fetch`, `/wasm`, `/wasm/fetch`) skips only the repository steps (index lookup, hash and
+signature) and finds or creates the source row by the artifact's own id. Replacing a specific
+source (`POST /rest/sources/{id}/wasm`, `/{id}/wasm/fetch`) requires the artifact to declare that
+source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_version`, id form
+(§3.9), blueprint schema version (§2.4) and capability checks apply on every path; an artifact that fails any of them, or does not
+compile, is a `400` and changes nothing.
 
 ### 6.4 SSE events
 
@@ -2221,3 +2343,69 @@ use (TOFU) key pinning.
 - `kani-cli publish` — validate, hash, sign an extension and upsert its `index.json` entry.
 - `kani-cli repo init|add|list|verify` — manage a local repo; `verify` recomputes hashes + checks signatures (non-zero exit on failure, for CI).
 - `kani-cli new <name>` scaffolds a YAML extension; `--rust` scaffolds a Rust/WASM crate instead.
+
+## 7. Outbound Request Policy
+
+Every request an extension causes, directly or through the host, passes two checks. They apply
+to the first request and to every redirect hop.
+
+1. **Host policy (`AllowedHost`).** A source may contact only its `base_url` host, matched
+   exactly, unless it declares `unrestricted_http: true`. The check runs on the final request,
+   after any `pre_request` hook has rewritten it.
+2. **Forbidden addresses.** Private, loopback, link-local (including cloud metadata
+   `169.254.169.254`), CGNAT, multicast, documentation and reserved ranges are refused whatever
+   the host policy allows. For a hostname, the validating resolver filters the addresses it
+   resolves to at connect time, so DNS rebinding cannot change the answer after the check. For an
+   IP literal, the URL itself is checked before connecting.
+
+**Local-network grants.** An administrator can allow one installed source to reach named private
+hosts, for a self-hosted server such as Komga on the LAN: `PUT /rest/sources/{id}/local-hosts`
+with entries of the form `host` or `host:port` (a port-less entry covers every port). Extensions
+cannot grant themselves anything. A grant:
+
+- exempts only the listed hosts, and only for that source: its requests, sub-fetches, hooks,
+  option sets, cover and page images through the proxy, downloads and quality probes all use a
+  client carrying the grant, and every other source's client is unchanged;
+- resolves a granted name through the system resolver, so LAN names and `/etc/hosts` work, and
+  pins the connection to the addresses it checked;
+- never opens loopback (Kani itself), link-local (including `169.254.169.254`), unspecified or
+  multicast addresses, whether named directly or reached through DNS;
+- is still subject to the host policy: a restricted source reaches a granted host only if it is
+  the source's `base_url` host.
+
+Changing a grant reloads the source.
+
+| Path | Host policy | Forbidden addresses |
+|------|-------------|---------------------|
+| Endpoint routes and pagination chunks | Yes | Yes |
+| Sub-fetches (`then:` / `for_each:`, `Expr::Fetch`) | Yes | Yes |
+| Hook-driven retries and rewritten `req.url` | Yes (checked after the hook) | Yes |
+| WASM guest HTTP imports | Yes | Yes |
+| Fetched option sets (§3.4) | Yes (`base_url` host) | Yes |
+| Browser `page_url` (endpoint, WASM guest, hook `ctx.capture_page_payload`) | Yes | Yes |
+| Page scripts and subresources inside the solver browser | No: pages load CDNs and challenge scripts | Yes, by the solver (below); captures are refused without it |
+| Image proxy (covers, pages) | No: images may come from any CDN | Yes; the owning source's grant applies |
+| Repository index and artifacts | Artifact must share the repo's host | Yes |
+
+**Redirects** are held to both checks on every hop: a restricted source's request may not be
+redirected off its host. A site that redirects to another host (commonly `example.com` →
+`www.example.com`) must use the final host as its `base_url`, or declare `unrestricted_http`.
+
+**The solver browser** is a separate process with its own network. Kani checks the page it asks
+the solver to load; the solver (`flaresolverr-kani`) enforces the forbidden-address rule on
+everything that page then fetches, by routing the browser through an egress-guard proxy that
+dials only the address it checked. It advertises this as `kani.egress-guard/1` on `GET /`.
+
+**Browser captures require the guard.** A capture runs extension-supplied JavaScript in the
+solver's browser, so Kani refuses it (`solver_egress_guard_missing`) unless the solver
+advertises `kani.egress-guard/1`; browser endpoints and hook `ctx.capture_page_payload` fail
+rather than run under a weaker policy. Ordinary challenge solving, which loads the source's own
+page and returns cookies, still works with a stock FlareSolverr, but its browser then operates
+under the **weaker policy**: nothing stops that page's scripts reaching private addresses on the
+solver's network. Kani raises a `solver_egress_guard` warning in Diagnostics while the configured
+solver lacks the capability, reading its index at startup and whenever the solver setting
+changes. A solver request that supplies its own upstream `proxy` is not covered by the guard. The host policy cannot apply inside the browser: real pages load CDNs, fonts and
+challenge scripts from other hosts.
+
+**Secret preferences** are readable by the extension that declares them and may be sent to any
+host the table above allows (§3.5).

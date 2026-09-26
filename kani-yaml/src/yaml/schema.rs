@@ -652,28 +652,17 @@ impl YamlIdEncoding {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-/// Host-managed named cache declaration.
+#[serde(deny_unknown_fields)]
+/// A cache namespace hook scripts may use.
 pub struct CacheEntry {
-    #[serde(default)]
-    pub scope: YamlCacheScope,
-    /// Entry lifetime in seconds.
+    /// Default and maximum entry lifetime in seconds.
     #[serde(default = "default_cache_block_ttl")]
     pub ttl: u32,
     pub max_entries: Option<u32>,
-    pub key_template: Option<String>,
 }
 
 fn default_cache_block_ttl() -> u32 {
     3600
-}
-
-#[derive(Debug, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum YamlCacheScope {
-    #[default]
-    Extension,
-    Installation,
-    User,
 }
 
 #[cfg(test)]

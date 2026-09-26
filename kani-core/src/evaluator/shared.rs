@@ -524,9 +524,7 @@ where
 
         Expr::ParseFloat { target } => Some(recurse(target, env).await.and_then(|v| {
             v.map_str("parse_float", |s| {
-                s.parse::<f64>()
-                    .map(Value::Num)
-                    .map_err(|e| format!("Invalid float '{}': {}", s, e))
+                Ok(s.parse::<f64>().map(Value::Num).unwrap_or(Value::Null))
             })
         })),
 
@@ -563,18 +561,15 @@ where
             .await,
         ),
 
-        Expr::Lookup { target, table } => Some(
-            recurse(target, env)
-                .await
-                .and_then(|v| v.into_str("lookup"))
-                .map(|s| {
-                    table
-                        .iter()
-                        .find(|(k, _)| s == *k)
-                        .map(|(_, v)| Value::Str(v.clone()))
-                        .unwrap_or(Value::Null)
-                }),
-        ),
+        Expr::Lookup { target, table } => Some(recurse(target, env).await.and_then(|v| {
+            v.map_str("lookup", |s| {
+                Ok(table
+                    .iter()
+                    .find(|(k, _)| s == *k)
+                    .map(|(_, v)| Value::Str(v.clone()))
+                    .unwrap_or(Value::Null))
+            })
+        })),
 
         Expr::StartsWith { target, prefix } => Some(recurse(target, env).await.and_then(|v| {
             v.map_str("starts_with", |s| {
@@ -1000,9 +995,9 @@ where
                     parts.push(s);
                 }
                 let part_refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-                Ok(Value::Str(crate::evaluator::id_encoding::encode_composite(
-                    &part_refs, delimiter, encoding,
-                )))
+                crate::evaluator::id_encoding::encode_composite(&part_refs, delimiter, encoding)
+                    .map(Value::Str)
+                    .map_err(|e| format!("encoded_field: {e}"))
             })
             .await,
         ),
@@ -1081,6 +1076,8 @@ pub async fn fetch_body(
                 http: Some(state.http_client.clone()),
                 browser_scripts: state.browser_scripts.clone(),
                 browser_profile_key: Some(state.browser_profile_key.clone()),
+                allowed_host: state.allowed_host.clone(),
+                cache_namespaces: std::sync::Arc::default(),
             };
             let action = registry
                 .run_pre_request(&mut working, ctx)
@@ -1106,7 +1103,15 @@ pub async fn fetch_body(
             m => return Err(format!("Unsupported HTTP method: {}", m)),
         };
 
-        let mut builder = state.http_client.inner().request(method, url.to_string());
+        let mut builder = state
+            .http_client
+            .inner()
+            .request(method, url.to_string())
+            .redirect(
+                state
+                    .http_client
+                    .source_redirect_policy(state.allowed_host.clone()),
+            );
         for (k, v) in &working.headers {
             builder = builder.header(k, v);
         }
@@ -1176,6 +1181,8 @@ pub async fn fetch_body(
                 http: Some(state.http_client.clone()),
                 browser_scripts: state.browser_scripts.clone(),
                 browser_profile_key: Some(state.browser_profile_key.clone()),
+                allowed_host: state.allowed_host.clone(),
+                cache_namespaces: std::sync::Arc::default(),
             };
             let action = registry
                 .run_on_status(&working, &mut scriptable_resp, ctx)
@@ -1321,6 +1328,7 @@ pub(super) fn charge_fetch_request(
 /// applies. Mirrors `fetch_body`'s no-hooks path exactly.
 pub(super) async fn send_prepared_request(
     client: crate::http::SmartClient,
+    allowed_host: crate::wasm::AllowedHost,
     req: kani_shared::ast::RequestDef,
 ) -> Result<String, String> {
     let method = match req.method.to_uppercase().as_str() {
@@ -1335,7 +1343,10 @@ pub(super) async fn send_prepared_request(
     if !req.queries.is_empty() {
         url.query_pairs_mut().extend_pairs(req.queries.iter());
     }
-    let mut builder = client.inner().request(method, url.to_string());
+    let mut builder = client
+        .inner()
+        .request(method, url.to_string())
+        .redirect(client.source_redirect_policy(allowed_host));
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
@@ -1573,6 +1584,9 @@ mod tests {
         let mut state = HostState {
             allowed_host: AllowedHost::Unrestricted,
             max_hook_requests: 2,
+            http_client: crate::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             ..Default::default()
         };
 

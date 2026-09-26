@@ -79,7 +79,9 @@ async fn wire_pages_source(svc: &AppService, origin: &TestOrigin) -> i64 {
         source_id,
         SourceBackend::Yaml(Box::new(YamlSource::new(
             Arc::new(ext),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "test:".into(),
             HashMap::new(),

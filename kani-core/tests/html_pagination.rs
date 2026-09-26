@@ -16,7 +16,9 @@ use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn make_state(allowed: AllowedHost) -> HostState {
-    let client = kani_core::http::SmartClient::new(None).unwrap();
+    let client = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     HostState::new(
         client,
         allowed,

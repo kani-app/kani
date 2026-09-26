@@ -71,7 +71,12 @@ fn fixture_wasm_path() -> std::path::PathBuf {
 /// the `base_url` preference the guest reads to construct its requests. Returns
 /// `None` (with a skip note) if the fixture has not been built.
 fn wasm_backend(origin_base: &str) -> Option<SourceBackend> {
-    wasm_backend_with_client(origin_base, SmartClient::new(None).unwrap())
+    wasm_backend_with_client(
+        origin_base,
+        SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
+    )
 }
 
 /// Same, but with a caller-supplied client — lets a test register the rate limit
@@ -208,7 +213,9 @@ fn yaml_backend(origin_base: &str) -> SourceBackend {
 
     loader::build_yaml_source(
         Arc::new(config),
-        SmartClient::new(None).unwrap(),
+        SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(InMemoryCache::new()),
         "fixture:".into(),
         HashMap::new(),
@@ -473,7 +480,9 @@ async fn a_wasm_source_honours_its_declared_rate_limit() {
         .ok()
         .and_then(|u| u.host_str().map(str::to_owned))
         .expect("origin has a host");
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     client.register_rate_limit(&host, &declared);
 
     let wasm = match wasm_backend_with_client(&origin.base(), client) {

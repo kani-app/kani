@@ -223,6 +223,7 @@ fn build_factory_yaml(
             ))
         })?;
 
+        super::generate::reject_interpreted_only(&validated)?;
         let generated = crate::codegen::generate(&validated, false);
 
         let crate_dir = ext_root.join(format!("kani-{}", generated.id));

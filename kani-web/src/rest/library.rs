@@ -113,7 +113,7 @@ pub(super) async fn get_library_filtered(
                 Some(local_cover_url(r.id, "sm", r.cover_hash.as_deref()))
             } else {
                 r.cover_url
-                    .map(|url| sign_image_url(&url, &r.base_url, &state, None))
+                    .map(|url| sign_image_url(&url, &r.base_url, r.source_id, &state, None))
             };
             let resume =
                 r.resume_chapter_id
@@ -220,7 +220,7 @@ pub(super) async fn get_continue_reading_shelf(
                 ))
             } else {
                 item.cover_url
-                    .map(|url| sign_image_url(&url, &item.base_url, &state, None))
+                    .map(|url| sign_image_url(&url, &item.base_url, item.source_id, &state, None))
             };
             json!({
                 "manga_id": item.manga_id,
@@ -732,7 +732,7 @@ pub(super) async fn get_recent_updates(
         u.cover_url = if u.local_cover_path.is_some() {
             Some(local_cover_url(u.manga_id, "sm", u.cover_hash.as_deref()))
         } else if let Some(ref url) = u.cover_url.clone() {
-            Some(sign_image_url(url, &u.base_url, &state, None))
+            Some(sign_image_url(url, &u.base_url, u.source_id, &state, None))
         } else {
             None
         };
@@ -792,7 +792,7 @@ pub(super) async fn global_search_handler(
             .unwrap_or("");
         for item in &mut result.manga {
             if let Some(ref url) = item.cover_url.clone() {
-                item.cover_url = Some(sign_image_url(url, referer, &state, None));
+                item.cover_url = Some(sign_image_url(url, referer, result.source_id, &state, None));
             }
         }
     }

@@ -17,6 +17,8 @@ pub struct HookScripts {
     pub endpoint_pre_request: std::collections::BTreeMap<String, String>,
     pub endpoint_on_status:
         std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    /// Cache namespaces the hooks may use; any other namespace is refused.
+    pub cache: std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits>,
 }
 
 impl HookScripts {
@@ -35,6 +37,8 @@ pub struct HookRegistry {
     global_on_status: HashMap<String, AST>,
     endpoint_pre_request: HashMap<String, AST>,
     endpoint_on_status: HashMap<String, HashMap<String, AST>>,
+    cache_namespaces:
+        std::sync::Arc<std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits>>,
 }
 
 impl HookRegistry {
@@ -105,6 +109,7 @@ impl HookRegistry {
 
         Ok(Self {
             engine,
+            cache_namespaces: std::sync::Arc::new(scripts.cache.clone()),
             global_pre_request,
             global_on_status,
             endpoint_pre_request,
@@ -117,10 +122,15 @@ impl HookRegistry {
         req: &mut ScriptableRequest,
         ctx: ScriptableCtx,
     ) -> Result<HookAction, String> {
+        let ctx = ScriptableCtx {
+            cache_namespaces: std::sync::Arc::clone(&self.cache_namespaces),
+            ..ctx
+        };
         let endpoint_id = req.endpoint_id.as_deref().unwrap_or("");
         let ast = self
             .endpoint_pre_request
             .get(endpoint_id)
+            .or_else(|| parent_endpoint(endpoint_id).and_then(|p| self.endpoint_pre_request.get(p)))
             .or(self.global_pre_request.as_ref());
 
         let Some(ast) = ast else {
@@ -153,11 +163,18 @@ impl HookRegistry {
         resp: &mut ScriptableResponse,
         ctx: ScriptableCtx,
     ) -> Result<HookAction, String> {
+        let ctx = ScriptableCtx {
+            cache_namespaces: std::sync::Arc::clone(&self.cache_namespaces),
+            ..ctx
+        };
         let endpoint_id = req.endpoint_id.as_deref().unwrap_or("");
         let status = resp.status as u16;
 
         let ast = self
             .find_on_status_ast(endpoint_id, status)
+            .or_else(|| {
+                parent_endpoint(endpoint_id).and_then(|p| self.find_on_status_ast(p, status))
+            })
             .or_else(|| self.find_on_status_ast("", status));
 
         let Some(ast) = ast else {
@@ -199,6 +216,13 @@ impl HookRegistry {
     }
 }
 
+fn parent_endpoint(endpoint_id: &str) -> Option<&str> {
+    endpoint_id
+        .split_once('/')
+        .map(|(parent, _)| parent)
+        .filter(|parent| !parent.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -214,6 +238,8 @@ mod tests {
             http: None,
             browser_scripts: None,
             browser_profile_key: None,
+            allowed_host: crate::wasm::AllowedHost::MetadataOnly,
+            cache_namespaces: std::sync::Arc::default(),
         }
     }
 
@@ -542,5 +568,94 @@ mod tests {
             "endpoint hook must win: {:?}",
             req.headers
         );
+    }
+
+    fn inheriting_registry() -> HookRegistry {
+        let mut ep_pre = std::collections::BTreeMap::new();
+        ep_pre.insert(
+            "manga_details".to_string(),
+            r#"req.set_header("X-Hook", "parent"); proceed()"#.to_string(),
+        );
+        let mut ep_status = std::collections::BTreeMap::new();
+        ep_status.insert(
+            "manga_details".to_string(),
+            std::collections::BTreeMap::from([(
+                "401".to_string(),
+                r#"resp.body = "parent"; proceed()"#.to_string(),
+            )]),
+        );
+        let scripts = HookScripts {
+            pre_request: Some(r#"req.set_header("X-Hook", "global"); proceed()"#.to_string()),
+            on_status: std::collections::BTreeMap::from([(
+                "default".to_string(),
+                r#"resp.body = "global"; proceed()"#.to_string(),
+            )]),
+            endpoint_pre_request: ep_pre,
+            endpoint_on_status: ep_status,
+            ..Default::default()
+        };
+        HookRegistry::compile(&scripts).unwrap()
+    }
+
+    #[test]
+    fn sub_fetch_pre_request_inherits_its_parent_endpoint_hook() {
+        let registry = inheriting_registry();
+        for (endpoint_id, expected) in [
+            (Some("manga_details/chapters"), "parent"),
+            (Some("manga_details"), "parent"),
+            (Some("search/details"), "global"),
+            (Some("/orphan"), "global"),
+            (None, "global"),
+        ] {
+            let mut req = dummy_req(endpoint_id);
+            tokio::task::block_in_place(|| registry.run_pre_request(&mut req, dummy_ctx()))
+                .unwrap();
+            let header = req
+                .headers
+                .iter()
+                .find(|(k, _)| k == "X-Hook")
+                .map(|(_, v)| v.as_str());
+            assert_eq!(header, Some(expected), "endpoint_id {endpoint_id:?}");
+        }
+    }
+
+    #[test]
+    fn sub_fetch_on_status_inherits_its_parent_endpoint_hook() {
+        let registry = inheriting_registry();
+        for (endpoint_id, status, expected) in [
+            ("manga_details/chapters", 401, "parent"),
+            ("manga_details/chapters", 500, "global"),
+            ("search/details", 401, "global"),
+        ] {
+            let req = dummy_req(Some(endpoint_id));
+            let mut resp = dummy_resp(status);
+            tokio::task::block_in_place(|| registry.run_on_status(&req, &mut resp, dummy_ctx()))
+                .unwrap();
+            assert_eq!(resp.body, expected, "{endpoint_id} {status}");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn hooks_may_use_only_declared_cache_namespaces() {
+        let hook = |ns: &str| HookScripts {
+            pre_request: Some(format!(r#"ctx.cache_put("{ns}", "k", "v", 60); proceed()"#)),
+            cache: std::collections::BTreeMap::from([(
+                "auth".to_string(),
+                kani_shared::CacheNamespaceLimits {
+                    ttl_seconds: 3600,
+                    max_entries: None,
+                },
+            )]),
+            ..Default::default()
+        };
+        let declared = HookRegistry::compile(&hook("auth")).unwrap();
+        let mut req = dummy_req(None);
+        assert!(declared.run_pre_request(&mut req, dummy_ctx()).is_ok());
+
+        let undeclared = HookRegistry::compile(&hook("other")).unwrap();
+        let err = undeclared
+            .run_pre_request(&mut req, dummy_ctx())
+            .unwrap_err();
+        assert!(err.contains("not declared"), "got: {err}");
     }
 }

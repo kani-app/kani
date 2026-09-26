@@ -122,35 +122,40 @@ pub fn to_shared_filters(filters: Vec<wit_types::ActiveFilter>) -> Vec<ActiveFil
         .collect()
 }
 
-/// Visibility scope for a declared cache namespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "host", serde(rename_all = "snake_case"))]
-pub enum CacheScope {
-    /// Shared across every installation of this extension.
-    Extension,
-    /// Scoped to a single installed instance of this extension.
-    Installation,
-    /// Scoped to the requesting user.
-    User,
+pub const DEFAULT_BROWSER_AUTO_SCROLL: bool = false;
+
+/// Whether `id` has the `[a-z][a-z0-9-]*` form every extension id must take. Ids name
+/// artifact files, source rows and cache namespaces, so they may not contain separators.
+pub fn is_valid_extension_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-/// A cache namespace declared by an extension via the YAML `cache:` block.
-/// Emitted by codegen as a `static` registry; the runtime call-sites that
-/// read/write entries under this namespace are owned by the Rhai scripting
-/// cluster (`pre_request:` hooks).
-///
-/// Holds `&'static str` rather than `String` so codegen can emit it as a
-/// `const`-evaluable literal inside a `static` array; this means it cannot
-/// derive `Deserialize` (no borrowed-from-input lifetime is `'static`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "host", derive(Serialize))]
-pub struct CacheNamespace {
-    pub name: &'static str,
-    pub scope: CacheScope,
-    pub ttl_seconds: u32,
-    pub max_entries: Option<u32>,
-    pub key_template: Option<&'static str>,
+const AUTO_SCROLL_ON: &str = "/*kani:auto-scroll=true*/\n";
+const AUTO_SCROLL_OFF: &str = "/*kani:auto-scroll=false*/\n";
+
+/// Prefixes a capture script with its auto-scroll choice, which is how the setting
+/// crosses the WIT `capture-page-payload` call.
+pub fn mark_auto_scroll(init_script: &str, auto_scroll: bool) -> String {
+    let marker = if auto_scroll {
+        AUTO_SCROLL_ON
+    } else {
+        AUTO_SCROLL_OFF
+    };
+    format!("{marker}{init_script}")
+}
+
+/// Splits a capture script into its auto-scroll choice and the script itself; an
+/// unmarked script takes [`DEFAULT_BROWSER_AUTO_SCROLL`].
+pub fn take_auto_scroll(init_script: &str) -> (bool, &str) {
+    if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_ON) {
+        (true, script)
+    } else if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_OFF) {
+        (false, script)
+    } else {
+        (DEFAULT_BROWSER_AUTO_SCROLL, init_script)
+    }
 }
 
 /// Builds a [`FilterList`](crate::wit_types::FilterList) from semicolon-separated
@@ -1157,6 +1162,7 @@ pub struct RecentUpdate {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecentUpdateItem {
     pub manga_id: i64,
+    pub source_id: i64,
     pub manga_name: String,
     pub cover_url: Option<String>,
     #[serde(skip)]
@@ -1435,6 +1441,28 @@ pub struct ContinueReadingChapter {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn extension_id_form() {
+        for valid in ["a", "comix", "mangapill-gen", "x9"] {
+            assert!(is_valid_extension_id(valid), "{valid} should be valid");
+        }
+        for invalid in ["", "A", "1a", "-a", "a_b", "a:b", "a b", "é"] {
+            assert!(
+                !is_valid_extension_id(invalid),
+                "{invalid} should be invalid"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_scroll_marker_round_trips_and_defaults_off() {
+        for auto_scroll in [true, false] {
+            let marked = mark_auto_scroll("run()", auto_scroll);
+            assert_eq!(take_auto_scroll(&marked), (auto_scroll, "run()"));
+        }
+        assert_eq!(take_auto_scroll("run()"), (false, "run()"));
+    }
 
     #[test]
     fn download_status_serialises_as_integer() {
@@ -1865,40 +1893,6 @@ mod tests {
             languages: Some(r#"["en","ja"]"#.into()),
             schema_version: 1,
         });
-    }
-
-    #[test]
-    fn cache_scope_json_round_trip_all_variants() {
-        json_rt(&CacheScope::Extension);
-        json_rt(&CacheScope::Installation);
-        json_rt(&CacheScope::User);
-    }
-
-    #[test]
-    fn cache_namespace_serializes_declared_fields() {
-        let ns = CacheNamespace {
-            name: "search_results",
-            scope: CacheScope::Extension,
-            ttl_seconds: 1800,
-            max_entries: Some(200),
-            key_template: Some("search:{query}:{page}"),
-        };
-        let s = serde_json::to_string(&ns).unwrap();
-        assert!(s.contains("search_results"));
-        assert!(s.contains("1800"));
-    }
-
-    #[test]
-    fn cache_namespace_equality() {
-        let a = CacheNamespace {
-            name: "ns",
-            scope: CacheScope::User,
-            ttl_seconds: 60,
-            max_entries: None,
-            key_template: None,
-        };
-        let b = a;
-        assert_eq!(a, b);
     }
 
     #[test]

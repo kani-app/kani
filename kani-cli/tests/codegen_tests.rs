@@ -86,43 +86,32 @@ fn codegen_id_encoding_emits_decode_prologue_in_chapter_list() {
 }
 
 #[test]
-fn codegen_cache_emits_registry_entries() {
+fn codegen_cache_declares_namespaces_in_metadata() {
     let validated = load_and_validate("cache.yaml");
     let generated = codegen::generate(&validated, false);
+    let compact: String = generated.lib_rs.split_whitespace().collect();
     assert!(
-        generated.lib_rs.contains("pub static CACHE_REGISTRY"),
-        "cache fixture must emit a CACHE_REGISTRY static: {}",
+        compact.contains(
+            "(\"search_results\".to_string(),kani_shared::CacheNamespaceLimits{ttl_seconds:1800_u32,max_entries:Some(200_u32),"
+        ),
+        "declared namespaces must reach ExtensionMetadata.cache: {}",
         generated.lib_rs
     );
     assert!(
-        generated.lib_rs.contains("kani_shared::CacheNamespace"),
-        "registry entries must reference kani_shared::CacheNamespace: {}",
-        generated.lib_rs
-    );
-    assert!(
-        generated
-            .lib_rs
-            .contains("kani_shared::CacheScope::Extension")
-            && generated.lib_rs.contains("kani_shared::CacheScope::User"),
-        "registry entries must reference the declared scopes: {}",
-        generated.lib_rs
-    );
-    assert!(
-        generated.lib_rs.contains("\"search_results\""),
-        "registry must include the declared namespace name: {}",
+        compact.contains("dsl_schema_version:Some(kani_shared::ast::DSL_SCHEMA_VERSION)"),
+        "the blueprint version must be recorded in metadata: {}",
         generated.lib_rs
     );
 }
 
 #[test]
-fn codegen_cache_empty_block_emits_empty_registry() {
+fn codegen_without_a_cache_block_declares_no_namespaces() {
     let validated = load_and_validate("popular.yaml");
     let generated = codegen::generate(&validated, false);
+    let compact: String = generated.lib_rs.split_whitespace().collect();
     assert!(
-        generated
-            .lib_rs
-            .contains("pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace] = &[];"),
-        "extensions with no cache block must still emit an empty registry: {}",
+        compact.contains("cache:std::collections::BTreeMap::new(),"),
+        "no cache block means no hook namespaces: {}",
         generated.lib_rs
     );
 }

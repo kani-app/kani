@@ -6,12 +6,9 @@ language: en
 
 cache:
   search_results:
-    scope: extension
     ttl: 1800
     max_entries: 200
-    key_template: "search:{query}:{page}"
-  user_prefs:
-    scope: user
+  auth: {}
 
 endpoints:
   manga_details:

@@ -1,7 +1,6 @@
 //! Emit Cargo.toml and the lib.rs header / footer for a generated extension crate.
 
 use crate::yaml::model::{ValidatedChapterSort, ValidatedExtension};
-use crate::yaml::schema::YamlCacheScope;
 
 pub(crate) fn emit_cargo_toml(ext: &ValidatedExtension, embedded_bytes: bool) -> String {
     let id = &ext.id;
@@ -140,6 +139,28 @@ pub(crate) fn emit_lib_header(ext: &ValidatedExtension, embedded_bytes: bool) ->
         format!("std::collections::BTreeMap::from([{entries}])")
     };
 
+    let cache = if ext.cache.is_empty() {
+        "std::collections::BTreeMap::new()".to_string()
+    } else {
+        let entries = ext
+            .cache
+            .iter()
+            .map(|c| {
+                let max_entries = match c.max_entries {
+                    Some(n) => format!("Some({n}_u32)"),
+                    None => "None".to_string(),
+                };
+                format!(
+                    "(\"{}\".to_string(), kani_shared::CacheNamespaceLimits {{ ttl_seconds: {}_u32, max_entries: {max_entries} }})",
+                    escape_str(&c.name),
+                    c.ttl
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("std::collections::BTreeMap::from([{entries}])")
+    };
+
     let pref_import = if ext.preferences.is_empty() {
         ""
     } else {
@@ -208,6 +229,8 @@ impl {struct_name} {{
             on_status:        {on_status},
             endpoint_pre_request: {endpoint_pre_request},
             endpoint_on_status: {endpoint_on_status},
+            cache:            {cache},
+            dsl_schema_version: Some(kani_shared::ast::DSL_SCHEMA_VERSION),
         }}
     }}
 }}
@@ -297,38 +320,6 @@ bindings::export!({struct_name});
     )
 }
 
-/// Emits a `pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace]` declaring
-/// every namespace from the YAML `cache:` block. Empty when no `cache` block
-/// was declared, in which case the registry is still emitted (as `&[]`) so
-/// generated crates always expose a stable symbol.
-pub(crate) fn emit_cache_registry(ext: &ValidatedExtension) -> String {
-    let entries: Vec<String> = ext
-        .cache
-        .iter()
-        .map(|c| {
-            let name = escape_str(&c.name);
-            let scope = scope_token(c.scope);
-            let max_entries = match c.max_entries {
-                Some(n) => format!("Some({n}_u32)"),
-                None => "None".to_string(),
-            };
-            let key_template = match &c.key_template {
-                Some(t) => format!("Some(\"{}\")", escape_str(t)),
-                None => "None".to_string(),
-            };
-            format!(
-                "kani_shared::CacheNamespace {{ name: \"{name}\", scope: {scope}, ttl_seconds: {ttl}_u32, max_entries: {max_entries}, key_template: {key_template} }}",
-                ttl = c.ttl
-            )
-        })
-        .collect();
-
-    format!(
-        "pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace] = &[{}];",
-        entries.join(", ")
-    )
-}
-
 /// Emits the `get_chapter_sort_list` (and optionally `default_chapter_sort`)
 /// `MangaExtension` impl methods from a validated `chapter_sort` block.
 pub(crate) fn emit_chapter_sort(cs: &ValidatedChapterSort) -> String {
@@ -355,14 +346,6 @@ pub(crate) fn emit_chapter_sort(cs: &ValidatedChapterSort) -> String {
             d = escape_str(d)
         ),
         None => sort_list,
-    }
-}
-
-fn scope_token(scope: YamlCacheScope) -> &'static str {
-    match scope {
-        YamlCacheScope::Extension => "kani_shared::CacheScope::Extension",
-        YamlCacheScope::Installation => "kani_shared::CacheScope::Installation",
-        YamlCacheScope::User => "kani_shared::CacheScope::User",
     }
 }
 

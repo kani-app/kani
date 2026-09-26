@@ -160,3 +160,65 @@ fn factory_yaml_validates_cleanly() {
         );
     }
 }
+
+#[test]
+fn factory_build_rejects_interpreted_only_features() {
+    let dir = tempfile::tempdir().unwrap();
+    let factory = dir.path().join("dedup-factory.yaml");
+    std::fs::write(
+        &factory,
+        r#"id: dedup-template
+name: DedupTemplate
+version: "0.1.0"
+base_url: "https://example.com"
+endpoints:
+  search:
+    route: "/search"
+    container: ".item"
+    fields:
+      id: 'self.first(".id").text()'
+      title: 'self.first(".title").text()'
+    for_each:
+      - endpoint: manga_details
+        url_expr: 'self.first(".link").attr("href")'
+        merge_as: details
+        deduplicate_by: 'self.ptr("/details/id").str()'
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id: '"$manga_id$"'
+      title: 'dom(".title").text()'
+      status: '"unknown"'
+factory:
+  sources:
+    - id: dedup-alpha
+      name: Alpha
+      base_url: "https://alpha.example.com"
+"#,
+    )
+    .unwrap();
+    let ext_root = dir.path().join("extensions");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir_all(&ext_root).unwrap();
+
+    let err = kani_cli::commands::build::run(
+        Some(factory.to_str().unwrap()),
+        false,
+        false,
+        None,
+        Some(ext_root.to_str().unwrap()),
+        Some(out_dir.to_str().unwrap()),
+        false,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("deduplicate_by"),
+        "refused for the interpreted-only key, got: {err}"
+    );
+    assert!(
+        !ext_root.join("kani-dedup-alpha").exists(),
+        "no crate may be generated for a refused source"
+    );
+}

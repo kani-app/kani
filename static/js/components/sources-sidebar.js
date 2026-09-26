@@ -22,21 +22,6 @@ function _isYamlName(name) {
 }
 
 
-/** @type {number|null} */
-let _pendingSourceId = null;
-
-/**
- * Returns and clears the pending source ID (created but not yet fully installed).
- * Call this in your page's destroy() to clean up orphaned records.
- * @returns {number|null}
- */
-export function consumePendingSourceId() {
-  const id = _pendingSourceId;
-  _pendingSourceId = null;
-  return id;
-}
-
-
 /**
  * Modal for adding a new source from a WASM URL or file upload.
  * @param {{
@@ -61,7 +46,6 @@ export function AddSourceModal({ open, onClose, onCreated }) {
       setYamlText('');
       setLoading(false);
       setError(null);
-      _pendingSourceId = null;
     }
   }, [open]);
 
@@ -101,18 +85,8 @@ export function AddSourceModal({ open, onClose, onCreated }) {
           await api.installYaml(text);
         }
       } else {
-        const placeholder = 'pending-' + Date.now().toString(36);
-        const { id: sourceId } = await api.createSource(placeholder);
-        _pendingSourceId = sourceId;
-        try {
-          if (mode === 'url') await api.fetchWasm(sourceId, url);
-          else await api.uploadWasm(sourceId, /** @type {File} */ (wasmFile));
-        } catch (e) {
-          api.deleteSource(sourceId).catch(() => {});
-          _pendingSourceId = null;
-          throw e;
-        }
-        _pendingSourceId = null;
+        if (mode === 'url') await api.fetchWasm(url);
+        else await api.uploadWasm(/** @type {File} */ (wasmFile));
       }
     } catch (e) {
       setError(/** @type {any} */ (e)?.message ?? t('source.add.error.install_failed'));

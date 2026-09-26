@@ -27,7 +27,6 @@ use kani_shared::types::{
 pub trait SourceDomain: Send + Sync {
     async fn list_sources(&self) -> Result<Vec<Source>>;
     async fn get_source(&self, id: i64) -> Result<Source>;
-    async fn add_source(&self, name: &str, user_id: UserId) -> Result<i64>;
     async fn update_source(
         &self,
         id: i64,
@@ -82,10 +81,6 @@ impl SourceDomain for AppService {
 
     async fn get_source(&self, id: i64) -> Result<Source> {
         self.get_source(id).await
-    }
-
-    async fn add_source(&self, name: &str, user_id: UserId) -> Result<i64> {
-        self.add_source(name, user_id).await
     }
 
     async fn update_source(
@@ -1302,9 +1297,6 @@ mod tests {
             Ok(self.list.clone())
         }
         async fn get_source(&self, _id: i64) -> Result<Source> {
-            unimplemented!()
-        }
-        async fn add_source(&self, _name: &str, _user_id: UserId) -> Result<i64> {
             unimplemented!()
         }
         async fn update_source(

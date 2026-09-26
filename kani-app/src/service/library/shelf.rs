@@ -14,7 +14,7 @@ impl AppService {
         // the unread check below is then evaluated once per read chapter.
         let mangas = sqlx::query!(
             r#"
-            SELECT m.id, COALESCE(m.local_name, m.name) as "name!: String", m.cover_url, m.local_cover_path, m.cover_hash, s.base_url
+            SELECT m.id, m.source_id, COALESCE(m.local_name, m.name) as "name!: String", m.cover_url, m.local_cover_path, m.cover_hash, s.base_url
             FROM manga m
             JOIN sources s ON s.id = m.source_id
             WHERE m.deleted_at IS NULL
@@ -58,6 +58,7 @@ impl AppService {
             };
             items.push(crate::models::ContinueReadingItem {
                 manga_id: MangaId(row.id),
+                source_id: row.source_id,
                 manga_name: row.name,
                 cover_url: row.cover_url,
                 local_cover_path: row.local_cover_path,

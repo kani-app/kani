@@ -88,7 +88,9 @@ fn source(origin: &TestOrigin, key: Option<Expr>) -> SourceBackend {
     };
     SourceBackend::Yaml(Box::new(YamlSource::new(
         Arc::new(config),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "test:".into(),
         HashMap::new(),

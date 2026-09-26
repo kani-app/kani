@@ -219,6 +219,7 @@ pub(crate) fn host_state_for(
         on_status: ext.on_status.clone(),
         endpoint_pre_request: ext.endpoint_pre_request.clone(),
         endpoint_on_status: ext.endpoint_on_status.clone(),
+        cache: ext.cache_limits(),
     };
     if !hooks.is_empty() {
         state.hook_registry = Some(std::sync::Arc::new(

@@ -40,6 +40,14 @@ pub fn validate(
     let mut errors: Vec<YamlError> = Vec::new();
     let filename = path.to_string_lossy().into_owned();
 
+    if !kani_shared::types::is_valid_extension_id(&ext.id) {
+        errors.push(YamlError::Validation(format!(
+            "id: '{}' must match [a-z][a-z0-9-]* (lowercase letter first, then lowercase \
+             letters, digits and hyphens)",
+            ext.id
+        )));
+    }
+
     let id_encoding = ext.id_encoding.as_ref();
     if let Some(block) = id_encoding {
         errors.append(&mut validate_id_encoding(block));
@@ -382,6 +390,14 @@ fn validate_cache(
     let mut errors = Vec::new();
     let mut entries = Vec::new();
 
+    if cache.len() > kani_shared::MAX_CACHE_NAMESPACES {
+        errors.push(YamlError::Validation(format!(
+            "cache: at most {} namespaces may be declared, found {}",
+            kani_shared::MAX_CACHE_NAMESPACES,
+            cache.len()
+        )));
+    }
+
     for (name, entry) in cache {
         if name.is_empty() {
             errors.push(YamlError::Validation(
@@ -399,20 +415,19 @@ fn validate_cache(
             )));
         }
 
-        if let Some(key_template) = &entry.key_template
-            && key_template.is_empty()
+        if let Some(max) = entry.max_entries
+            && !(1..=kani_shared::MAX_CACHE_NAMESPACE_ENTRIES).contains(&max)
         {
             errors.push(YamlError::Validation(format!(
-                "cache.{name}: 'key_template' must not be empty when present"
+                "cache.{name}: max_entries must be between 1 and {}",
+                kani_shared::MAX_CACHE_NAMESPACE_ENTRIES
             )));
         }
 
         entries.push(ValidatedCacheEntry {
             name: name.clone(),
-            scope: entry.scope,
             ttl: entry.ttl,
             max_entries: entry.max_entries,
-            key_template: entry.key_template.clone(),
         });
     }
 
@@ -1127,7 +1142,9 @@ fn validate_endpoint(
             page_url,
             script_name,
             timeout_ms: body.timeout_ms,
-            auto_scroll: body.auto_scroll.unwrap_or(true),
+            auto_scroll: body
+                .auto_scroll
+                .unwrap_or(kani_shared::types::DEFAULT_BROWSER_AUTO_SCROLL),
         })
     } else {
         Err(errors)

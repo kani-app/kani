@@ -55,11 +55,11 @@ impl FixtureGen {
             on_status: std::collections::BTreeMap::new(),
             endpoint_pre_request: std::collections::BTreeMap::new(),
             endpoint_on_status: std::collections::BTreeMap::new(),
+            cache: std::collections::BTreeMap::new(),
+            dsl_schema_version: Some(kani_shared::ast::DSL_SCHEMA_VERSION),
         }
     }
 }
-
-pub static CACHE_REGISTRY: &[kani_shared::CacheNamespace] = &[];
 
 impl MangaExtension for FixtureGen {
     fn name(&self) -> &str {

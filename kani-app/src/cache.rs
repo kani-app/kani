@@ -327,6 +327,21 @@ impl Default for RequestCache {
 const NS_MAX_BYTES: i64 = 4 * 1024 * 1024;
 const NS_MAX_ROWS: i64 = 4096;
 
+/// Drops what an extension cached under an earlier version: its own namespace, its hooks'
+/// namespaces (all prefixed `"<id>:"`), and its fetched option sets.
+pub(crate) async fn invalidate_extension_cache(
+    cache: &dyn CacheBackend,
+    extension_id: &str,
+    source_id: i64,
+) {
+    cache
+        .clear_namespaces_with_prefix(&format!("{extension_id}:"))
+        .await;
+    cache
+        .clear_namespace(&format!("fetched_opts:{source_id}"))
+        .await;
+}
+
 pub(crate) struct SqliteCache {
     pool: SqlitePool,
 }
@@ -354,8 +369,16 @@ impl CacheBackend for SqliteCache {
         .map(|(v,)| v)
     }
 
-    async fn put(&self, namespace: &str, key: &str, value: Vec<u8>, ttl: Duration) {
-        let expires_at = now_secs() + ttl.as_secs() as i64;
+    async fn put_limited(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Duration,
+        max_entries: usize,
+    ) {
+        let max_rows = (max_entries as i64).clamp(1, NS_MAX_ROWS);
+        let expires_at = now_secs() + kani_core::cache::effective_ttl(ttl).as_secs() as i64;
 
         let _ = sqlx::query(
             "INSERT OR REPLACE INTO extension_cache (namespace, key, value, expires_at)
@@ -378,7 +401,7 @@ impl CacheBackend for SqliteCache {
         .bind(namespace)
         .bind(namespace)
         .bind(namespace)
-        .bind(NS_MAX_ROWS)
+        .bind(max_rows)
         .execute(&self.pool)
         .await;
 
@@ -415,6 +438,14 @@ impl CacheBackend for SqliteCache {
             .await;
     }
 
+    async fn clear_namespaces_with_prefix(&self, prefix: &str) {
+        let _ =
+            sqlx::query("DELETE FROM extension_cache WHERE substr(namespace, 1, length(?1)) = ?1")
+                .bind(prefix)
+                .execute(&self.pool)
+                .await;
+    }
+
     async fn prune_expired(&self) {
         let now = now_secs();
         let _ = sqlx::query("DELETE FROM extension_cache WHERE expires_at <= ?")
@@ -441,6 +472,67 @@ mod tests {
     fn default_is_equivalent_to_new() {
         let _a = RequestCache::new();
         let _b = RequestCache::default();
+    }
+
+    async fn sqlite_cache() -> SqliteCache {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE extension_cache (namespace TEXT NOT NULL, key TEXT NOT NULL, \
+             value BLOB NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (namespace, key))",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        SqliteCache::new(pool)
+    }
+
+    #[tokio::test]
+    async fn sqlite_put_limited_evicts_down_to_max_entries() {
+        let cache = sqlite_cache().await;
+        for (key, ttl) in [("a", 100), ("b", 200), ("c", 300)] {
+            cache
+                .put_limited("ns", key, b"v".to_vec(), Duration::from_secs(ttl), 2)
+                .await;
+        }
+        assert_eq!(
+            cache.get("ns", "a").await,
+            None,
+            "the soonest to expire is evicted"
+        );
+        assert!(cache.get("ns", "b").await.is_some());
+        assert!(cache.get("ns", "c").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn sqlite_prefix_clear_spares_other_extensions() {
+        let cache = sqlite_cache().await;
+        let ttl = Duration::from_secs(60);
+        for ns in ["a:", "a:auth", "ab:", "b:a:", "a%:"] {
+            cache.put(ns, "k", b"v".to_vec(), ttl).await;
+        }
+        cache.clear_namespaces_with_prefix("a:").await;
+        assert_eq!(cache.get("a:", "k").await, None);
+        assert_eq!(cache.get("a:auth", "k").await, None);
+        for spared in ["ab:", "b:a:", "a%:"] {
+            assert!(
+                cache.get(spared, "k").await.is_some(),
+                "{spared} was cleared"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn sqlite_cache_zero_ttl_never_expires() {
+        let cache = sqlite_cache().await;
+
+        cache.put("ns", "key", b"v".to_vec(), Duration::ZERO).await;
+        cache.prune_expired().await;
+
+        assert_eq!(cache.get("ns", "key").await, Some(b"v".to_vec()));
     }
 
     #[tokio::test]

@@ -651,3 +651,158 @@ async fn refresh_with_rotated_maintainer_key_does_not_poison_the_cache() {
         "cached entry must still point at the original author key — the cache was poisoned otherwise"
     );
 }
+
+#[tokio::test]
+async fn an_artifact_declaring_another_sources_id_is_refused() {
+    let svc = test_service().await;
+    let victim_id = unique_ext_id();
+    let victim_yaml = format!(
+        "id: {victim_id}\nname: Victim\nversion: \"1.0.0\"\nbase_url: \"https://victim.example\"\n"
+    );
+    let victim_source = svc
+        .install_yaml_source(victim_yaml.as_bytes())
+        .await
+        .unwrap();
+
+    let entry_id = unique_ext_id();
+    let mut repo = TestRepo::new(&entry_id);
+    repo.artifact_yaml = format!(
+        "id: {victim_id}\nname: Impostor\nversion: \"9.9.9\"\nbase_url: \"https://evil.example\"\n"
+    );
+    let port = start_mock_server(repo.build_routes("Impostor Repo")).await;
+    let url = format!("http://127.0.0.1:{port}");
+    let RepoAddResult::Added { id: repo_id, .. } = svc
+        .add_repo(&url, Some(&fingerprint(&repo.maintainer_key)), None)
+        .await
+        .unwrap()
+    else {
+        panic!("expected Added");
+    };
+
+    let err = svc
+        .install_source_from_repo(repo_id, &entry_id, None)
+        .await
+        .expect_err("an artifact must not install under another source's id");
+
+    assert!(
+        err.to_string().contains("declares id"),
+        "refused for the id mismatch, got: {err}"
+    );
+    let victim = svc.get_source(victim_source).await.unwrap();
+    assert_eq!(victim.version, "1.0.0", "the victim's row was rewritten");
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    assert_eq!(
+        std::fs::read_to_string(storage.join(format!("{victim_id}.yaml"))).unwrap(),
+        victim_yaml,
+        "the victim's artifact was overwritten"
+    );
+}
+
+fn fixture_wasm() -> Vec<u8> {
+    std::fs::read(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("wasm_sources")
+            .join("fixture.wasm"),
+    )
+    .expect("wasm_sources/fixture.wasm: cargo run -p kani-cli -- build kani-fixture-source")
+}
+
+#[tokio::test]
+async fn a_manual_wasm_install_finds_or_creates_by_its_own_id() {
+    let svc = test_service().await;
+    let bytes = fixture_wasm();
+
+    let first = svc.install_wasm_source(&bytes).await.unwrap();
+    let again = svc.install_wasm_source(&bytes).await.unwrap();
+
+    assert_eq!(first, again, "a reinstall must reuse the source row");
+    let source = svc.get_source(first).await.unwrap();
+    assert!(
+        kani_shared::types::is_valid_extension_id(&source.name),
+        "the row is named by the artifact's id, got {}",
+        source.name
+    );
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    assert!(storage.join(format!("{}.wasm", source.name)).exists());
+}
+
+#[tokio::test]
+async fn a_manual_wasm_update_must_keep_the_sources_id() {
+    let svc = test_service().await;
+    let other = svc
+        .install_yaml_source(
+            b"id: some-other-source\nname: Other\nversion: \"1.0.0\"\nbase_url: \"https://other.example\"\n",
+        )
+        .await
+        .unwrap();
+
+    let err = svc
+        .update_wasm_source(other, &fixture_wasm())
+        .await
+        .expect_err("an artifact for another id must not replace this source");
+
+    assert!(
+        err.to_string().contains("declares id"),
+        "refused for the id mismatch, got: {err}"
+    );
+    assert_eq!(
+        svc.get_source(other).await.unwrap().name,
+        "some-other-source"
+    );
+}
+
+#[tokio::test]
+async fn a_reserved_id_is_refused_on_every_install_path() {
+    let svc = test_service().await;
+    let err = svc
+        .install_yaml_source(
+            b"id: example\nname: Example\nversion: \"1.0.0\"\nbase_url: \"https://example.com\"\n",
+        )
+        .await
+        .expect_err("a reserved id must be refused for YAML as well as WASM");
+    assert!(
+        err.to_string().contains("reserved"),
+        "refused as reserved, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn a_local_grant_opens_its_host_to_its_own_source_only() {
+    use std::time::Duration;
+    let svc = test_service().await;
+    let granted = kani_shared_test::insert_source(&svc.db, "granted-src").await;
+    let other = kani_shared_test::insert_source(&svc.db, "other-src").await;
+    svc.set_source_local_hosts(
+        granted,
+        vec!["192.0.2.10:8080".into()],
+        kani_app::ids::UserId(1),
+    )
+    .await
+    .unwrap();
+
+    let refused = |client: kani_core::http::SmartClient| async move {
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            client.safe_get("http://192.0.2.10:8080/cover.jpg", None),
+        )
+        .await
+        {
+            Ok(Err(e)) => e.to_string().contains("forbidden host"),
+            _ => false,
+        }
+    };
+    assert!(
+        !refused(svc.proxy_client_for_source(granted).await).await,
+        "the granted source's client must be allowed to try the host"
+    );
+    assert!(
+        refused(svc.proxy_client_for_source(other).await).await,
+        "another source must still be refused"
+    );
+    assert!(
+        refused(svc.proxy_client.clone()).await,
+        "the shared client is unchanged"
+    );
+}

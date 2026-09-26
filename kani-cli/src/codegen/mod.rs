@@ -10,9 +10,7 @@ pub mod request;
 pub mod templates;
 
 use crate::yaml::model::ValidatedExtension;
-use crate_layout::{
-    emit_cache_registry, emit_cargo_toml, emit_chapter_sort, emit_guest_impl, emit_lib_header,
-};
+use crate_layout::{emit_cargo_toml, emit_chapter_sort, emit_guest_impl, emit_lib_header};
 use endpoints::{
     emit_browser_script_statics, emit_chapter_list, emit_manga_details, emit_pages, emit_popular,
     emit_search,
@@ -48,7 +46,6 @@ fn emit_lib_rs(ext: &ValidatedExtension, embedded_bytes: bool) -> String {
     let mut parts: Vec<String> = Vec::new();
 
     parts.push(emit_lib_header(ext, embedded_bytes));
-    parts.push(emit_cache_registry(ext));
 
     let browser_statics = emit_browser_script_statics(&ext.browser_scripts);
     if !browser_statics.is_empty() {

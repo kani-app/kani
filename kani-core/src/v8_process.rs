@@ -596,6 +596,13 @@ pub async fn capture_page_payload_resilient(
                 message: error.to_string(),
             })
         }
+        Err(error @ crate::http::SolverCaptureError::MissingEgressGuard) => {
+            record_browser_solver_result(false);
+            Err(CapturePagePayloadError::Action {
+                code: "solver_egress_guard_missing".to_string(),
+                message: error.to_string(),
+            })
+        }
         Err(error @ crate::http::SolverCaptureError::Unreachable) => {
             record_browser_solver_result(false);
             Err(CapturePagePayloadError::Action {
@@ -686,7 +693,11 @@ mod tests {
 
     #[tokio::test]
     async fn capture_through_a_capable_solver_returns_the_payload() {
-        let server = solver_stub(Some(serde_json::json!(["kani.capture/2"]))).await;
+        let server = solver_stub(Some(serde_json::json!([
+            "kani.capture/2",
+            "kani.egress-guard/1"
+        ])))
+        .await;
         let handle = null_handle();
         let http = crate::http::SmartClient::new(Some(server.uri() + "/v1")).unwrap();
 

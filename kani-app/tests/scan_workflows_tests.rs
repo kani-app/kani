@@ -99,7 +99,9 @@ async fn wire_source_always_paginated(svc: &AppService, origin: &TestOrigin) -> 
         source_id,
         SourceBackend::Yaml(Box::new(YamlSource::new(
             Arc::new(ext),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "test:".into(),
             HashMap::new(),
@@ -127,7 +129,9 @@ async fn wire_source(svc: &AppService, origin: &TestOrigin) -> MangaId {
         source_id,
         SourceBackend::Yaml(Box::new(YamlSource::new(
             Arc::new(ext),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "test:".into(),
             HashMap::new(),
@@ -767,7 +771,9 @@ async fn wire_source_with_details(svc: &AppService, origin: &TestOrigin) -> Mang
         source_id,
         SourceBackend::Yaml(Box::new(YamlSource::new(
             Arc::new(ext),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "test:".into(),
             HashMap::new(),

@@ -24,6 +24,39 @@ pub(super) fn compile_pure_registry(
     }
 }
 
+pub(super) async fn reconcile_wasm_row(
+    db: &sqlx::SqlitePool,
+    ext_cache: &dyn kani_core::cache::CacheBackend,
+    source: &Source,
+    metadata: &kani_shared::ExtensionMetadata,
+) -> Result<()> {
+    if metadata.id != source.name {
+        return Err(ServiceError::Validation(format!(
+            "the artifact declares id '{}' but is stored as source '{}'",
+            metadata.id, source.name
+        )));
+    }
+    if source.version == metadata.version
+        && source.base_url == metadata.base_url
+        && source.unrestricted_http == metadata.unrestricted_http
+    {
+        return Ok(());
+    }
+    sqlx::query!(
+        "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ? WHERE id = ?",
+        metadata.version,
+        metadata.base_url,
+        metadata.unrestricted_http,
+        source.id
+    )
+    .execute(db)
+    .await?;
+    if source.version != metadata.version {
+        crate::cache::invalidate_extension_cache(ext_cache, &source.name, source.id).await;
+    }
+    Ok(())
+}
+
 pub(super) fn compile_hook_registry(
     metadata: &kani_shared::ExtensionMetadata,
 ) -> Option<std::sync::Arc<kani_core::scripting::HookRegistry>> {
@@ -33,6 +66,7 @@ pub(super) fn compile_hook_registry(
         on_status: metadata.on_status.clone(),
         endpoint_pre_request: metadata.endpoint_pre_request.clone(),
         endpoint_on_status: metadata.endpoint_on_status.clone(),
+        cache: metadata.cache.clone(),
     };
     if scripts.is_empty() {
         return None;
@@ -115,20 +149,6 @@ impl AppService {
         .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
-    }
-
-    /// Inserts a new source row with a default version and returns its id.
-    pub async fn add_source(&self, name: &str, user_id: UserId) -> Result<i64> {
-        let id = sqlx::query_scalar!(
-            "INSERT INTO sources (name, version) VALUES (?, '0.1') RETURNING id",
-            name
-        )
-        .fetch_one(&self.db)
-        .await?;
-
-        self.audit(Some(user_id), "source.install", Some(name), None)
-            .await;
-        Ok(id)
     }
 
     /// Updates the name and/or version of an existing source.
@@ -289,7 +309,8 @@ impl AppService {
                 let browser_enabled = self.browser_enabled_flag(id).await;
                 let backend = loader::build_yaml_source(
                     std::sync::Arc::new(ext),
-                    self.smart_client.clone(),
+                    crate::service::local_network::client_for(&self.db, id, &self.smart_client)
+                        .await,
                     std::sync::Arc::clone(&self.ext_cache),
                     format!("{}:", source.name),
                     prefs,
@@ -332,6 +353,10 @@ impl AppService {
                     let meta = inst.get_metadata().await.ok().and_then(|raw| {
                         serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                     });
+                    if let Some(m) = &meta {
+                        crate::install_gating::check_dsl_schema_version(m.dsl_schema_version)
+                            .map_err(ServiceError::Validation)?;
+                    }
                     let max_hk = meta
                         .as_ref()
                         .and_then(|m| m.rate_limit.as_ref())
@@ -350,7 +375,7 @@ impl AppService {
             let backend = loader::build_wasm_source(
                 self.wasm_runtime.engine().clone(),
                 instance_pre,
-                self.smart_client.clone(),
+                crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
                 Some(source.base_url),
                 source.unrestricted_http,
                 browser_enabled,
@@ -946,6 +971,7 @@ impl AppService {
         smart_client: kani_core::http::SmartClient,
         wasm_runtime: &WasmRuntime,
         preference_schemas: &DashMap<i64, Vec<kani_core::PreferenceSpec>>,
+        ext_cache: &dyn kani_core::cache::CacheBackend,
     ) -> Result<()> {
         tracing::info!(
             "Scanning and registering sources in {:?}",
@@ -1033,13 +1059,18 @@ impl AppService {
                 let mihon_id: Option<i64> = ext.as_ref().and_then(|e| e.mihon_source_id);
                 let enabled_i = enabled as i64;
 
-                let existing = sqlx::query("SELECT id FROM sources WHERE name = ?")
+                let existing = sqlx::query("SELECT id, version FROM sources WHERE name = ?")
                     .bind(&canonical_id)
                     .fetch_optional(db)
                     .await?;
 
                 if let Some(row) = existing {
                     let id: i64 = row.try_get("id")?;
+                    let stored_version: String = row.try_get("version")?;
+                    if ext.is_some() && stored_version != version {
+                        crate::cache::invalidate_extension_cache(ext_cache, &canonical_id, id)
+                            .await;
+                    }
                     sqlx::query(
                         "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ?, \
                          mihon_source_id = ?, load_error = ?, \
@@ -1174,6 +1205,14 @@ impl AppService {
                         )
                         .execute(db)
                         .await?;
+                        if version_changed {
+                            crate::cache::invalidate_extension_cache(
+                                ext_cache,
+                                &canonical_id,
+                                existing.id,
+                            )
+                            .await;
+                        }
                         if was_deleted {
                             sqlx::query!(
                                 "UPDATE manga SET is_orphaned = FALSE WHERE source_id = ?",
@@ -1280,150 +1319,13 @@ impl AppService {
         Ok(())
     }
 
-    pub async fn install_source(
-        &self,
-        id: i64,
-        current_source_name: &str,
-        bytes: &[u8],
-        host_version: &str,
-    ) -> Result<std::path::PathBuf> {
-        let bytes_owned = bytes.to_vec();
-        let runtime_clone = self.wasm_runtime.clone();
-
-        let component =
-            tokio::task::spawn_blocking(move || runtime_clone.compile_component(&bytes_owned))
-                .await
-                .map_err(|e| {
-                    ServiceError::Internal(format!("WASM compilation task panicked: {}", e))
-                })??;
-
-        let (metadata, raw_schema) = {
-            let mut inst =
-                kani_core::sources::SourceInstance::new(self.smart_client.clone(), None, false);
-            inst.load(
-                self.wasm_runtime.engine(),
-                &component,
-                self.wasm_runtime.linker(),
-            )
-            .await
-            .map_err(ServiceError::Core)?;
-            let raw_meta = inst.get_metadata().await.map_err(ServiceError::Core)?;
-            let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw_meta)
-                .map_err(|e| ServiceError::Internal(format!("Invalid extension metadata: {e}")))?;
-            let schema = inst.get_preferences().await.ok();
-            (meta, schema)
-        };
-
-        const RESERVED_IDS: &[&str] = &["example", "test-abi"];
-        if RESERVED_IDS.contains(&metadata.id.as_str()) {
-            return Err(ServiceError::Validation(format!(
-                "Extension ID '{}' is reserved for development use and cannot be installed",
-                metadata.id
-            )));
-        }
-
-        crate::install_gating::check_min_kani_version(
-            metadata.min_kani_version.as_deref(),
-            host_version,
-        )
-        .map_err(ServiceError::Validation)?;
-        crate::install_gating::check_required_capabilities_live(
-            &metadata.requires_capabilities,
-            &self.smart_client,
-        )
-        .await
-        .map_err(ServiceError::Validation)?;
-
-        let languages_json = serde_json::to_string(&metadata.languages)
-            .map_err(|e| ServiceError::Internal(format!("Failed to encode languages: {e}")))?;
-        let schema_version = metadata.schema_version as i64;
-
-        sqlx::query!(
-            "UPDATE sources SET name = ?, version = ?, base_url = ?, unrestricted_http = ?, \
-             icon = ?, description = ?, languages = ?, schema_version = ? WHERE id = ?",
-            metadata.id,
-            metadata.version,
-            metadata.base_url,
-            metadata.unrestricted_http,
-            metadata.icon,
-            metadata.description,
-            languages_json,
-            schema_version,
-            id
-        )
-        .execute(&self.db)
-        .await?;
-
-        let settings = self.settings.read().await;
-        let storage_path = settings
-            .wasm_storage_path
-            .to_str()
-            .ok_or_else(|| ServiceError::Internal("Failed to convert path".to_string()))?;
-
-        if current_source_name != metadata.id {
-            tracing::info!(
-                "Source name changed from {} to {}. Deleting old file.",
-                current_source_name,
-                metadata.id
-            );
-            let _ =
-                kani_core::file_storage::delete_wasm_file(storage_path, current_source_name).await;
-        }
-
-        let path = kani_core::file_storage::save_wasm(storage_path, &metadata.id, bytes)
-            .await
-            .map_err(ServiceError::Core)?;
-        drop(settings);
-
-        let pure_registry = compile_pure_registry(&metadata);
-        let hook_registry = compile_hook_registry(&metadata);
-        let max_hook_requests = metadata
-            .rate_limit
-            .as_ref()
-            .map(|rl| rl.max_hook_requests)
-            .unwrap_or(3);
-        let backend = loader::build_wasm_source(
-            self.wasm_runtime.engine().clone(),
-            self.wasm_runtime
-                .instantiate_pre(&component)
-                .map_err(ServiceError::Core)?,
-            self.smart_client.clone(),
-            Some(metadata.base_url.clone()),
-            metadata.unrestricted_http,
-            self.browser_enabled_flag(id).await,
-            self.load_pref_map(id).await.unwrap_or_default(),
-            std::sync::Arc::clone(&self.ext_cache),
-            format!("{}:", metadata.id),
-            pure_registry,
-            hook_registry,
-            max_hook_requests,
-        );
-
-        self.sources.insert(id, backend);
-
-        if let Some(schema) = raw_schema {
-            self.cache.insert_preference_schema(id, schema);
-        }
-
-        self.cache.invalidate_source(id);
-
-        tracing::info!(
-            "Successfully installed source {}: {} v{}",
-            id,
-            metadata.name,
-            metadata.version
-        );
-
-        Ok(path)
-    }
-
     pub async fn reload_source(&self, id: i64) -> Result<()> {
         let source = self.get_source(id).await?;
         let storage_path = self.settings.read().await.wasm_storage_path.clone();
 
         let yaml_path = storage_path.join(format!("{}.yaml", source.name));
         if yaml_path.exists() {
-            return self.reload_yaml_source(id, &source.name, &yaml_path).await;
+            return self.reload_yaml_source(&source, &yaml_path).await;
         }
 
         let wasm_path = storage_path.join(format!("{}.wasm", source.name));
@@ -1453,19 +1355,13 @@ impl AppService {
             let raw_meta = inst.get_metadata().await.map_err(ServiceError::Core)?;
             let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw_meta)
                 .map_err(|e| ServiceError::Internal(format!("Invalid extension metadata: {e}")))?;
+            crate::install_gating::check_dsl_schema_version(meta.dsl_schema_version)
+                .map_err(ServiceError::Validation)?;
             let schema = inst.get_preferences().await.ok();
             (meta, schema)
         };
 
-        sqlx::query!(
-            "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ? WHERE id = ?",
-            metadata.version,
-            metadata.base_url,
-            metadata.unrestricted_http,
-            id
-        )
-        .execute(&self.db)
-        .await?;
+        reconcile_wasm_row(&self.db, self.ext_cache.as_ref(), &source, &metadata).await?;
 
         let pure_registry = compile_pure_registry(&metadata);
         let hook_registry = compile_hook_registry(&metadata);
@@ -1479,7 +1375,7 @@ impl AppService {
             self.wasm_runtime
                 .instantiate_pre(&component)
                 .map_err(ServiceError::Core)?,
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
             Some(metadata.base_url.clone()),
             metadata.unrestricted_http,
             self.browser_enabled_flag(id).await,
@@ -1503,12 +1399,8 @@ impl AppService {
         Ok(())
     }
 
-    async fn reload_yaml_source(
-        &self,
-        id: i64,
-        source_name: &str,
-        yaml_path: &std::path::Path,
-    ) -> Result<()> {
+    async fn reload_yaml_source(&self, source: &Source, yaml_path: &std::path::Path) -> Result<()> {
+        let (id, source_name) = (source.id, source.name.as_str());
         let text = tokio::fs::read_to_string(yaml_path)
             .await
             .map_err(|e| ServiceError::Internal(format!("Failed to read YAML: {e}")))?;
@@ -1538,13 +1430,17 @@ impl AppService {
         )
         .execute(&self.db)
         .await?;
+        if source.version != validated.version {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), source_name, id)
+                .await;
+        }
 
         let prefs = self.load_pref_map(id).await.unwrap_or_default();
         let browser_enabled = self.browser_enabled_flag(id).await;
         let ns = format!("{}:", validated.id);
         let backend = loader::build_yaml_source(
             std::sync::Arc::new(validated),
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, id, &self.smart_client).await,
             std::sync::Arc::clone(&self.ext_cache),
             ns,
             prefs,
@@ -1584,7 +1480,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_option_set_returns_cached_values_without_network_call() {
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
 
         let options: Vec<(String, String)> = vec![
             ("Action".to_string(), "action".to_string()),
@@ -1613,7 +1511,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_option_set_returns_none_on_network_failure() {
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let def = make_def(None);
         let result =
             resolve_option_set(&*cache, &client, 1, "https://example.invalid", false, &def).await;
@@ -1630,7 +1530,9 @@ mod tests {
         origin.set("/genres", Response::status(500));
 
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let mut def = make_def(Some("genres-v1"));
         def.route = origin.url("/genres");
 
@@ -1652,7 +1554,9 @@ mod tests {
         );
 
         let cache = Arc::new(InMemoryCache::new());
-        let client = kani_core::http::SmartClient::new(None).unwrap();
+        let client = kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
         let mut def = make_def(Some("genres-v1"));
         def.route = origin.url("/genres");
         def.cache_ttl = 1;

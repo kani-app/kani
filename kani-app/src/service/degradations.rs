@@ -33,6 +33,7 @@ pub mod ids {
     pub(crate) const STORAGE_DIRECTORY: &str = "storage_directory";
     pub const LIBRARY_PATH: &str = "library_path";
     pub(crate) const SOURCE_REGISTRY: &str = "source_registry";
+    pub const SOLVER_EGRESS_GUARD: &str = "solver_egress_guard";
 
     /// One id per source, so several broken extensions each report themselves
     /// instead of overwriting one shared entry.

@@ -988,6 +988,14 @@ impl ExprNode {
 /// Current serialized blueprint schema understood by codegen and the host evaluator.
 pub const DSL_SCHEMA_VERSION: u32 = 6;
 
+/// Oldest blueprint schema the host still reads. Within 1.x a version bump only appends enum
+/// variants, so every version from this one up to [`DSL_SCHEMA_VERSION`] stays readable.
+pub const MIN_READABLE_DSL_SCHEMA_VERSION: u32 = 5;
+
+pub fn is_readable_dsl_schema_version(version: u32) -> bool {
+    (MIN_READABLE_DSL_SCHEMA_VERSION..=DSL_SCHEMA_VERSION).contains(&version)
+}
+
 /// Declares that a source paginates in fixed-size chunks, so the framework can
 /// handle the offset algebra instead of each extension doing it manually.
 #[derive(Debug, Clone, PartialEq)]

@@ -481,6 +481,36 @@ pub struct ExtensionMetadata {
     )]
     pub endpoint_on_status:
         std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    /// Cache namespaces hook scripts may use, from the YAML `cache:` block.
+    #[cfg_attr(
+        any(feature = "host", feature = "builder", feature = "meta"),
+        serde(default)
+    )]
+    pub cache: std::collections::BTreeMap<String, CacheNamespaceLimits>,
+    /// Blueprint schema version the extension was built with. `None` for extensions built
+    /// before it was recorded, which the host cannot check until their first extraction.
+    #[cfg_attr(
+        any(feature = "host", feature = "builder", feature = "meta"),
+        serde(default)
+    )]
+    pub dsl_schema_version: Option<u32>,
+}
+
+/// Most cache namespaces one extension may declare, so its total cache storage is bounded.
+pub const MAX_CACHE_NAMESPACES: usize = 16;
+/// Host limit on entries in any one cache namespace; `max_entries` may only lower it.
+pub const MAX_CACHE_NAMESPACE_ENTRIES: u32 = 4096;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    any(feature = "host", feature = "builder", feature = "meta"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+/// Limits for one declared cache namespace: `ttl_seconds` is both the default and the maximum
+/// entry lifetime, and `max_entries` caps the namespace below the host's own limit.
+pub struct CacheNamespaceLimits {
+    pub ttl_seconds: u32,
+    pub max_entries: Option<u32>,
 }
 
 #[cfg(any(feature = "host", feature = "builder", feature = "meta"))]
@@ -512,6 +542,8 @@ impl Default for ExtensionMetadata {
             on_status: std::collections::BTreeMap::new(),
             endpoint_pre_request: std::collections::BTreeMap::new(),
             endpoint_on_status: std::collections::BTreeMap::new(),
+            cache: std::collections::BTreeMap::new(),
+            dsl_schema_version: Some(crate::ast::DSL_SCHEMA_VERSION),
         }
     }
 }
@@ -684,6 +716,8 @@ mod tests {
             on_status: std::collections::BTreeMap::new(),
             endpoint_pre_request: std::collections::BTreeMap::new(),
             endpoint_on_status: std::collections::BTreeMap::new(),
+            cache: std::collections::BTreeMap::new(),
+            dsl_schema_version: Some(crate::ast::DSL_SCHEMA_VERSION),
         };
 
         let json = crate::serde_json::to_string(&meta).expect("serializes");

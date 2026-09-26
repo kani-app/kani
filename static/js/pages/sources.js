@@ -10,7 +10,7 @@ import { iconCube } from '../icons.js';
 import { h, render } from 'preact';
 import htm from 'htm';
 import { mountIntoModalRoot } from '../components/modal.js';
-import { SourcesSidebar, AddSourceModal, consumePendingSourceId } from '../components/sources-sidebar.js';
+import { SourcesSidebar, AddSourceModal } from '../components/sources-sidebar.js';
 import { setPageHeader, clearPageHeader } from '../components/app-header.js';
 import { mountRepoManager } from '../components/repo-manager.js';
 import { createSourcesHeaderActions, mountSourcesViewTabs } from '../components/sources-header.js';
@@ -188,8 +188,6 @@ export function destroy(container) {
   clearPageHeader();
   _unsubSourcesInvalidation?.();
   _unsubSourcesInvalidation = null;
-  const pendingId = consumePendingSourceId();
-  if (pendingId !== null) api.deleteSource(pendingId).catch(() => {});
   if (_asideEl)  render(null, _asideEl);
   if (_mobileEl) render(null, _mobileEl);
   _asideEl = null;

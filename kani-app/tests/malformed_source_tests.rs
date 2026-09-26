@@ -84,7 +84,9 @@ fn source(origin: &TestOrigin, limits: EvalLimits) -> SourceBackend {
     SourceBackend::Yaml(Box::new(
         YamlSource::new(
             Arc::new(config),
-            kani_core::http::SmartClient::new(None).unwrap(),
+            kani_core::http::SmartClient::new(None)
+                .unwrap()
+                .with_allow_loopback_egress(true),
             Arc::new(kani_core::cache::InMemoryCache::new()),
             "test:".into(),
             HashMap::new(),
@@ -274,7 +276,9 @@ fn json_source(origin: &TestOrigin) -> SourceBackend {
     };
     SourceBackend::Yaml(Box::new(YamlSource::new(
         Arc::new(config),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "test:".into(),
         HashMap::new(),
@@ -300,7 +304,9 @@ fn chapter_source(origin: &TestOrigin) -> SourceBackend {
     };
     SourceBackend::Yaml(Box::new(YamlSource::new(
         Arc::new(config),
-        kani_core::http::SmartClient::new(None).unwrap(),
+        kani_core::http::SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true),
         Arc::new(kani_core::cache::InMemoryCache::new()),
         "test:".into(),
         HashMap::new(),

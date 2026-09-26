@@ -22,6 +22,7 @@ fn fast_timings(cooldown: Duration) -> Timings {
 fn fast_client() -> SmartClient {
     SmartClient::new(None)
         .unwrap()
+        .with_allow_loopback_egress(true)
         .with_timings(fast_timings(Duration::from_secs(30)))
 }
 
@@ -52,6 +53,7 @@ async fn the_circuit_recovers_after_the_cooldown() {
     site.set("/x", Response::status(502));
     let client = SmartClient::new(None)
         .unwrap()
+        .with_allow_loopback_egress(true)
         .with_timings(fast_timings(Duration::from_millis(50)));
 
     for _ in 0..5 {
@@ -77,12 +79,15 @@ async fn the_circuit_recovers_after_the_cooldown() {
 async fn a_slow_body_hits_the_request_timeout_not_a_hang() {
     let site = TestOrigin::start().await;
     site.set("/x", Response::status(200).body(Body::Stall));
-    let client = SmartClient::new(None).unwrap().with_timings(Timings {
-        retry_base_delay: Duration::from_millis(1),
-        retry_jitter: Duration::ZERO,
-        request_timeout: Duration::from_millis(80),
-        ..Timings::default()
-    });
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true)
+        .with_timings(Timings {
+            retry_base_delay: Duration::from_millis(1),
+            retry_jitter: Duration::ZERO,
+            request_timeout: Duration::from_millis(80),
+            ..Timings::default()
+        });
 
     let start = std::time::Instant::now();
     let res = client.get(&site.url("/x")).await;

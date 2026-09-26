@@ -8,7 +8,7 @@ mod tests {
 
     fn round_trip(parts: &[&str], delimiter: &str, encoding: IdEncoding) {
         let field_names: Vec<&str> = (0..parts.len()).map(|i| ["a", "b", "c"][i]).collect();
-        let encoded = encode_composite(parts, delimiter, &encoding);
+        let encoded = encode_composite(parts, delimiter, &encoding).unwrap();
         let decoded = decode_composite(&encoded, delimiter, &encoding, &field_names).unwrap();
         let values: Vec<&str> = decoded.iter().map(|(_, v)| v.as_str()).collect();
         assert_eq!(values, parts);
@@ -36,7 +36,7 @@ mod tests {
 
     #[test]
     fn single_field_no_delimiter() {
-        let enc = encode_composite(&["solo"], "|", &IdEncoding::Base64Url);
+        let enc = encode_composite(&["solo"], "|", &IdEncoding::Base64Url).unwrap();
         let dec = decode_composite(&enc, "|", &IdEncoding::Base64Url, &["id"]).unwrap();
         assert_eq!(dec[0].1, "solo");
     }
@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn mismatched_field_count_errors() {
-        let enc = encode_composite(&["a", "b"], "|", &IdEncoding::Passthrough);
+        let enc = encode_composite(&["a", "b"], "|", &IdEncoding::Passthrough).unwrap();
         let result = decode_composite(&enc, "|", &IdEncoding::Passthrough, &["x", "y", "z"]);
         assert!(result.is_err());
     }

@@ -22,10 +22,11 @@ fn decode_blueprint(bytes: &[u8]) -> Result<kani_shared::ast::Blueprint, String>
     }
     let (version, rest) = postcard::take_from_bytes::<u32>(bytes)
         .map_err(|e| format!("Invalid blueprint header: {}", e))?;
-    if !matches!(version, 5 | kani_shared::ast::DSL_SCHEMA_VERSION) {
+    if !kani_shared::ast::is_readable_dsl_schema_version(version) {
         return Err(format!(
-            "Blueprint DSL schema version {} is not supported (host accepts 5 or {}); recompile the extension",
+            "Blueprint DSL schema version {} is not supported (host accepts {} to {}); recompile the extension",
             version,
+            kani_shared::ast::MIN_READABLE_DSL_SCHEMA_VERSION,
             kani_shared::ast::DSL_SCHEMA_VERSION,
         ));
     }
@@ -218,7 +219,14 @@ impl http::Host for HostState {
 
         self.check_allowed_host(url.host_str().unwrap_or(""))?;
 
-        let mut builder = self.http_client.inner().request(method, url.as_str());
+        let mut builder = self
+            .http_client
+            .inner()
+            .request(method, url.as_str())
+            .redirect(
+                self.http_client
+                    .source_redirect_policy(self.allowed_host.clone()),
+            );
         for (k, v) in req.headers {
             builder = builder.header(k, v);
         }
@@ -767,17 +775,9 @@ impl scripting::Host for HostState {
         if !self.browser_enabled {
             return Err("Browser capability is disabled for this source".to_string());
         }
-        let host = page_url
-            .parse::<url::Url>()
-            .map_err(|error| format!("Invalid browser page URL: {error}"))?
-            .host_str()
-            .unwrap_or_default()
-            .to_string();
-        self.check_allowed_host(&host)?;
+        crate::scripting::bindings::check_capture_target(&self.allowed_host, &page_url)?;
         self.charge_io()?;
-        let (auto_scroll, init_script) = init_script
-            .strip_prefix("/*kani:auto-scroll=false*/\n")
-            .map_or((true, init_script.as_str()), |script| (false, script));
+        let (auto_scroll, init_script) = kani_shared::types::take_auto_scroll(&init_script);
         let result = crate::v8_process::capture_page_payload_resilient(
             &self.v8_process,
             &self.http_client,

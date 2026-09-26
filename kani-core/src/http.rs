@@ -291,6 +291,10 @@ pub enum SolverCaptureError {
     /// from `Failed` because the solver itself is healthy: a caller retrying a
     /// harvest should treat this as "try again", not "the solver is broken".
     ScriptProducedNothing(String),
+    /// The solver can capture but does not advertise `kani.egress-guard/1`, so a page it
+    /// loads could reach private addresses on its network. Captures run extension scripts,
+    /// so they are refused rather than run under that weaker policy.
+    MissingEgressGuard,
     Failed(String),
 }
 
@@ -309,6 +313,12 @@ impl std::fmt::Display for SolverCaptureError {
                  the solver's API_KEY"
             ),
             Self::Unreachable => write!(f, "no solver is reachable at the configured URL"),
+            Self::MissingEgressGuard => write!(
+                f,
+                "the configured solver does not advertise kani.egress-guard/1, so a page it \
+                 loads could reach private addresses on its network; browser sources need the \
+                 ghcr.io/kani-app/flaresolverr image"
+            ),
             Self::ScriptProducedNothing(message) => write!(f, "{message}"),
             Self::Failed(message) => write!(f, "{message}"),
         }
@@ -494,19 +504,28 @@ impl SmartResponse {
 
 const REDIRECT_LIMIT: usize = 10;
 
-/// The one SSRF egress decision, shared by both redirect-following mechanisms
-/// (the auto-follow `Policy::custom` for `send_request`, and `safe_get`'s manual
-/// loop): refuse a hop whose target is a forbidden IP literal — the hole the
-/// DNS-only resolver never sees — unless `allow_private` is set (tests only).
-fn redirect_egress_forbidden(allow_private: &std::sync::atomic::AtomicBool, url: &str) -> bool {
-    !allow_private.load(std::sync::atomic::Ordering::Relaxed)
-        && crate::network::is_forbidden_url_host(url)
+/// The one SSRF egress decision, applied to the first request and to every redirect
+/// hop: refuse a forbidden IP literal, the hole the DNS-only resolver never sees.
+/// A host the source has been granted is exempt; `allow_loopback` (tests only) exempts
+/// loopback literals and nothing else.
+fn egress_forbidden(
+    allow_loopback: &std::sync::atomic::AtomicBool,
+    grants: &crate::network::LocalGrants,
+    url: &str,
+) -> bool {
+    crate::network::is_forbidden_url_host(url)
+        && !grants.permits_url(url)
+        && !(allow_loopback.load(std::sync::atomic::Ordering::Relaxed)
+            && crate::network::is_loopback_url_host(url))
 }
 
-/// Redirect policy for the auto-following client (source extraction): follow up
-/// to `REDIRECT_LIMIT` hops, refusing a forbidden egress target per hop.
+/// Redirect policy for the auto-following client: follow up to `REDIRECT_LIMIT`
+/// hops, refusing a forbidden egress target per hop and, when given, any hop the
+/// source's host policy would not allow as a first request.
 fn ssrf_aware_redirect_policy(
-    allow_private: Arc<std::sync::atomic::AtomicBool>,
+    allow_loopback: Arc<std::sync::atomic::AtomicBool>,
+    grants: Arc<crate::network::LocalGrants>,
+    allowed_host: Option<crate::wasm::AllowedHost>,
 ) -> rquest::redirect::Policy {
     rquest::redirect::Policy::custom(move |attempt| {
         if attempt.previous.len() >= REDIRECT_LIMIT {
@@ -514,10 +533,17 @@ fn ssrf_aware_redirect_policy(
                 "too many redirects",
             ));
         }
-        if redirect_egress_forbidden(&allow_private, &attempt.uri.to_string()) {
+        if egress_forbidden(&allow_loopback, &grants, &attempt.uri.to_string()) {
             return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(
                 "redirect to a forbidden host refused",
             ));
+        }
+        if let Some(policy) = &allowed_host
+            && let Err(reason) = policy.allows_host(attempt.uri.host().unwrap_or_default())
+        {
+            return attempt.error(Box::<dyn std::error::Error + Send + Sync>::from(format!(
+                "redirect refused: {reason}"
+            )));
         }
         attempt.follow()
     })
@@ -536,6 +562,8 @@ pub struct SmartClient {
     solver_url: Arc<ArcSwap<Option<String>>>,
     solver_sessions: Arc<dashmap::DashMap<String, std::time::Instant>>,
     solver_capture_support: Arc<std::sync::atomic::AtomicU8>,
+    /// Whether the last probe found the solver advertising `kani.egress-guard/1`.
+    solver_egress_guard: Arc<std::sync::atomic::AtomicBool>,
     solver_client: Arc<std::sync::OnceLock<rquest::Client>>,
     pub solving: Arc<dashmap::DashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     pub host_circuits: Arc<dashmap::DashMap<String, Arc<HostCircuit>>>,
@@ -544,11 +572,15 @@ pub struct SmartClient {
     pub cond_cache: Arc<ConditionalGetCache>,
     timings: Timings,
     budgets: Budgets,
-    /// When false (production), a redirect to a forbidden IP literal
-    /// (private/loopback/metadata) is refused — closing the SSRF-via-redirect
-    /// hole the DNS-only resolver can't see. Shared with the client's redirect
-    /// policy closure so it is read live. Tests set it true to reach loopback.
-    allow_private_egress: Arc<std::sync::atomic::AtomicBool>,
+    /// When false (production), any request or redirect to a forbidden IP literal
+    /// (private/loopback/metadata) is refused. Tests set it true to reach a local
+    /// server on loopback; other forbidden ranges stay refused. Shared with the
+    /// redirect policy closure so it is read live.
+    allow_loopback_egress: Arc<std::sync::atomic::AtomicBool>,
+    /// Private hosts this client may reach on behalf of one source ([`Self::with_local_grants`]).
+    local_grants: Arc<crate::network::LocalGrants>,
+    /// Whether the inner client follows redirects itself, so a granted copy keeps the same shape.
+    follows_redirects: bool,
 }
 
 impl SmartClient {
@@ -569,35 +601,60 @@ impl SmartClient {
         self.budgets
     }
 
-    /// Allow egress to private/loopback IP literals (test seam so a `TestOrigin`
-    /// on `127.0.0.1` is reachable).
+    /// Allow egress to loopback IP literals (test seam so a `TestOrigin` on
+    /// `127.0.0.1` is reachable). Other forbidden ranges stay refused.
     ///
     /// Gated to test builds: it exists only under `cfg(test)` or the `test-util`
     /// feature, neither of which a release binary compiles (dev-deps are excluded
     /// from a production build). So there is **no way to disable the SSRF guard in
     /// production** — the field is constructed `false` and has no public mutator.
     #[cfg(any(test, feature = "test-util"))]
-    pub fn with_allow_private_egress(self, allow: bool) -> Self {
-        self.allow_private_egress
+    pub fn with_allow_loopback_egress(self, allow: bool) -> Self {
+        self.allow_loopback_egress
             .store(allow, std::sync::atomic::Ordering::Relaxed);
         self
     }
 
-    pub fn new(solver_url: Option<String>) -> Result<Self> {
-        let resolver = ValidatingResolver::new()?;
-        let allow_private_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        // Auto-following client (source extraction). The redirect policy validates
-        // every hop for SSRF; send_request keeps its simple loop.
-        let client = rquest::Client::builder()
+    /// Builds the underlying client. `follows_redirects` selects the auto-following,
+    /// SSRF-checked policy (source extraction) or none (`safe_get` follows by hand).
+    fn build_inner(
+        follows_redirects: bool,
+        allow_loopback: &Arc<std::sync::atomic::AtomicBool>,
+        grants: &Arc<crate::network::LocalGrants>,
+    ) -> Result<rquest::Client> {
+        let resolver = ValidatingResolver::new()?.with_grants(Arc::clone(grants));
+        let redirect = if follows_redirects {
+            ssrf_aware_redirect_policy(Arc::clone(allow_loopback), Arc::clone(grants), None)
+        } else {
+            rquest::redirect::Policy::none()
+        };
+        Ok(rquest::Client::builder()
             .emulation(rquest_util::Emulation::Chrome130)
-            .redirect(ssrf_aware_redirect_policy(Arc::clone(
-                &allow_private_egress,
-            )))
+            .redirect(redirect)
             .dns_resolver(Arc::new(resolver))
             .pool_idle_timeout(std::time::Duration::from_secs(300))
             .pool_max_idle_per_host(100)
             .timeout(std::time::Duration::from_secs(35))
-            .build()?;
+            .build()?)
+    }
+
+    /// A copy of this client that may also reach the private hosts one source has been
+    /// granted. Rate limits, circuits and stored credentials stay shared with the original.
+    pub fn with_local_grants(&self, grants: crate::network::LocalGrants) -> Result<Self> {
+        let grants = Arc::new(grants);
+        let client =
+            Self::build_inner(self.follows_redirects, &self.allow_loopback_egress, &grants)?;
+        Ok(Self {
+            client,
+            local_grants: grants,
+            ..self.clone()
+        })
+    }
+
+    pub fn new(solver_url: Option<String>) -> Result<Self> {
+        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let local_grants = Arc::new(crate::network::LocalGrants::default());
+        let client = Self::build_inner(true, &allow_loopback_egress, &local_grants)?;
 
         let (circuit_event_tx, _) = tokio::sync::broadcast::channel(32);
         Ok(Self {
@@ -606,6 +663,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(solver_url)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving: Arc::new(dashmap::DashMap::new()),
             host_circuits: Arc::new(dashmap::DashMap::new()),
@@ -614,7 +672,9 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress,
+            allow_loopback_egress,
+            local_grants,
+            follows_redirects: true,
         })
     }
 
@@ -625,15 +685,9 @@ impl SmartClient {
         host_circuits: Arc<dashmap::DashMap<String, Arc<HostCircuit>>>,
         circuit_event_tx: tokio::sync::broadcast::Sender<CircuitOpenedEvent>,
     ) -> Result<Self> {
-        let resolver = ValidatingResolver::new()?;
-        let client = rquest::Client::builder()
-            .emulation(rquest_util::Emulation::Chrome130)
-            .redirect(rquest::redirect::Policy::none())
-            .dns_resolver(Arc::new(resolver))
-            .pool_idle_timeout(std::time::Duration::from_secs(300))
-            .pool_max_idle_per_host(100)
-            .timeout(std::time::Duration::from_secs(35))
-            .build()?;
+        let allow_loopback_egress = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let local_grants = Arc::new(crate::network::LocalGrants::default());
+        let client = Self::build_inner(false, &allow_loopback_egress, &local_grants)?;
 
         Ok(Self {
             client,
@@ -641,6 +695,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(solver_url)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving,
             host_circuits,
@@ -649,7 +704,9 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            allow_loopback_egress,
+            local_grants,
+            follows_redirects: false,
         })
     }
 
@@ -731,6 +788,7 @@ impl SmartClient {
 
     pub(crate) async fn send_request(&self, request: rquest::Request) -> Result<SmartResponse> {
         let mut request = request;
+        self.refuse_forbidden_egress(&request.uri().to_string())?;
 
         let domain = request.uri().host().map(base_domain).unwrap_or_default();
         let creds_map = self.credentials.load();
@@ -959,8 +1017,45 @@ impl SmartClient {
         }
     }
 
+    /// The redirect policy for one extension's request: the client's own rules plus that
+    /// source's host policy, applied to every hop.
+    pub fn source_redirect_policy(
+        &self,
+        allowed_host: crate::wasm::AllowedHost,
+    ) -> rquest::redirect::Policy {
+        ssrf_aware_redirect_policy(
+            Arc::clone(&self.allow_loopback_egress),
+            Arc::clone(&self.local_grants),
+            Some(allowed_host),
+        )
+    }
+
+    /// Refuses a first hop to a forbidden IP literal, which the validating resolver never sees.
+    fn refuse_forbidden_egress(&self, url: &str) -> Result<()> {
+        if egress_forbidden(&self.allow_loopback_egress, &self.local_grants, url) {
+            return Err(crate::error::Error::Other(format!(
+                "request to a forbidden host refused: {url}"
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn get(&self, url: &str) -> Result<SmartResponse> {
         let request = self.client.get(url).build()?;
+        self.send_request(request).await
+    }
+
+    /// [`Self::get`] with a source's host policy applied to every redirect hop.
+    pub async fn get_for_source(
+        &self,
+        url: &str,
+        allowed_host: crate::wasm::AllowedHost,
+    ) -> Result<SmartResponse> {
+        let request = self
+            .client
+            .get(url)
+            .redirect(self.source_redirect_policy(allowed_host))
+            .build()?;
         self.send_request(request).await
     }
 
@@ -990,6 +1085,7 @@ impl SmartClient {
         // Unified with the auto-following client's policy limit.
         const MAX_REDIRECTS: usize = REDIRECT_LIMIT;
 
+        self.refuse_forbidden_egress(initial_url)?;
         let mut current_url = initial_url.to_string();
         let mut solver_headers = rquest::header::HeaderMap::new();
         let mut solved = false;
@@ -1171,7 +1267,11 @@ impl SmartClient {
 
                 // Re-validate the redirect TARGET for SSRF (same decision the
                 // auto-follow policy makes — the resolver never sees an IP literal).
-                if redirect_egress_forbidden(&self.allow_private_egress, next.as_str()) {
+                if egress_forbidden(
+                    &self.allow_loopback_egress,
+                    &self.local_grants,
+                    next.as_str(),
+                ) {
                     return Err(crate::error::Error::Other(format!(
                         "redirect to a forbidden host refused: {next}"
                     )));
@@ -1389,6 +1489,10 @@ impl SmartClient {
         Ok((cookies, ua))
     }
 
+    pub fn solver_is_configured(&self) -> bool {
+        self.solver_configured()
+    }
+
     pub(crate) fn solver_configured(&self) -> bool {
         self.solver_url
             .load()
@@ -1440,6 +1544,25 @@ impl SmartClient {
         Some(parsed.to_string())
     }
 
+    /// Whether the configured solver keeps its browser off private addresses, as it
+    /// advertises with `kani.egress-guard/1` on its index. `None` when no solver is
+    /// configured or its index cannot be read, since then nothing is known.
+    pub async fn solver_has_egress_guard(&self) -> Option<bool> {
+        let guard = self.solver_url.load();
+        let url = guard.as_deref().filter(|url| !url.trim().is_empty())?;
+        let index_url = Self::solver_index_url(url)?;
+        let response = self.solver_http().ok()?.get(&index_url).send().await.ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let body = response.json::<serde_json::Value>().await.ok()?;
+        Some(
+            body["capabilities"]
+                .as_array()
+                .is_some_and(|caps| caps.iter().any(|c| c == "kani.egress-guard/1")),
+        )
+    }
+
     /// Establishes what the configured solver can do, and caches it. The index
     /// is unauthenticated while the commands are not, so both are checked.
     pub(crate) async fn probe_solver_capability(&self, url: &str) -> SolverCapability {
@@ -1466,6 +1589,10 @@ impl SmartClient {
             .unwrap_or_default();
         let sessions = capabilities.contains(&"kani.capture/2");
         let capture = sessions || capabilities.contains(&"kani.capture/1");
+        self.solver_egress_guard.store(
+            capabilities.contains(&"kani.egress-guard/1"),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         let probe = Self::solver_request(client, url)
             .body(json!({ "cmd": "sessions.list" }).to_string())
@@ -1629,6 +1756,9 @@ impl SmartClient {
         }
         if self.solver_capture_support.load(Ordering::Relaxed) == 2 {
             return Err(SolverCaptureError::Unsupported);
+        }
+        if !self.solver_egress_guard.load(Ordering::Relaxed) {
+            return Err(SolverCaptureError::MissingEgressGuard);
         }
 
         let use_session =
@@ -2054,6 +2184,7 @@ impl SmartClient {
             solver_url: Arc::new(ArcSwap::from_pointee(None)),
             solver_sessions: Arc::new(dashmap::DashMap::new()),
             solver_capture_support: Arc::new(std::sync::atomic::AtomicU8::new(0)),
+            solver_egress_guard: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             solver_client: Arc::new(std::sync::OnceLock::new()),
             solving: Arc::new(dashmap::DashMap::new()),
             host_circuits: Arc::new(dashmap::DashMap::new()),
@@ -2062,7 +2193,9 @@ impl SmartClient {
             cond_cache: Arc::new(ConditionalGetCache::new()),
             timings: Timings::default(),
             budgets: Budgets::default(),
-            allow_private_egress: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            allow_loopback_egress: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            local_grants: Arc::default(),
+            follows_redirects: false,
         })
     }
 }
@@ -2509,13 +2642,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_script_that_never_submits_is_distinguished_from_a_broken_solver() {
+    async fn a_capture_is_refused_when_the_solver_lacks_the_egress_guard() {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "msg": "ready",
                 "capabilities": ["kani.capture/1", "kani.capture/2"]
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(body_partial_json(
+                serde_json::json!({"cmd": "sessions.list"}),
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"status": "ok"})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(body_partial_json(
+                serde_json::json!({"cmd": "kani.capture"}),
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&server)
+            .await;
+        let client = SmartClient::new(Some(server.uri())).unwrap();
+
+        let error = client
+            .solver_capture(
+                "https://sub.example.com/a",
+                "passPayload(1)",
+                1000,
+                None,
+                false,
+            )
+            .await
+            .expect_err("a capture without the guard must be refused");
+
+        assert!(
+            matches!(error, SolverCaptureError::MissingEgressGuard),
+            "got: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_script_that_never_submits_is_distinguished_from_a_broken_solver() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "msg": "ready",
+                "capabilities": ["kani.capture/1", "kani.capture/2", "kani.egress-guard/1"]
             })))
             .mount(&server)
             .await;
@@ -2558,7 +2738,7 @@ mod tests {
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "msg": "ready",
-                "capabilities": ["kani.capture/1", "kani.capture/2"]
+                "capabilities": ["kani.capture/1", "kani.capture/2", "kani.egress-guard/1"]
             })))
             .mount(&server)
             .await;
@@ -3069,7 +3249,7 @@ mod tests {
 
         let client = SmartClient::new_for_test()
             .unwrap()
-            .with_allow_private_egress(false);
+            .with_allow_loopback_egress(true);
         let Err(err) = client
             .safe_get(&format!("{}/redir", server.uri()), None)
             .await
@@ -3077,8 +3257,8 @@ mod tests {
             panic!("expected the redirect to a forbidden host to be refused");
         };
         assert!(
-            err.to_string().contains("forbidden host"),
-            "refused for the right reason, got: {err}"
+            err.to_string().contains("redirect to a forbidden host"),
+            "refused at the redirect, got: {err}"
         );
     }
 
@@ -3094,12 +3274,90 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = SmartClient::new(None).unwrap();
-        let res = client.get(&format!("{}/redir", server.uri())).await;
+        let client = SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
+        let Err(err) = client.get(&format!("{}/redir", server.uri())).await else {
+            panic!("a source redirect to a forbidden host must be refused");
+        };
         assert!(
-            res.is_err(),
-            "a source redirect to a forbidden host must be refused"
+            format!("{err:?}").contains("forbidden host"),
+            "refused at the redirect, got: {err:?}"
         );
+    }
+
+    #[test]
+    fn a_grant_exempts_only_its_own_host_from_the_egress_rule() {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        let grants = crate::network::LocalGrants::parse(&["10.0.0.5:8080".to_string()]).unwrap();
+        assert!(!egress_forbidden(&never, &grants, "http://10.0.0.5:8080/x"));
+        assert!(egress_forbidden(&never, &grants, "http://10.0.0.5:9090/x"));
+        assert!(egress_forbidden(&never, &grants, "http://10.0.0.6:8080/x"));
+        assert!(egress_forbidden(&never, &grants, "http://169.254.169.254/"));
+        let none = crate::network::LocalGrants::default();
+        assert!(egress_forbidden(&never, &none, "http://10.0.0.5:8080/x"));
+    }
+
+    #[tokio::test]
+    async fn a_granted_client_keeps_refusing_ungranted_private_hosts() {
+        let base = SmartClient::new(None).unwrap();
+        let granted = base
+            .with_local_grants(
+                crate::network::LocalGrants::parse(&["10.0.0.5:8080".to_string()]).unwrap(),
+            )
+            .unwrap();
+        let Err(err) = granted.safe_get("http://10.0.0.6:8080/", None).await else {
+            panic!("an ungranted private host was reached");
+        };
+        assert!(err.to_string().contains("forbidden host"), "got: {err}");
+        let Err(err) = base.safe_get("http://10.0.0.5:8080/", None).await else {
+            panic!("the base client must not inherit the grant");
+        };
+        assert!(err.to_string().contains("forbidden host"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn a_first_request_to_a_forbidden_ip_literal_is_refused() {
+        let client = SmartClient::new(None).unwrap();
+        for url in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:9/",
+            "http://10.0.0.1/",
+            "http://[::1]:9/",
+        ] {
+            for (label, result) in [
+                ("get", client.get(url).await.err()),
+                ("safe_get", client.safe_get(url, None).await.err()),
+            ] {
+                let err = result.unwrap_or_else(|| panic!("{label} reached {url}"));
+                assert!(
+                    err.to_string()
+                        .contains("request to a forbidden host refused"),
+                    "{label} {url} refused for the wrong reason: {err}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_loopback_test_switch_exempts_loopback_only() {
+        let client = SmartClient::new(None)
+            .unwrap()
+            .with_allow_loopback_egress(true);
+        for url in [
+            "http://169.254.169.254/",
+            "http://10.0.0.1/",
+            "http://192.168.1.1/",
+        ] {
+            let Err(err) = client.safe_get(url, None).await else {
+                panic!("{url} was reached with only loopback allowed");
+            };
+            assert!(
+                err.to_string()
+                    .contains("request to a forbidden host refused"),
+                "{url} must stay refused with loopback allowed: {err}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -3113,7 +3371,7 @@ mod tests {
 
         let client = SmartClient::new(None)
             .unwrap()
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let start = std::time::Instant::now();
         let res = client.get(&format!("{}/loop", server.uri())).await;
         let elapsed = start.elapsed();

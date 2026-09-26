@@ -133,7 +133,7 @@ impl AppService {
             || f.hide_completed_status;
 
         let mut qb = sqlx::QueryBuilder::new(
-            "SELECT m.id, COALESCE(m.local_name, m.name) AS name, m.cover_url, m.local_cover_path, m.cover_hash, s.base_url, \
+            "SELECT m.id, m.source_id, COALESCE(m.local_name, m.name) AS name, m.cover_url, m.local_cover_path, m.cover_hash, s.base_url, \
              m.is_orphaned, \
              (SELECT il.status FROM manga_import_links il WHERE il.manga_id = m.id) \
                AS import_link_status, \
@@ -514,7 +514,7 @@ impl AppService {
         let offset = (page - 1) * 50;
         let mut items = sqlx::query_as!(
             kani_shared::types::RecentUpdateItem,
-            "SELECT m.id as manga_id, COALESCE(m.local_name, m.name) as manga_name, m.cover_url, m.local_cover_path, m.cover_hash,
+            "SELECT m.id as manga_id, m.source_id, COALESCE(m.local_name, m.name) as manga_name, m.cover_url, m.local_cover_path, m.cover_hash,
                     s.base_url, c.id as chapter_id, c.chapter_number,
                     c.name as chapter_name, c.discovered_at,
                     (c.download_status = 2) as \"is_downloaded: bool\"

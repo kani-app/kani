@@ -8,6 +8,20 @@ pub(crate) const HOST_CAPABILITIES: &[&str] =
 
 pub(crate) const BROWSER_PAYLOAD: &str = "browser_payload";
 
+/// Refuses an extension whose recorded blueprint schema this host cannot read. `None` (built
+/// before the version was recorded) passes; such an extension is checked on its first extraction.
+pub(crate) fn check_dsl_schema_version(version: Option<u32>) -> Result<(), String> {
+    match version {
+        Some(v) if !kani_shared::ast::is_readable_dsl_schema_version(v) => Err(format!(
+            "extension was built for blueprint schema version {v}, but this Kani reads {} to {}; \
+             rebuild it with a matching kani-cli",
+            kani_shared::ast::MIN_READABLE_DSL_SCHEMA_VERSION,
+            kani_shared::ast::DSL_SCHEMA_VERSION
+        )),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn check_min_kani_version(
     min_version: Option<&str>,
     host_version: &str,
@@ -87,6 +101,20 @@ pub(crate) async fn check_required_capabilities_live(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn only_readable_blueprint_versions_pass() {
+        for ok in [None, Some(5), Some(kani_shared::ast::DSL_SCHEMA_VERSION)] {
+            assert!(check_dsl_schema_version(ok).is_ok(), "{ok:?}");
+        }
+        for bad in [4, kani_shared::ast::DSL_SCHEMA_VERSION + 1] {
+            let err = check_dsl_schema_version(Some(bad)).unwrap_err();
+            assert!(
+                err.contains(&format!("schema version {bad}")) && err.contains("rebuild"),
+                "{err}"
+            );
+        }
+    }
 
     fn caps(values: &[&str]) -> Vec<String> {
         values.iter().map(|v| (*v).to_string()).collect()

@@ -990,23 +990,25 @@ cache:
 }
 
 #[test]
-fn valid_cache_all_fields_and_scopes() {
-    assert_valid(&format!(
-        r#"{}
+fn valid_cache_namespaces_with_limits() {
+    let validated = validate_str(
+        r#"
+id: cache-ok
+name: CacheOk
+version: "0.1.0"
+base_url: "https://example.com"
 cache:
   search_results:
-    scope: extension
     ttl: 1800
     max_entries: 200
-    key_template: "search:{{query}}:{{page}}"
-  user_prefs:
-    scope: user
-    ttl: 60
-  install_state:
-    scope: installation
+  auth: {}
 "#,
-        CACHE_BASE
-    ));
+    )
+    .unwrap_or_else(|e| panic!("expected valid, got {e:?}"));
+    let limits = validated.cache_limits();
+    assert_eq!(limits["search_results"].ttl_seconds, 1800);
+    assert_eq!(limits["search_results"].max_entries, Some(200));
+    assert_eq!(limits["auth"].ttl_seconds, 3600, "ttl defaults to an hour");
 }
 
 #[test]
@@ -1067,18 +1069,43 @@ cache:
 }
 
 #[test]
-fn invalid_cache_key_template_empty() {
+fn removed_cache_fields_are_rejected() {
+    for field in ["scope: extension", "key_template: \"k\""] {
+        let yaml = format!(
+            "id: cache-old\nname: X\nversion: \"0.1.0\"\nbase_url: \"https://example.com\"\ncache:\n  ns:\n    {field}\n"
+        );
+        let ext: Result<YamlExtension, _> = serde_yaml::from_str(&yaml);
+        let err = ext.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(
+            err.contains("unknown field"),
+            "{field} must be refused, got: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn too_many_cache_namespaces_are_rejected() {
+    let namespaces: String = (0..=kani_shared::MAX_CACHE_NAMESPACES)
+        .map(|i| format!("  ns{i}: {{}}\n"))
+        .collect();
     assert_invalid_containing(
         &format!(
-            r#"{}
-cache:
-  bad_template:
-    key_template: ""
-"#,
-            CACHE_BASE
+            "id: cache-many\nname: X\nversion: \"0.1.0\"\nbase_url: \"https://example.com\"\ncache:\n{namespaces}"
         ),
-        "'key_template' must not be empty",
+        "at most 16 namespaces",
     );
+}
+
+#[test]
+fn cache_max_entries_must_be_within_the_host_limit() {
+    for max in ["0", "4097"] {
+        assert_invalid_containing(
+            &format!(
+                "id: cache-max\nname: X\nversion: \"0.1.0\"\nbase_url: \"https://example.com\"\ncache:\n  ns:\n    max_entries: {max}\n"
+            ),
+            "max_entries must be between 1 and 4096",
+        );
+    }
 }
 
 const METADATA_BASE: &str = r#"
@@ -1568,4 +1595,16 @@ endpoints:
 "#,
         "route",
     );
+}
+
+#[test]
+fn an_id_outside_the_documented_form_is_rejected() {
+    for id in ["Fetched_Opts", "a:b", "1abc", "has space", "-lead"] {
+        assert_invalid_containing(
+            &format!(
+                "id: \"{id}\"\nname: X\nversion: \"0.1.0\"\nbase_url: \"https://example.com\"\n"
+            ),
+            "must match [a-z][a-z0-9-]*",
+        );
+    }
 }

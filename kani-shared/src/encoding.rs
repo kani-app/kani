@@ -15,16 +15,35 @@ pub fn decode_manga_id(encoded: &str) -> String {
         .unwrap_or_else(|| encoded.to_string())
 }
 
-pub fn encode_composite(parts: &[&str], delimiter: &str, encoding: &IdEncoding) -> String {
+/// Joins `parts` with `delimiter` and encodes the result.
+///
+/// Decoding splits at most `parts.len() - 1` times, so only the last part may contain
+/// the delimiter; any other part containing it is rejected rather than misparsed later.
+pub fn encode_composite(
+    parts: &[&str],
+    delimiter: &str,
+    encoding: &IdEncoding,
+) -> Result<String, String> {
+    if let Some((index, part)) = parts
+        .iter()
+        .enumerate()
+        .take(parts.len().saturating_sub(1))
+        .find(|(_, part)| part.contains(delimiter))
+    {
+        return Err(format!(
+            "composite id part {index} ({part:?}) contains the delimiter {delimiter:?}; \
+             only the last part may"
+        ));
+    }
     let joined = parts.join(delimiter);
-    match encoding {
+    Ok(match encoding {
         IdEncoding::Passthrough => joined,
         IdEncoding::Base64Url => {
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(joined.as_bytes())
         }
         IdEncoding::Base64 => base64::engine::general_purpose::STANDARD.encode(joined.as_bytes()),
         IdEncoding::Hex => hex::encode(joined.as_bytes()),
-    }
+    })
 }
 
 pub fn decode_composite(
@@ -87,7 +106,7 @@ mod tests {
 
     fn round_trip(parts: &[&str], delimiter: &str, encoding: IdEncoding) {
         let field_names: Vec<&str> = (0..parts.len()).map(|i| ["a", "b", "c"][i]).collect();
-        let encoded = encode_composite(parts, delimiter, &encoding);
+        let encoded = encode_composite(parts, delimiter, &encoding).unwrap();
         let decoded = decode_composite(&encoded, delimiter, &encoding, &field_names).unwrap();
         let values: Vec<&str> = decoded.iter().map(|(_, v)| v.as_str()).collect();
         assert_eq!(values, parts);
@@ -115,7 +134,7 @@ mod tests {
 
     #[test]
     fn single_field_no_delimiter() {
-        let enc = encode_composite(&["solo"], "|", &IdEncoding::Base64Url);
+        let enc = encode_composite(&["solo"], "|", &IdEncoding::Base64Url).unwrap();
         let dec = decode_composite(&enc, "|", &IdEncoding::Base64Url, &["id"]).unwrap();
         assert_eq!(dec[0].1, "solo");
     }
@@ -127,9 +146,23 @@ mod tests {
 
     #[test]
     fn mismatched_field_count_errors() {
-        let enc = encode_composite(&["a", "b"], "|", &IdEncoding::Passthrough);
+        let enc = encode_composite(&["a", "b"], "|", &IdEncoding::Passthrough).unwrap();
         let result = decode_composite(&enc, "|", &IdEncoding::Passthrough, &["x", "y", "z"]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn delimiter_in_last_part_round_trips() {
+        round_trip(&["h1", "title|with|bars"], "|", IdEncoding::Base64Url);
+    }
+
+    #[test]
+    fn delimiter_in_non_final_part_is_rejected() {
+        let err = encode_composite(&["a|b", "slug"], "|", &IdEncoding::Base64Url).unwrap_err();
+        assert!(
+            err.contains("part 0") && err.contains("\"a|b\""),
+            "error must name the offending part: {err}"
+        );
     }
 }
 

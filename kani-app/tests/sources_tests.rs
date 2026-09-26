@@ -14,8 +14,8 @@ async fn list_sources_empty_on_fresh_db() {
 #[tokio::test]
 async fn list_sources_returns_added_sources() {
     let svc = test_service().await;
-    svc.add_source("source-a", UserId(1)).await.unwrap();
-    svc.add_source("source-b", UserId(1)).await.unwrap();
+    kani_shared_test::insert_source(&svc.db, "source-a").await;
+    kani_shared_test::insert_source(&svc.db, "source-b").await;
 
     let sources = svc.list_sources().await.unwrap();
     assert_eq!(sources.len(), 2);
@@ -27,7 +27,7 @@ async fn list_sources_returns_added_sources() {
 #[tokio::test]
 async fn get_source_returns_correct_row() {
     let svc = test_service().await;
-    let id = svc.add_source("my-source", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "my-source").await;
 
     let source = svc.get_source(id).await.unwrap();
     assert_eq!(source.id, id);
@@ -44,7 +44,7 @@ async fn get_source_returns_error_for_missing_id() {
 #[tokio::test]
 async fn delete_source_removes_it_from_list() {
     let svc = test_service().await;
-    let id = svc.add_source("to-delete", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "to-delete").await;
     assert_eq!(svc.list_sources().await.unwrap().len(), 1);
 
     svc.delete_source(id, UserId(1)).await.unwrap();
@@ -54,7 +54,7 @@ async fn delete_source_removes_it_from_list() {
 #[tokio::test]
 async fn delete_source_is_idempotent() {
     let svc = test_service().await;
-    let id = svc.add_source("del", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "del").await;
     svc.delete_source(id, UserId(1)).await.unwrap();
     svc.delete_source(id, UserId(1)).await.unwrap();
     assert!(svc.list_sources().await.unwrap().is_empty());
@@ -63,7 +63,7 @@ async fn delete_source_is_idempotent() {
 #[tokio::test]
 async fn set_and_get_preference_round_trips() {
     let svc = test_service().await;
-    let id = svc.add_source("pref-src", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "pref-src").await;
 
     svc.set_preference(id, "lang", "en").await.unwrap();
     let val = svc.get_preference(id, "lang").await.unwrap();
@@ -73,7 +73,7 @@ async fn set_and_get_preference_round_trips() {
 #[tokio::test]
 async fn get_preference_returns_none_for_missing_key() {
     let svc = test_service().await;
-    let id = svc.add_source("pref-src", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "pref-src").await;
 
     let val = svc.get_preference(id, "no-such-key").await.unwrap();
     assert_eq!(val, None);
@@ -82,7 +82,7 @@ async fn get_preference_returns_none_for_missing_key() {
 #[tokio::test]
 async fn get_all_preferences_returns_all_set_values() {
     let svc = test_service().await;
-    let id = svc.add_source("pref-src", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "pref-src").await;
     svc.set_preference(id, "a", "1").await.unwrap();
     svc.set_preference(id, "b", "2").await.unwrap();
 
@@ -99,7 +99,7 @@ async fn get_all_preferences_returns_all_set_values() {
 #[tokio::test]
 async fn source_metadata_fields_round_trip() {
     let svc = test_service().await;
-    let id = svc.add_source("meta-source", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "meta-source").await;
 
     sqlx::query!(
         "UPDATE sources SET icon = ?, description = ?, languages = ?, schema_version = ? WHERE id = ?",
@@ -130,7 +130,7 @@ async fn source_metadata_fields_round_trip() {
 #[tokio::test]
 async fn set_preference_overwrites_existing_value() {
     let svc = test_service().await;
-    let id = svc.add_source("pref-src", UserId(1)).await.unwrap();
+    let id = kani_shared_test::insert_source(&svc.db, "pref-src").await;
 
     svc.set_preference(id, "key", "old").await.unwrap();
     svc.set_preference(id, "key", "new").await.unwrap();

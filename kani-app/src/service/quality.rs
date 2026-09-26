@@ -203,8 +203,9 @@ impl AppService {
                             &held.source_chapter_id,
                         )
                         .await
-                        && let Some(cand_score) =
-                            self.probe_page_quality(&urls, PROBE_SAMPLES).await
+                        && let Some(cand_score) = self
+                            .probe_page_quality(src.source_id, &urls, PROBE_SAMPLES)
+                            .await
                     {
                         let v =
                             kani_core::quality::compare_quality(&cand_score, &held_score, &policy);
@@ -286,7 +287,9 @@ impl AppService {
                             )
                             .await
                         {
-                            candidate_score = self.probe_page_quality(&urls, PROBE_SAMPLES).await;
+                            candidate_score = self
+                                .probe_page_quality(src.source_id, &urls, PROBE_SAMPLES)
+                                .await;
                         }
                     }
 
@@ -649,9 +652,11 @@ impl AppService {
     /// axes required for a pre-download comparison.
     pub async fn probe_page_quality(
         &self,
+        source_id: i64,
         page_urls: &[String],
         samples: usize,
     ) -> Option<kani_core::quality::QualityScore> {
+        let client = self.smart_client_for_source(source_id).await;
         use kani_core::probe::{PROBE_PREFIX_BYTES, probe_header, sample_indices};
 
         let mut probes = Vec::new();
@@ -667,7 +672,7 @@ impl AppService {
                 headers.insert(rquest::header::RANGE, v);
             }
 
-            let Ok(resp) = self.smart_client.safe_get(url, Some(headers)).await else {
+            let Ok(resp) = client.safe_get(url, Some(headers)).await else {
                 continue;
             };
             let total = content_range_total(resp.headers());

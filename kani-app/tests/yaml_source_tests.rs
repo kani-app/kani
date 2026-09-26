@@ -107,7 +107,9 @@ fn yaml_source(_base_url: &str, ext: ValidatedExtension) -> YamlSource {
 
 fn yaml_source_with_browser(ext: ValidatedExtension, browser_enabled: bool) -> YamlSource {
     let cache = Arc::new(kani_core::cache::InMemoryCache::new());
-    let http = kani_core::http::SmartClient::new(None).unwrap();
+    let http = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     YamlSource::new(
         Arc::new(ext),
         http,
@@ -326,7 +328,9 @@ fn capability_unrestricted_http_is_supported() {
 #[tokio::test]
 async fn metadata_serialises_from_config() {
     let cache = Arc::new(kani_core::cache::InMemoryCache::new());
-    let http = kani_core::http::SmartClient::new(None).unwrap();
+    let http = kani_core::http::SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let src = YamlSource::new(
         Arc::new(ValidatedExtension {
             id: "test-id".into(),
@@ -922,8 +926,24 @@ endpoints:
 
     let yaml_v2 = yaml_v1.replace("1.0.0", "2.0.0");
     std::fs::write(storage_path.join("reload-test-source.yaml"), &yaml_v2).unwrap();
+    svc.ext_cache
+        .put(
+            "reload-test-source:auth",
+            "k",
+            b"v".to_vec(),
+            std::time::Duration::from_secs(600),
+        )
+        .await;
 
     svc.reload_source(source_id).await.unwrap();
+
+    assert!(
+        svc.ext_cache
+            .get("reload-test-source:auth", "k")
+            .await
+            .is_none(),
+        "a version change found on reload clears the cache"
+    );
 
     let version: String = sqlx::query_scalar("SELECT version FROM sources WHERE id = ?")
         .bind(source_id)
@@ -1746,5 +1766,156 @@ async fn an_unresolved_route_placeholder_is_an_error_not_a_literal() {
         origin.hits("/list"),
         0,
         "no request must be sent when a placeholder is unresolved"
+    );
+}
+
+fn recoverable_yaml(version: &str) -> String {
+    format!(
+        r#"id: recover-me
+name: recover-me
+version: "{version}"
+base_url: "https://example.com"
+language: en
+endpoints:
+  popular:
+    route: /popular
+    container: ".item"
+    fields:
+      id: 'self.attr("data-id")'
+      title: 'self.first(".title").text()'
+"#
+    )
+}
+
+async fn fail_source_writes(svc: &kani_app::service::AppService, event: &str) {
+    sqlx::query(&format!(
+        "CREATE TRIGGER inject_failure BEFORE {event} ON sources \
+         BEGIN SELECT RAISE(ABORT, 'injected row failure'); END"
+    ))
+    .execute(&svc.db)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_failed_row_update_restores_the_previous_artifact() {
+    let svc = test_service().await;
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    let v1 = recoverable_yaml("1.0.0");
+    svc.install_yaml_source(v1.as_bytes()).await.unwrap();
+    fail_source_writes(&svc, "UPDATE").await;
+
+    let error = svc
+        .install_yaml_source(recoverable_yaml("2.0.0").as_bytes())
+        .await
+        .expect_err("the injected trigger must fail the row update");
+
+    assert!(
+        error.to_string().contains("injected row failure"),
+        "failed for the injected reason, got: {error}"
+    );
+    assert_eq!(
+        tokio::fs::read_to_string(storage.join("recover-me.yaml"))
+            .await
+            .unwrap(),
+        v1,
+        "the artifact on disk must still match the row"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_first_install_leaves_no_artifact() {
+    let svc = test_service().await;
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    fail_source_writes(&svc, "INSERT").await;
+
+    let error = svc
+        .install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .expect_err("the injected trigger must fail the row insert");
+
+    assert!(
+        error.to_string().contains("injected row failure"),
+        "failed for the injected reason, got: {error}"
+    );
+    assert!(
+        !storage.join("recover-me.yaml").exists(),
+        "no artifact may be left behind without a row"
+    );
+}
+
+#[tokio::test]
+async fn a_version_change_clears_the_extension_cache() {
+    let svc = test_service().await;
+    let sid = svc
+        .install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .unwrap();
+    let ttl = std::time::Duration::from_secs(600);
+    let seed = || async {
+        for ns in ["recover-me:", "recover-me:auth"] {
+            svc.ext_cache.put(ns, "k", b"v".to_vec(), ttl).await;
+        }
+        svc.ext_cache
+            .put(&format!("fetched_opts:{sid}"), "k", b"v".to_vec(), ttl)
+            .await;
+    };
+    let cached = || async {
+        let mut present = Vec::new();
+        for ns in [
+            "recover-me:".to_string(),
+            "recover-me:auth".to_string(),
+            format!("fetched_opts:{sid}"),
+        ] {
+            if svc.ext_cache.get(&ns, "k").await.is_some() {
+                present.push(ns);
+            }
+        }
+        present
+    };
+
+    seed().await;
+    svc.install_yaml_source(recoverable_yaml("1.0.0").as_bytes())
+        .await
+        .unwrap();
+    assert_eq!(
+        cached().await.len(),
+        3,
+        "a same-version reinstall keeps the cache"
+    );
+
+    svc.install_yaml_source(recoverable_yaml("2.0.0").as_bytes())
+        .await
+        .unwrap();
+    assert!(
+        cached().await.is_empty(),
+        "a version change must clear every namespace, left: {:?}",
+        cached().await
+    );
+}
+
+#[tokio::test]
+async fn a_version_change_found_at_startup_clears_the_extension_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("recover-me.yaml");
+    let svc = test_service().await;
+
+    std::fs::write(&file, recoverable_yaml("1.0.0")).unwrap();
+    svc.scan_and_load_yaml_dir_for_test(dir.path())
+        .await
+        .unwrap();
+    let ttl = std::time::Duration::from_secs(600);
+    svc.ext_cache
+        .put("recover-me:auth", "k", b"v".to_vec(), ttl)
+        .await;
+
+    std::fs::write(&file, recoverable_yaml("2.0.0")).unwrap();
+    svc.scan_and_load_yaml_dir_for_test(dir.path())
+        .await
+        .unwrap();
+
+    assert!(
+        svc.ext_cache.get("recover-me:auth", "k").await.is_none(),
+        "a version bump on disk must clear the cache"
     );
 }

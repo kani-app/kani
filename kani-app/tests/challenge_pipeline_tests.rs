@@ -25,7 +25,8 @@ fn solver_envelope(rendered: &str) -> String {
 
 /// A solver index advertising scripted capture. The capability probe reads this
 /// before dispatching, so a mock that serves only /v1 reads as unreachable.
-const CAPABLE_INDEX: &str = r#"{"msg":"ready","capabilities":["kani.capture/1","kani.capture/2"]}"#;
+const CAPABLE_INDEX: &str =
+    r#"{"msg":"ready","capabilities":["kani.capture/1","kani.capture/2","kani.egress-guard/1"]}"#;
 
 #[tokio::test]
 async fn a_challenge_page_triggers_the_solver_and_replays() {
@@ -40,7 +41,9 @@ async fn a_challenge_page_triggers_the_solver_and_replays() {
         Response::json(&solver_envelope("<html><body>REAL CONTENT</body></html>")),
     );
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let resp = client.get(&site.url("/page")).await.unwrap();
     let body = resp.text().await.unwrap();
 
@@ -61,7 +64,9 @@ async fn the_solved_cookie_is_attached_to_the_replay() {
     let solver = TestOrigin::start().await;
     solver.set("/v1", Response::json(&solver_envelope("unused")));
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let resp = client.get(&site.url("/page")).await.unwrap();
     assert_eq!(resp.status().as_u16(), 200);
 
@@ -83,7 +88,9 @@ async fn a_solver_error_status_surfaces_as_a_useful_error() {
         Response::json(r#"{"status":"error","message":"challenge-boom"}"#),
     );
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let msg = match client.get(&site.url("/page")).await {
         Ok(_) => panic!("expected the solver error to surface, got a response"),
         Err(e) => e.to_string(),
@@ -110,7 +117,9 @@ async fn stored_credentials_are_re_solved_after_a_403() {
     let solver = TestOrigin::start().await;
     solver.set("/v1", Response::json(&solver_envelope("unused")));
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     assert_eq!(
         client
             .get(&site.url("/page"))
@@ -153,6 +162,7 @@ async fn expired_credentials_are_dropped_before_reuse() {
 
     let client = SmartClient::new(Some(solver.url("/v1")))
         .unwrap()
+        .with_allow_loopback_egress(true)
         .with_timings(Timings {
             credential_ttl: Duration::from_millis(20),
             ..Timings::default()
@@ -192,6 +202,7 @@ async fn a_solver_that_is_unreachable_does_not_hang_the_request() {
 
     let client = SmartClient::new(Some(solver.url("/v1")))
         .unwrap()
+        .with_allow_loopback_egress(true)
         .with_timings(Timings {
             solver_timeout: Duration::from_millis(300),
             ..Timings::default()
@@ -212,7 +223,9 @@ async fn without_a_solver_a_challenge_is_passed_through() {
     let site = TestOrigin::start().await;
     site.set("/page", Response::status(503));
 
-    let client = SmartClient::new(None).unwrap();
+    let client = SmartClient::new(None)
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let resp = client.get(&site.url("/page")).await.unwrap();
 
     assert_eq!(
@@ -246,7 +259,9 @@ async fn a_capture_returns_the_payload_the_solver_browser_collected() {
         Response::json(&capture_envelope(r#"{"items":[1,2]}"#)),
     );
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let payload = client
         .solver_capture(
             "https://site.test/browse",
@@ -271,7 +286,9 @@ async fn a_stock_solver_is_reported_as_unsupported_not_as_a_failure() {
     );
     solver.set("/v1", Response::json(r#"{"status":"ok","sessions":[]}"#));
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let error = client
         .solver_capture(
             "https://site.test/browse",
@@ -320,7 +337,9 @@ async fn a_solver_that_rejects_the_key_is_reported_as_unauthorized() {
     );
     solver.set("/v1", Response::status(401));
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let error = client
         .solver_capture(
             "https://site.test/browse",
@@ -353,7 +372,9 @@ async fn a_capture_error_from_a_compatible_solver_surfaces_verbatim() {
         ),
     );
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let error = client
         .solver_capture(
             "https://site.test/browse",
@@ -384,7 +405,9 @@ async fn an_ok_envelope_without_a_payload_is_an_error_not_an_empty_capture() {
         Response::json(r#"{"status":"ok","solution":{"userAgent":"FlareUA/1.0"}}"#),
     );
 
-    let client = SmartClient::new(Some(solver.url("/v1"))).unwrap();
+    let client = SmartClient::new(Some(solver.url("/v1")))
+        .unwrap()
+        .with_allow_loopback_egress(true);
     let error = client
         .solver_capture(
             "https://site.test/browse",

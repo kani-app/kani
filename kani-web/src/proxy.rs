@@ -35,7 +35,9 @@ const NONCE_LEN: usize = 12;
 
 /// Leads the sealed plaintext. The nonce is carried in the token and used as
 /// supplied, so an unversioned token still decrypts; this marker is what refuses it.
-const TOKEN_VERSION: &str = "v2";
+/// v3 adds the owning source's id; v2 tokens are still read, as belonging to no source.
+const TOKEN_VERSION: &str = "v3";
+const LEGACY_TOKEN_VERSION: &str = "v2";
 
 /// Load the proxy secret from `KANI_PROXY_SECRET` (base64-encoded 32 bytes), read/persist it
 /// from `data_dir/proxy.key`, or generate and persist a new one on first boot.
@@ -87,9 +89,22 @@ pub(crate) fn load_or_persist_secret(data_dir: &std::path::Path) -> [u8; 32] {
     secret
 }
 
-/// Seal a (url, referer) pair into an opaque token.
+/// Seal a (url, referer) pair into an opaque token that belongs to no source.
+#[cfg(test)]
 pub(crate) fn seal_proxy_token(url: &str, referer: &str, secret: &[u8; 32]) -> String {
-    let plaintext = format!("{TOKEN_VERSION}|{url}|{referer}");
+    seal_source_proxy_token(None, url, referer, secret)
+}
+
+/// Seal a (source, url, referer) triple. The proxy fetches with the source's own client, so a
+/// source's local-network grant covers its images and no other source's.
+pub(crate) fn seal_source_proxy_token(
+    source_id: Option<i64>,
+    url: &str,
+    referer: &str,
+    secret: &[u8; 32],
+) -> String {
+    let source = source_id.map(|id| id.to_string()).unwrap_or_default();
+    let plaintext = format!("{TOKEN_VERSION}|{source}|{url}|{referer}");
 
     let mut mac =
         <HmacSha256 as hmac::Mac>::new_from_slice(secret).expect("HMAC accepts any key length");
@@ -113,7 +128,16 @@ pub(crate) fn seal_proxy_token(url: &str, referer: &str, secret: &[u8; 32]) -> S
 }
 
 /// Unseal a token, returning `(url, referer)` if it is authentic.
+#[cfg(test)]
 pub(crate) fn unseal_proxy_token(token: &str, secret: &[u8; 32]) -> Option<(String, String)> {
+    unseal_proxy_token_with_source(token, secret).map(|(_, url, referer)| (url, referer))
+}
+
+/// Unseal a token, returning `(source, url, referer)` if it is authentic.
+pub(crate) fn unseal_proxy_token_with_source(
+    token: &str,
+    secret: &[u8; 32],
+) -> Option<(Option<i64>, String, String)> {
     let raw = URL_SAFE_NO_PAD.decode(token).ok()?;
     if raw.len() <= NONCE_LEN {
         return None;
@@ -126,13 +150,25 @@ pub(crate) fn unseal_proxy_token(token: &str, secret: &[u8; 32]) -> Option<(Stri
     let plaintext = cipher.decrypt(nonce, ciphertext).ok()?;
     let s = String::from_utf8(plaintext).ok()?;
 
-    let body = s.strip_prefix(TOKEN_VERSION)?.strip_prefix('|')?;
+    let (source, body) = if let Some(rest) = s.strip_prefix(TOKEN_VERSION) {
+        let (source, body) = rest.strip_prefix('|')?.split_once('|')?;
+        let source = match source {
+            "" => None,
+            id => Some(id.parse::<i64>().ok()?),
+        };
+        (source, body)
+    } else {
+        (
+            None,
+            s.strip_prefix(LEGACY_TOKEN_VERSION)?.strip_prefix('|')?,
+        )
+    };
 
     let mut parts = body.splitn(2, '|');
     let url = parts.next()?.to_string();
     let referer = parts.next()?.to_string();
 
-    Some((url, referer))
+    Some((source, url, referer))
 }
 
 /// Compute a stable, server-signed ETag for a (url, referer) pair.
@@ -208,10 +244,11 @@ impl Default for ProxyConfig {
 pub fn make_proxy_url(
     url: &str,
     referer: &str,
+    source_id: Option<i64>,
     secret: &[u8; 32],
     transform: Option<&str>,
 ) -> String {
-    let token = seal_proxy_token(url, referer, secret);
+    let token = seal_source_proxy_token(source_id, url, referer, secret);
     match transform {
         Some(t) if !t.is_empty() => format!(
             "/rest/image_proxy?token={}&transform={}",
@@ -325,6 +362,40 @@ mod tests {
         assert_eq!(
             unseal_proxy_token(&token, &s),
             Some((url.into(), referer.into()))
+        );
+    }
+
+    #[test]
+    fn a_v3_token_carries_its_source() {
+        let s = secret();
+        let token = seal_source_proxy_token(Some(42), "https://img.example.com/a.jpg", "ref", &s);
+        assert_eq!(
+            unseal_proxy_token_with_source(&token, &s),
+            Some((
+                Some(42),
+                "https://img.example.com/a.jpg".into(),
+                "ref".into()
+            ))
+        );
+        let token = seal_source_proxy_token(None, "https://img.example.com/a.jpg", "ref", &s);
+        assert_eq!(unseal_proxy_token_with_source(&token, &s).unwrap().0, None);
+    }
+
+    #[test]
+    fn a_v2_token_is_still_read_as_belonging_to_no_source() {
+        let s = secret();
+        let plaintext = "v2|https://img.example.com/a.jpg|ref";
+        let nonce_bytes = [7u8; NONCE_LEN];
+        let cipher = ChaCha20Poly1305::new((&s).into());
+        let ciphertext = cipher
+            .encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_bytes())
+            .unwrap();
+        let mut raw = nonce_bytes.to_vec();
+        raw.extend_from_slice(&ciphertext);
+        let token = URL_SAFE_NO_PAD.encode(raw);
+        assert_eq!(
+            unseal_proxy_token_with_source(&token, &s),
+            Some((None, "https://img.example.com/a.jpg".into(), "ref".into()))
         );
     }
 

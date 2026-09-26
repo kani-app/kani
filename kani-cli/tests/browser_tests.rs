@@ -69,9 +69,9 @@ fn browser_payload_codegen_emits_capture_page_payload() {
 }
 
 #[test]
-fn browser_payload_auto_scroll_defaults_to_true_after_validation() {
+fn browser_payload_auto_scroll_defaults_to_false_after_validation() {
     let validated = load_and_validate("browser_payload_full.yaml");
-    assert!(validated.manga_details.as_ref().unwrap().auto_scroll);
+    assert!(!validated.manga_details.as_ref().unwrap().auto_scroll);
 }
 
 #[test]

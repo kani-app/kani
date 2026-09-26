@@ -253,9 +253,10 @@ async fn extract_html_with_doc(
 
     if !pending.is_empty() {
         let client = state.http_client.clone();
-        let sends = pending
-            .iter()
-            .map(|p| send_prepared_request(client.clone(), p.request.clone()));
+        let allowed_host = state.allowed_host.clone();
+        let sends = pending.iter().map(|p| {
+            send_prepared_request(client.clone(), allowed_host.clone(), p.request.clone())
+        });
         let bodies: Vec<Result<String, String>> = futures::future::join_all(sends).await;
 
         for (p, body_result) in pending.into_iter().zip(bodies) {

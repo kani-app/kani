@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::yaml::schema::{
     FilterEntry, FilterFormatCfg, FilterMappingEntry, IdEncodingBlock, OptionSetDef, PaginationCfg,
-    PreferenceEntry, ResponseType, YamlCacheScope, YamlIdEncoding,
+    PreferenceEntry, ResponseType, YamlIdEncoding,
 };
 use kani_shared::ast::{Expr, OnFailurePolicy};
 
@@ -55,6 +55,24 @@ pub struct ValidatedExtension {
 }
 
 impl ValidatedExtension {
+    /// The declared cache namespaces, as the hook runtime enforces them.
+    pub fn cache_limits(
+        &self,
+    ) -> std::collections::BTreeMap<String, kani_shared::CacheNamespaceLimits> {
+        self.cache
+            .iter()
+            .map(|c| {
+                (
+                    c.name.clone(),
+                    kani_shared::CacheNamespaceLimits {
+                        ttl_seconds: c.ttl,
+                        max_entries: c.max_entries,
+                    },
+                )
+            })
+            .collect()
+    }
+
     /// Look up a named endpoint by its YAML key.
     pub fn endpoint_by_name(&self, name: &str) -> Option<&ValidatedEndpoint> {
         match name {
@@ -107,14 +125,11 @@ pub struct ValidatedSection {
     pub nsfw: bool,
 }
 
-/// A validated entry from the top-level `cache` block, ready for codegen to
-/// emit as a `kani_shared::CacheNamespace` registry entry.
+/// A validated entry from the top-level `cache` block: a namespace hook scripts may use.
 pub struct ValidatedCacheEntry {
     pub name: String,
-    pub scope: YamlCacheScope,
     pub ttl: u32,
     pub max_entries: Option<u32>,
-    pub key_template: Option<String>,
 }
 
 /// Popular-list operation implemented directly or delegated to another endpoint.

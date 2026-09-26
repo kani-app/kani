@@ -519,12 +519,22 @@ impl AppService {
 
         let source_id = match entry.format.as_str() {
             "yaml" => {
-                self.install_yaml_artifact(&artifact_bytes, &storage_path, existing_source_id)
-                    .await?
+                self.install_yaml_artifact(
+                    &artifact_bytes,
+                    &storage_path,
+                    existing_source_id,
+                    Some(extension_id),
+                )
+                .await?
             }
             "wasm" => {
-                self.install_wasm_artifact(&artifact_bytes, &storage_path, existing_source_id)
-                    .await?
+                self.install_wasm_artifact(
+                    &artifact_bytes,
+                    &storage_path,
+                    existing_source_id,
+                    Some(extension_id),
+                )
+                .await?
             }
             fmt => {
                 return Err(ServiceError::Validation(format!(
@@ -554,8 +564,34 @@ impl AppService {
         Ok(source_id)
     }
 
+    /// Install a compiled WASM extension from raw bytes: the manual counterpart to
+    /// [`Self::install_yaml_source`], finding or creating the source row by the
+    /// artifact's own id. Runs the same pipeline as a repository install.
+    pub async fn install_wasm_source(&self, bytes: &[u8]) -> Result<i64> {
+        let storage_path = self.storage_path_string().await?;
+        self.install_wasm_artifact(bytes, &storage_path, None, None)
+            .await
+    }
+
+    /// Replace the artifact of an existing source with compiled WASM bytes. The
+    /// artifact must declare the source's own id, exactly as a repository update must.
+    pub async fn update_wasm_source(&self, source_id: i64, bytes: &[u8]) -> Result<i64> {
+        let storage_path = self.storage_path_string().await?;
+        self.install_wasm_artifact(bytes, &storage_path, Some(source_id), None)
+            .await
+    }
+
+    async fn storage_path_string(&self) -> Result<String> {
+        let settings = self.settings.read().await;
+        settings
+            .wasm_storage_path
+            .to_str()
+            .map(str::to_string)
+            .ok_or_else(|| ServiceError::Internal("Failed to convert storage path".to_string()))
+    }
+
     /// Install an interpreted-YAML extension from raw YAML bytes — the manual
-    /// add-source counterpart to `install_source` (WASM). Validates, saves to
+    /// add-source counterpart to [`Self::install_wasm_source`]. Validates, saves to
     /// storage, upserts the source row (find-or-create/revive by the YAML's own
     /// id, so reinstalling a previously-removed source works), and hot-loads the
     /// backend. Returns the source id.
@@ -567,7 +603,8 @@ impl AppService {
             .ok_or_else(|| ServiceError::Internal("Failed to convert storage path".to_string()))?
             .to_string();
         drop(settings);
-        self.install_yaml_artifact(bytes, &storage_path, None).await
+        self.install_yaml_artifact(bytes, &storage_path, None, None)
+            .await
     }
 
     async fn install_yaml_artifact(
@@ -575,6 +612,7 @@ impl AppService {
         bytes: &[u8],
         storage_path: &str,
         existing_id: Option<i64>,
+        expected_id: Option<&str>,
     ) -> Result<i64> {
         let text = std::str::from_utf8(bytes).map_err(|_| {
             ServiceError::Validation("YAML artifact is not valid UTF-8".to_string())
@@ -596,6 +634,9 @@ impl AppService {
             ServiceError::Validation(format!("Invalid YAML extension: {msg}"))
         })?;
 
+        self.check_artifact_identity(&validated.id, expected_id, existing_id)
+            .await?;
+        check_artifact_gating(&validated.id, validated.min_kani_version.as_deref())?;
         crate::install_gating::check_required_capabilities_live(
             &validated.requires_capabilities,
             &self.smart_client,
@@ -603,21 +644,38 @@ impl AppService {
         .await
         .map_err(ServiceError::Validation)?;
 
-        kani_core::file_storage::save_yaml(storage_path, &validated.id, text)
+        let previous_version = self.stored_version(existing_id, &validated.id).await?;
+        let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &validated.id)
             .await
             .map_err(ServiceError::Core)?;
-        kani_core::file_storage::delete_wasm_file(storage_path, &validated.id)
-            .await
-            .map_err(ServiceError::Core)?;
-
-        let sid = self.upsert_yaml_source_row(&validated, existing_id).await?;
+        let written = async {
+            kani_core::file_storage::save_yaml(storage_path, &validated.id, text)
+                .await
+                .map_err(ServiceError::Core)?;
+            kani_core::file_storage::delete_wasm_file(storage_path, &validated.id)
+                .await
+                .map_err(ServiceError::Core)?;
+            self.upsert_yaml_source_row(&validated, existing_id).await
+        }
+        .await;
+        let sid = match written {
+            Ok(sid) => sid,
+            Err(e) => {
+                restore_after_failed_install(storage_path, &validated.id, previous).await;
+                return Err(e);
+            }
+        };
+        if previous_version.is_some_and(|v| v != validated.version) {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), &validated.id, sid)
+                .await;
+        }
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", validated.id);
         let browser_enabled = self.browser_enabled_flag(sid).await;
         let backend = loader::build_yaml_source(
             Arc::new(validated),
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, sid, &self.smart_client).await,
             Arc::clone(&self.ext_cache),
             ns,
             prefs,
@@ -637,6 +695,7 @@ impl AppService {
         bytes: &[u8],
         storage_path: &str,
         existing_id: Option<i64>,
+        expected_id: Option<&str>,
     ) -> Result<i64> {
         let bytes_owned = bytes.to_vec();
         let runtime_clone = self.wasm_runtime.clone();
@@ -644,7 +703,9 @@ impl AppService {
             tokio::task::spawn_blocking(move || runtime_clone.compile_component(&bytes_owned))
                 .await
                 .map_err(|e| ServiceError::Internal(format!("Compile task panicked: {e}")))?
-                .map_err(ServiceError::Core)?;
+                .map_err(|e| {
+                    ServiceError::Validation(format!("Not a loadable WASM extension: {e}"))
+                })?;
 
         let (metadata, raw_schema) = {
             let mut inst =
@@ -658,26 +719,59 @@ impl AppService {
             .map_err(ServiceError::Core)?;
             let raw = inst.get_metadata().await.map_err(ServiceError::Core)?;
             let schema = inst.get_preferences().await.ok();
-            let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw)
-                .map_err(|e| ServiceError::Internal(format!("Bad metadata: {e}")))?;
+            let meta: kani_shared::ExtensionMetadata = serde_json::from_str(&raw).map_err(|e| {
+                ServiceError::Validation(format!("Invalid extension metadata: {e}"))
+            })?;
             (meta, schema)
         };
 
+        if !kani_shared::types::is_valid_extension_id(&metadata.id) {
+            return Err(ServiceError::Validation(format!(
+                "Extension id '{}' must match [a-z][a-z0-9-]*",
+                metadata.id
+            )));
+        }
+        self.check_artifact_identity(&metadata.id, expected_id, existing_id)
+            .await?;
+        check_artifact_gating(&metadata.id, metadata.min_kani_version.as_deref())?;
+        crate::install_gating::check_dsl_schema_version(metadata.dsl_schema_version)
+            .map_err(ServiceError::Validation)?;
         crate::install_gating::check_required_capabilities_live(
             &metadata.requires_capabilities,
             &self.smart_client,
         )
         .await
         .map_err(ServiceError::Validation)?;
-
-        kani_core::file_storage::save_wasm(storage_path, &metadata.id, bytes)
-            .await
-            .map_err(ServiceError::Core)?;
-        kani_core::file_storage::delete_yaml_file(storage_path, &metadata.id)
-            .await
+        let instance_pre = self
+            .wasm_runtime
+            .instantiate_pre(&component)
             .map_err(ServiceError::Core)?;
 
-        let sid = self.upsert_wasm_source_row(&metadata, existing_id).await?;
+        let previous_version = self.stored_version(existing_id, &metadata.id).await?;
+        let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &metadata.id)
+            .await
+            .map_err(ServiceError::Core)?;
+        let written = async {
+            kani_core::file_storage::save_wasm(storage_path, &metadata.id, bytes)
+                .await
+                .map_err(ServiceError::Core)?;
+            kani_core::file_storage::delete_yaml_file(storage_path, &metadata.id)
+                .await
+                .map_err(ServiceError::Core)?;
+            self.upsert_wasm_source_row(&metadata, existing_id).await
+        }
+        .await;
+        let sid = match written {
+            Ok(sid) => sid,
+            Err(e) => {
+                restore_after_failed_install(storage_path, &metadata.id, previous).await;
+                return Err(e);
+            }
+        };
+        if previous_version.is_some_and(|v| v != metadata.version) {
+            crate::cache::invalidate_extension_cache(self.ext_cache.as_ref(), &metadata.id, sid)
+                .await;
+        }
 
         let prefs = self.load_pref_map(sid).await.unwrap_or_default();
         let ns = format!("{}:", metadata.id);
@@ -688,14 +782,10 @@ impl AppService {
             .as_ref()
             .map(|rl| rl.max_hook_requests)
             .unwrap_or(3);
-        let instance_pre = self
-            .wasm_runtime
-            .instantiate_pre(&component)
-            .map_err(ServiceError::Core)?;
         let backend = loader::build_wasm_source(
             self.wasm_runtime.engine().clone(),
             instance_pre,
-            self.smart_client.clone(),
+            crate::service::local_network::client_for(&self.db, sid, &self.smart_client).await,
             Some(metadata.base_url),
             metadata.unrestricted_http,
             self.browser_enabled_flag(sid).await,
@@ -716,6 +806,59 @@ impl AppService {
         }
         self.cache.invalidate_source(sid);
         Ok(sid)
+    }
+
+    /// Refuses an artifact whose own id differs from the repository entry it was installed
+    /// from, or from the source it is updating. Files and rows are keyed by the artifact's
+    /// id, so a mismatch would overwrite a different source.
+    async fn check_artifact_identity(
+        &self,
+        artifact_id: &str,
+        expected_id: Option<&str>,
+        existing_id: Option<i64>,
+    ) -> Result<()> {
+        if let Some(expected) = expected_id
+            && artifact_id != expected
+        {
+            return Err(ServiceError::Validation(format!(
+                "Artifact declares id '{artifact_id}' but the repository lists it as '{expected}'"
+            )));
+        }
+        if let Some(id) = existing_id {
+            let name: Option<String> = sqlx::query_scalar("SELECT name FROM sources WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.db_read)
+                .await?;
+            if name.as_deref() != Some(artifact_id) {
+                return Err(ServiceError::Validation(format!(
+                    "Artifact declares id '{artifact_id}' but is updating source {id} ({})",
+                    name.as_deref().unwrap_or("missing")
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    async fn stored_version(
+        &self,
+        existing_id: Option<i64>,
+        extension_id: &str,
+    ) -> Result<Option<String>> {
+        let version: Option<String> = match existing_id {
+            Some(id) => {
+                sqlx::query_scalar("SELECT version FROM sources WHERE id = ?")
+                    .bind(id)
+                    .fetch_optional(&self.db_read)
+                    .await?
+            }
+            None => {
+                sqlx::query_scalar("SELECT version FROM sources WHERE name = ?")
+                    .bind(extension_id)
+                    .fetch_optional(&self.db_read)
+                    .await?
+            }
+        };
+        Ok(version)
     }
 
     async fn upsert_yaml_source_row(
@@ -907,4 +1050,30 @@ fn fingerprint_from_b64(b64: &str) -> std::result::Result<String, String> {
         .try_into()
         .map_err(|_| "Public key must be 32 bytes".to_string())?;
     Ok(signing::key_fingerprint(&arr))
+}
+
+async fn restore_after_failed_install(
+    storage_path: &str,
+    extension_id: &str,
+    previous: kani_core::file_storage::ArtifactSnapshot,
+) {
+    if let Err(e) =
+        kani_core::file_storage::restore_artifacts(storage_path, extension_id, previous).await
+    {
+        tracing::error!(
+            "Install of '{extension_id}' failed and its previous artifacts could not be restored: {e}"
+        );
+    }
+}
+
+/// Checks every install path applies to the artifact itself, whichever way it arrived.
+fn check_artifact_gating(extension_id: &str, min_kani_version: Option<&str>) -> Result<()> {
+    const RESERVED_IDS: &[&str] = &["example", "test-abi"];
+    if RESERVED_IDS.contains(&extension_id) {
+        return Err(ServiceError::Validation(format!(
+            "Extension ID '{extension_id}' is reserved for development use and cannot be installed"
+        )));
+    }
+    crate::install_gating::check_min_kani_version(min_kani_version, env!("CARGO_PKG_VERSION"))
+        .map_err(ServiceError::Validation)
 }

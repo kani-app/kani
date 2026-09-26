@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT m.id as manga_id, COALESCE(m.local_name, m.name) as manga_name, m.cover_url, m.local_cover_path, m.cover_hash,\n                    s.base_url, c.id as chapter_id, c.chapter_number,\n                    c.name as chapter_name, c.discovered_at,\n                    (c.download_status = 2) as \"is_downloaded: bool\"\n             FROM chapters c\n             JOIN manga m ON c.manga_id = m.id\n             JOIN sources s ON m.source_id = s.id\n             WHERE c.discovered_at IS NOT NULL\n             ORDER BY DATE(c.discovered_at) DESC, c.chapter_number DESC LIMIT 51 OFFSET ?",
+  "query": "SELECT m.id as manga_id, m.source_id, COALESCE(m.local_name, m.name) as manga_name, m.cover_url, m.local_cover_path, m.cover_hash,\n                    s.base_url, c.id as chapter_id, c.chapter_number,\n                    c.name as chapter_name, c.discovered_at,\n                    (c.download_status = 2) as \"is_downloaded: bool\"\n             FROM chapters c\n             JOIN manga m ON c.manga_id = m.id\n             JOIN sources s ON m.source_id = s.id\n             WHERE c.discovered_at IS NOT NULL\n             ORDER BY DATE(c.discovered_at) DESC, c.chapter_number DESC LIMIT 51 OFFSET ?",
   "describe": {
     "columns": [
       {
@@ -9,53 +9,58 @@
         "type_info": "Integer"
       },
       {
-        "name": "manga_name",
+        "name": "source_id",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Integer"
       },
       {
-        "name": "cover_url",
+        "name": "manga_name",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "local_cover_path",
+        "name": "cover_url",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "cover_hash",
+        "name": "local_cover_path",
         "ordinal": 4,
         "type_info": "Text"
       },
       {
-        "name": "base_url",
+        "name": "cover_hash",
         "ordinal": 5,
         "type_info": "Text"
       },
       {
-        "name": "chapter_id",
+        "name": "base_url",
         "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_id",
+        "ordinal": 7,
         "type_info": "Integer"
       },
       {
         "name": "chapter_number",
-        "ordinal": 7,
+        "ordinal": 8,
         "type_info": "Float"
       },
       {
         "name": "chapter_name",
-        "ordinal": 8,
+        "ordinal": 9,
         "type_info": "Text"
       },
       {
         "name": "discovered_at",
-        "ordinal": 9,
+        "ordinal": 10,
         "type_info": "Datetime"
       },
       {
         "name": "is_downloaded: bool",
-        "ordinal": 10,
+        "ordinal": 11,
         "type_info": "Integer"
       }
     ],
@@ -63,6 +68,7 @@
       "Right": 1
     },
     "nullable": [
+      false,
       false,
       false,
       true,
@@ -76,5 +82,5 @@
       false
     ]
   },
-  "hash": "7280ecb4ed63b05139a4d2fc15682ce33c2b09437aa60a82ba34ebc574da0382"
+  "hash": "779fdfbcc6705748fae865f71cf800cf391acf0c1f538e530ed6888d22e5579f"
 }

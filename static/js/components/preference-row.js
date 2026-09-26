@@ -130,17 +130,20 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
   if (kindName === 'TextInput' || kindName === 'Text') {
     const isSecret = descriptor.secret || kindName === 'TextInput' && kindData.secret;
     control = html`
-      <div class="flex items-center gap-2">
-        <input
-          type=${isSecret ? 'password' : 'text'}
-          class="input"
-          aria-label=${title}
-          value=${textVal}
-          onInput=${(e) => setTextVal(/** @type {HTMLInputElement} */ (e.target).value)}
-        />
-        <button class="btn-secondary btn-sm" disabled=${saving} onClick=${() => save(textVal)}>
-          ${saving ? '…' : t('common.save')}
-        </button>
+      <div class="flex flex-col items-end gap-1">
+        <div class="flex items-center gap-2">
+          <input
+            type=${isSecret ? 'password' : 'text'}
+            class="input"
+            aria-label=${title}
+            value=${textVal}
+            onInput=${(e) => setTextVal(/** @type {HTMLInputElement} */ (e.target).value)}
+          />
+          <button class="btn-secondary btn-sm" disabled=${saving} onClick=${() => save(textVal)}>
+            ${saving ? '…' : t('common.save')}
+          </button>
+        </div>
+        ${isSecret && html`<span class="text-xs text-text-muted">${t('pref_row.secret_disclosure')}</span>`}
       </div>
     `;
   } else if (kindName === 'Checkbox' || kindName === 'Toggle') {

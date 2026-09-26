@@ -49,6 +49,7 @@ mod id_repair;
 pub mod import;
 pub mod integrity;
 pub mod library;
+pub mod local_network;
 pub mod manifest_capture;
 pub mod metadata_provider;
 pub mod migration;
@@ -96,6 +97,9 @@ pub struct AppService {
     pub downloader: DownloaderManager,
     pub smart_client: kani_core::http::SmartClient,
     pub proxy_client: kani_core::http::SmartClient,
+    /// Per-source (extraction, image) clients that honour a source's local-network grant.
+    pub(crate) source_clients:
+        Arc<dashmap::DashMap<i64, (kani_core::http::SmartClient, kani_core::http::SmartClient)>>,
     pub refresh_tx: tokio::sync::broadcast::Sender<AppEvent>,
     pub refresh_task: Arc<tokio::sync::Mutex<Option<tokio::task::AbortHandle>>>,
     pub cache: RequestCache,
@@ -586,6 +590,7 @@ impl AppService {
             global_smart_client.clone(),
             &wasm_runtime,
             &cache.preference_schema,
+            ext_cache.as_ref(),
         )
         .await
         {
@@ -662,7 +667,7 @@ impl AppService {
                         }
                         loader::build_yaml_source(
                             std::sync::Arc::new(ext),
-                            global_smart_client.clone(),
+                            local_network::client_for(&pool, source.id, &global_smart_client).await,
                             std::sync::Arc::clone(&ext_cache),
                             ns,
                             prefs,
@@ -716,6 +721,8 @@ impl AppService {
                     }
                 };
 
+                let mut base_url = source.base_url.clone();
+                let mut unrestricted_http = source.unrestricted_http;
                 let (pure_registry, hook_registry, max_hook_requests) = {
                     let mut inst = kani_core::sources::SourceInstance::new(
                         global_smart_client.clone(),
@@ -730,6 +737,33 @@ impl AppService {
                         let meta = inst.get_metadata().await.ok().and_then(|raw| {
                             serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                         });
+                        if let Some(m) = &meta {
+                            let loadable = match crate::install_gating::check_dsl_schema_version(
+                                m.dsl_schema_version,
+                            ) {
+                                Ok(()) => sources::reconcile_wasm_row(
+                                    &pool,
+                                    ext_cache.as_ref(),
+                                    &source,
+                                    m,
+                                )
+                                .await
+                                .map_err(|e| e.to_string()),
+                                Err(reason) => Err(reason),
+                            };
+                            if let Err(reason) = loadable {
+                                degradation_registry.register(
+                                    &degradations::ids::source_load(&source.name),
+                                    degradations::Severity::Error,
+                                    format!("Source '{}'", source.name),
+                                    format!("{} cannot be loaded: {reason}", wasm_path.display()),
+                                    "Reinstall the extension from its repository, or rebuild it.",
+                                );
+                                continue;
+                            }
+                            base_url.clone_from(&m.base_url);
+                            unrestricted_http = m.unrestricted_http;
+                        }
                         let max_hk = meta
                             .as_ref()
                             .and_then(|m| m.rate_limit.as_ref())
@@ -760,9 +794,9 @@ impl AppService {
                 loader::build_wasm_source(
                     wasm_runtime.engine().clone(),
                     instance_pre,
-                    global_smart_client.clone(),
-                    Some(source.base_url),
-                    source.unrestricted_http,
+                    local_network::client_for(&pool, source.id, &global_smart_client).await,
+                    Some(base_url),
+                    unrestricted_http,
                     source.browser_enabled,
                     prefs,
                     std::sync::Arc::clone(&ext_cache),
@@ -909,6 +943,7 @@ impl AppService {
             downloader,
             smart_client: global_smart_client,
             proxy_client,
+            source_clients: Arc::default(),
             refresh_tx,
             refresh_task,
             cache,
@@ -1031,10 +1066,10 @@ impl AppService {
 
         let smart_client = kani_core::http::SmartClient::new(None)
             .expect("SmartClient::new failed in test")
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let proxy_client = kani_core::http::SmartClient::new(None)
             .expect("proxy SmartClient::new failed in test")
-            .with_allow_private_egress(true);
+            .with_allow_loopback_egress(true);
         let wasm_runtime =
             Arc::new(WasmRuntime::new_on_demand().expect("WasmRuntime::new failed in test"));
         let downloader = DownloaderManager::new(
@@ -1110,6 +1145,7 @@ impl AppService {
             downloader,
             smart_client,
             proxy_client,
+            source_clients: Arc::default(),
             refresh_tx,
             refresh_task: Arc::new(tokio::sync::Mutex::new(None)),
             cache: RequestCache::new(),
@@ -1156,6 +1192,7 @@ impl AppService {
             self.smart_client.clone(),
             &self.wasm_runtime,
             &pref_schemas,
+            self.ext_cache.as_ref(),
         )
         .await?;
 
@@ -1186,7 +1223,7 @@ impl AppService {
                     let prefs = Self::load_pref_map_static(&self.db, source_id).await?;
                     let backend = crate::source::loader::build_yaml_source(
                         std::sync::Arc::new(ext),
-                        self.smart_client.clone(),
+                        local_network::client_for(&self.db, source_id, &self.smart_client).await,
                         std::sync::Arc::clone(&self.ext_cache),
                         format!("{source_name}:"),
                         prefs,
@@ -1233,7 +1270,7 @@ impl AppService {
                     let prefs = Self::load_pref_map_static(&self.db, source_id).await?;
                     let backend = crate::source::loader::build_yaml_source(
                         std::sync::Arc::new(ext),
-                        self.smart_client.clone(),
+                        local_network::client_for(&self.db, source_id, &self.smart_client).await,
                         std::sync::Arc::clone(&self.ext_cache),
                         format!("{source_name}:"),
                         prefs,

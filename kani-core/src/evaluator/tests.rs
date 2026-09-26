@@ -612,12 +612,12 @@ mod shared_tests {
     }
 
     #[tokio::test]
-    async fn parse_float_invalid_errors() {
-        let err = json_eval_err(Expr::ParseFloat {
+    async fn parse_float_invalid_is_null() {
+        let v = json_eval_opt(Expr::ParseFloat {
             target: Box::new(lit("abc")),
         })
         .await;
-        assert!(err.contains("Invalid float"));
+        assert_eq!(v, serde_json::Value::Null);
     }
 
     #[tokio::test]
@@ -712,6 +712,16 @@ mod shared_tests {
         )
         .await;
         assert_eq!(rows[0]["v"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn lookup_on_null_propagates_null() {
+        let v = json_eval_opt(Expr::Lookup {
+            target: Box::new(Expr::Null),
+            table: vec![("publishing".into(), "ongoing".into())],
+        })
+        .await;
+        assert_eq!(v, serde_json::Value::Null);
     }
 
     #[tokio::test]
@@ -3071,6 +3081,24 @@ mod dsl_v2_tests {
         let v = json_eval(expr).await;
         let expected = general_purpose::URL_SAFE_NO_PAD.encode("my/manga|1");
         assert_eq!(v, expected);
+    }
+
+    #[tokio::test]
+    async fn encoded_field_rejects_delimiter_in_non_final_subfield() {
+        use kani_shared::ast::IdEncoding;
+        let expr = Expr::EncodedField {
+            subfields: vec![
+                ("hid".into(), Box::new(Expr::Literal("a|b".into()))),
+                ("slug".into(), Box::new(Expr::Literal("slug".into()))),
+            ],
+            delimiter: "|".into(),
+            encoding: IdEncoding::Base64Url,
+        };
+        let err = json_eval_err(expr).await;
+        assert!(
+            err.contains("encoded_field") && err.contains("contains the delimiter"),
+            "expected a delimiter rejection, got: {err}"
+        );
     }
 
     #[tokio::test]

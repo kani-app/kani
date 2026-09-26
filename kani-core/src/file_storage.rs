@@ -31,7 +31,7 @@ pub async fn save_wasm(wasm_storage_path: &str, name: &str, bytes: &[u8]) -> Res
         return Err(Error::PathTraversal(name));
     }
 
-    fs::write(&path, bytes).await?;
+    write_atomic(&path, bytes).await?;
     Ok(path)
 }
 
@@ -53,8 +53,77 @@ pub async fn save_yaml(wasm_storage_path: &str, name: &str, content: &str) -> Re
         return Err(Error::PathTraversal(name));
     }
 
-    fs::write(&path, content.as_bytes()).await?;
+    write_atomic(&path, content.as_bytes()).await?;
     Ok(path)
+}
+
+async fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
+    let mut staging = path.as_os_str().to_owned();
+    staging.push(".tmp");
+    let staging = PathBuf::from(staging);
+    fs::write(&staging, bytes).await?;
+    if let Err(e) = fs::rename(&staging, path).await {
+        let _ = fs::remove_file(&staging).await;
+        return Err(e.into());
+    }
+    Ok(())
+}
+
+/// Both stored artifacts for one source, as they were before an install touched them.
+#[derive(Debug, Default)]
+pub struct ArtifactSnapshot {
+    yaml: Option<Vec<u8>>,
+    wasm: Option<Vec<u8>>,
+}
+
+fn confined_artifact_path(wasm_storage_path: &str, name: &str, ext: &str) -> Result<PathBuf> {
+    let name = crate::utilities::sanitize_filename(name);
+    let dir = PathBuf::from(wasm_storage_path);
+    let path = dir.join(format!("{name}.{ext}"));
+    if dir.exists()
+        && let Some(parent) = path.parent()
+        && parent.canonicalize()? != dir.canonicalize()?
+    {
+        return Err(Error::PathTraversal(name));
+    }
+    Ok(path)
+}
+
+async fn read_if_present(path: &std::path::Path) -> Result<Option<Vec<u8>>> {
+    match fs::read(path).await {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn snapshot_artifacts(wasm_storage_path: &str, name: &str) -> Result<ArtifactSnapshot> {
+    Ok(ArtifactSnapshot {
+        yaml: read_if_present(&confined_artifact_path(wasm_storage_path, name, "yaml")?).await?,
+        wasm: read_if_present(&confined_artifact_path(wasm_storage_path, name, "wasm")?).await?,
+    })
+}
+
+/// Puts both artifacts back exactly as `snapshot` recorded them, deleting any that did not exist.
+pub async fn restore_artifacts(
+    wasm_storage_path: &str,
+    name: &str,
+    snapshot: ArtifactSnapshot,
+) -> Result<()> {
+    for (ext, previous) in [("yaml", snapshot.yaml), ("wasm", snapshot.wasm)] {
+        let path = confined_artifact_path(wasm_storage_path, name, ext)?;
+        match previous {
+            Some(bytes) => write_atomic(&path, &bytes).await?,
+            None => {
+                if let Err(e) = fs::remove_file(&path).await
+                    && e.kind() != std::io::ErrorKind::NotFound
+                {
+                    return Err(e.into());
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Deletes the confined, sanitized module path and succeeds if it is absent.
@@ -188,6 +257,39 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = delete_yaml_file(dir.path().to_str().unwrap(), "nonexistent").await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn restore_undoes_a_format_switch() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = dir.path().to_str().unwrap();
+        save_yaml(storage, "ext", "version: 1\n").await.unwrap();
+        let snapshot = snapshot_artifacts(storage, "ext").await.unwrap();
+
+        save_wasm(storage, "ext", &valid_wasm()).await.unwrap();
+        delete_yaml_file(storage, "ext").await.unwrap();
+        restore_artifacts(storage, "ext", snapshot).await.unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ext.yaml")).unwrap(),
+            "version: 1\n"
+        );
+        assert!(
+            !dir.path().join("ext.wasm").exists(),
+            "an artifact absent from the snapshot must be removed"
+        );
+    }
+
+    #[tokio::test]
+    async fn saving_leaves_no_staging_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = dir.path().to_str().unwrap();
+        save_yaml(storage, "ext", "version: 2\n").await.unwrap();
+        let names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["ext.yaml".to_string()]);
     }
 
     #[test]
