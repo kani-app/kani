@@ -65,6 +65,24 @@ pub fn unresolved_calls(registered: &BTreeSet<String>, ast: &AST) -> BTreeSet<St
         .collect()
 }
 
+const CACHE_FUNCTIONS: &[&str] = &["cache_get", "cache_put", "cache_delete"];
+
+/// Cache namespaces `ast` names as string literals in `ctx.cache_*` calls. A namespace built at
+/// run time is not seen.
+pub fn literal_cache_namespaces(ast: &AST) -> BTreeSet<String> {
+    let mut namespaces = BTreeSet::new();
+    ast.walk(&mut |path: &[ASTNode]| {
+        if let Some(ASTNode::Expr(Expr::MethodCall(call, _))) = path.last()
+            && CACHE_FUNCTIONS.contains(&call.name.as_str())
+            && let Some(Expr::StringConstant(namespace, _)) = call.args.first()
+        {
+            namespaces.insert(namespace.to_string());
+        }
+        true
+    });
+    namespaces
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -94,6 +112,24 @@ mod tests {
             helper("abc") + 1
         "#;
         assert_eq!(unresolved(src), Vec::<String>::new());
+    }
+
+    #[test]
+    fn literal_cache_namespaces_are_collected_from_every_cache_call() {
+        let engine = crate::scripting::make_hook_sandbox();
+        let ast = engine
+            .compile(
+                r#"
+                fn refresh(ctx) { ctx.cache_put("auth", "t", "v", 0) }
+                let v = ctx.cache_get("cipher", "k");
+                ctx.cache_delete("seen", "k");
+                let dynamic = "x" + "y";
+                ctx.cache_get(dynamic, "k");
+                "#,
+            )
+            .unwrap();
+        let found: Vec<String> = literal_cache_namespaces(&ast).into_iter().collect();
+        assert_eq!(found, vec!["auth", "cipher", "seen"]);
     }
 
     #[test]

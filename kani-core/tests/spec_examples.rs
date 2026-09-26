@@ -437,6 +437,12 @@ async fn every_spec_hook_example_compiles_and_runs() {
                         block.origin
                     ));
                 }
+                for (hook, namespace) in registry.undeclared_cache_namespaces() {
+                    failures.push(format!(
+                        "{}: {hook} uses cache namespace '{namespace}' without declaring it",
+                        block.origin
+                    ));
+                }
                 let ids = block
                     .endpoints
                     .iter()

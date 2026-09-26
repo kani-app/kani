@@ -64,6 +64,19 @@ fn a_hook_calling_an_undefined_function_is_refused() {
 }
 
 #[test]
+fn a_hook_using_an_undeclared_cache_namespace_is_refused() {
+    let src = VALID.replace("cache:\n  auth:\n    ttl: 3600\n", "");
+    let found = yaml_problems(&src);
+    assert!(
+        found.len() == 2
+            && found
+                .iter()
+                .all(|p| p.contains("cache namespace 'auth'") && p.contains("does not declare")),
+        "expected pre_request and on_status to report 'auth', got {found:?}"
+    );
+}
+
+#[test]
 fn a_reserved_id_is_refused() {
     let src = VALID.replace("id: check-source", "id: example");
     assert_one_problem(&yaml_problems(&src), "reserved");

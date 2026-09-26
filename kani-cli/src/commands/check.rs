@@ -136,7 +136,15 @@ fn check_scripts(hooks: &HookScripts) -> Vec<String> {
         Ok(registry) => {
             problems.extend(registry.unresolved_calls().into_iter().map(|(hook, name)| {
                 format!("{hook} calls `{name}`, which neither the scripts nor Kani define")
-            }))
+            }));
+            problems.extend(registry.undeclared_cache_namespaces().into_iter().map(
+                |(hook, namespace)| {
+                    format!(
+                        "{hook} uses cache namespace '{namespace}', which the `cache:` block \
+                         does not declare"
+                    )
+                },
+            ));
         }
         Err(e) => problems.push(e),
     }

@@ -133,6 +133,35 @@ impl HookRegistry {
     /// compiled scripts and engine the hooks run on.
     pub fn unresolved_calls(&self) -> Vec<(String, String)> {
         let registered = super::lint::registered_function_names(&self.engine);
+        let mut found: Vec<(String, String)> = self
+            .hooks()
+            .flat_map(|(hook, ast)| {
+                super::lint::unresolved_calls(&registered, ast)
+                    .into_iter()
+                    .map(move |name| (hook.clone(), name))
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Literal cache namespaces each hook uses that the `cache:` block does not declare, as
+    /// `(hook, namespace)` pairs. The runtime refuses these on the first call.
+    pub fn undeclared_cache_namespaces(&self) -> Vec<(String, String)> {
+        let mut found: Vec<(String, String)> = self
+            .hooks()
+            .flat_map(|(hook, ast)| {
+                super::lint::literal_cache_namespaces(ast)
+                    .into_iter()
+                    .filter(|namespace| !self.cache_namespaces.contains_key(namespace))
+                    .map(move |namespace| (hook.clone(), namespace))
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    fn hooks(&self) -> impl Iterator<Item = (String, &AST)> {
         let global = self
             .global_pre_request
             .iter()
@@ -150,16 +179,7 @@ impl HookRegistry {
                 map.iter()
                     .map(move |(key, ast)| (format!("endpoint '{id}' on_status[{key}]"), ast))
             }));
-        let mut found: Vec<(String, String)> = global
-            .chain(endpoint)
-            .flat_map(|(hook, ast)| {
-                super::lint::unresolved_calls(&registered, ast)
-                    .into_iter()
-                    .map(move |name| (hook.clone(), name))
-            })
-            .collect();
-        found.sort();
-        found
+        global.chain(endpoint)
     }
 
     pub fn run_pre_request(

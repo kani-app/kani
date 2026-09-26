@@ -2328,7 +2328,8 @@ compile, is a `400` and changes nothing.
 `kani-cli check <file>` runs the same checks without a server, so a repository can refuse an
 artifact before publishing it. It also compiles hooks on the engine they run on and reports any
 call to a function that neither the extension's scripts nor Kani define, which Rhai otherwise
-reports only when the call runs.
+reports only when the call runs. It also reports a literal cache namespace a hook uses without
+declaring it in `cache:` (§3.2), which the runtime refuses on the first call.
 
 ### 6.4 SSE events
 
