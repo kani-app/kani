@@ -10,13 +10,18 @@ metadata:
     max_concurrent: 4
     max_hook_requests: 5
 
+cache:
+  auth:
+    ttl: 300
+
 pre_request: |
-  req.set_header("X-Auth", ctx.cache.get("auth", "token").or("").to_string());
+  let token = ctx.cache_get("auth", "token");
+  req.set_header("X-Auth", if token == () { "" } else { token });
   proceed()
 
 on_status:
   "401": |
-    ctx.cache.put("auth", "token", "refreshed", 300);
+    ctx.cache_put("auth", "token", "refreshed", 300);
     retry()
   "5xx": |
     retry_after(5)

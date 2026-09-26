@@ -132,3 +132,21 @@ fn a_component_importing_what_kani_lacks_is_refused() {
     let path = workspace_file(&["tests", "fixtures", "check", "unlinked-import.wasm"]);
     assert_one_problem(&problems(&path).unwrap(), "kani:extension/nope");
 }
+
+/// Fixtures feed codegen and validation tests that never run their hooks, so this is what keeps
+/// them describing extensions Kani would actually accept.
+#[test]
+fn every_yaml_fixture_passes_check() {
+    let mut failures = Vec::new();
+    for entry in std::fs::read_dir(workspace_file(&["tests", "fixtures"])).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        let found = problems(&path).unwrap();
+        if !found.is_empty() {
+            failures.push(format!("{}: {found:?}", path.display()));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
