@@ -1037,6 +1037,10 @@ The YAML format is the developer-facing representation of a kani extension. It i
 
 ### 3.1 Top-Level Structure
 
+A key the schema does not define is an error, reported with the field's name, its line, and
+the keys allowed there, so a misspelt key cannot silently leave its setting without effect. The
+only exception is the retired `for_each.concurrency` (§3.2).
+
 <!-- schema sketch: not an executable example -->
 ```yaml
 # === Required metadata ===

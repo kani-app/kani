@@ -36,29 +36,6 @@ id: test-source
 name: Test Source
 base_url: https://example.com
 version: "1.0.0"
-search:
-  path: /search?q={query}
-  container: .item
-  fields:
-    title: h3
-    url: a[href]
-    cover: img[src]
-manga_detail:
-  container: .detail
-  fields:
-    title: h1
-    description: .desc
-    cover: img[src]
-chapter_list:
-  container: li
-  fields:
-    title: a
-    url: a[href]
-    number: .num
-page_list:
-  container: img
-  fields:
-    url: img[src]
 "#;
 
 #[test]
