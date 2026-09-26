@@ -67,8 +67,7 @@ method_call    = IDENT "(" [ arg_list ] ")" ;
 arg_list       = expr { "," expr } ;
 variable       = "$" IDENT ;
 string         = '"' { CHAR } '"' ;
-number         = [ "-" ] DIGIT+ [ "." DIGIT+ ] ;
-integer        = [ "-" ] DIGIT+ ;
+number         = [ "-" ] DIGIT+ [ "." DIGIT+ ] ;   (* always a Number (64-bit float), with or without "." *)
 (* map_literal is only valid as the sole argument to .lookup() — it is not a general atom *)
 map_literal    = "{" [ map_entry { "," map_entry } ] "}" ;
 map_entry      = string ":" string ;
@@ -82,7 +81,7 @@ Every expression evaluates to a **Value**, which is one of:
 |------|-------------|
 | `String` | UTF-8 text |
 | `Number` | 64-bit float |
-| `Int` | 64-bit integer |
+| `Int` | 64-bit integer. Never written as a literal: produced by coercions such as `.parse_int()` and `.int()` |
 | `Bool` | Boolean |
 | `Null` | Absent/missing value |
 | `List` | Ordered sequence of values (used as iterator input/output) |
@@ -95,7 +94,7 @@ Every expression evaluates to a **Value**, which is one of:
 - `parse_float()` and `parse_int()` on a non-numeric string return `Null` (soft failure, not an error).
 - `date_parse()` and `date_parse_rfc3339()` on a malformed string return `Null` (soft failure).
 - `fallback(default)` replaces `Null` or an empty string with the default value. It does **not** catch runtime errors — only null/empty values.
-- Final field values must be `String`, `Number`, `Int`, or `Null` (for optional fields). `Element` and `Json` cannot be output directly.
+- A field or scalar may output `String`, a finite `Number`, `Int`, `Bool`, `Json` (written as the JSON it holds), or a `List` of those (an `Element` inside a list becomes `null`). An `Element` on its own, a non-finite `Number`, or `Null` counts as absent: an optional field records `null`, and a required one is an error. A document's `has_next_page` is a `Bool` scalar.
 
 ### 1.4 Root Expressions
 
@@ -449,7 +448,12 @@ scalar("base_url").append(self.attr("href"))
 
 ## 2. JSON Intermediate Model (IM)
 
-The JSON IM is the serialized representation of the `Expr` AST. It is what gets embedded in compiled WASM extensions and transmitted across the FFI boundary as part of a blueprint. It uses a tagged-object format for clarity and debuggability.
+The JSON IM is a **descriptive notation** for the `Expr` AST: one tagged JSON object per node,
+used in this document to show a node's shape. It is not a format Kani reads or writes. Compiled
+extensions embed blueprints, and send them across the FFI boundary, as postcard binary (§2.4),
+and YAML extensions are parsed straight to the AST. Each IM example corresponds node for node to
+an `Expr` value; the `filter` example in §2.2 is evaluated as that AST in `kani-core`'s evaluator
+tests.
 
 ### 2.1 Encoding Rules
 
@@ -482,6 +486,9 @@ Each `Expr` node is encoded as a JSON object with a `"op"` field identifying the
 ```json
 { "op": "num", "value": 3.14 }
 ```
+
+Every numeric literal is a `num` (a 64-bit float), including whole numbers such as `2`; there is
+no integer leaf.
 
 ```json
 { "op": "null" }
@@ -663,8 +670,8 @@ Like `"map"`, but each body evaluation must return a `List`; all result lists ar
 ```json
 {
   "op": "filter",
-  "target": { "op": "dom", "selector": "a.chapter-link" },
-  "predicate": { "op": "binop", "kind": "==", "lhs": { "op": "has_class", "target": { "op": "var", "name": "$item" }, "class": "active" }, "rhs": { "op": "lit", "value": "true" } }
+  "target": { "op": "select", "target": { "op": "self" }, "selector": "a.chapter-link" },
+  "predicate": { "op": "binop", "kind": "==", "lhs": { "op": "has_class", "target": { "op": "var", "name": "$item" }, "class": "active" }, "rhs": { "op": "bool", "value": true } }
 }
 ```
 
@@ -1088,7 +1095,7 @@ scripts:
   pure:                        # Named pure Rhai functions callable from the DSL via `.user.<name>()`
     <name>: string             # Rhai source defining `fn <name>(...)`; also shared with hooks
 
-pre_request: string            # Top-level Rhai hook body: runs before every HTTP request (§3.10)
+pre_request: string            # Top-level Rhai hook body: runs before each request whose endpoint has no pre_request of its own (§3.10)
 on_status:                     # Top-level Rhai hook bodies keyed by status pattern (§3.10)
   "401": string
   "5xx": string
@@ -1218,7 +1225,7 @@ accounts are a possible future feature, not a cache setting.
 
 #### Extension Metadata
 
-The top-level `metadata` block carries the parts of an extension's identity that aren't required to construct a request or run extraction — icon, rate limiting, supported languages, a description, and content sections — plus the top-level `schema_version`/`min_kani_version`/`requires_capabilities` fields that gate installation:
+The top-level `metadata` block carries the parts of an extension's identity that aren't required to construct a request or run extraction — icon, rate limiting, supported languages, a description, and reserved `sections` labels — plus the top-level `schema_version`/`min_kani_version`/`requires_capabilities` fields that gate installation:
 
 ```yaml
 schema_version: 1                  # Default: current schema version kani-cli supports
@@ -1236,22 +1243,29 @@ metadata:
     - "en"
     - "ja"
   description: "A short, human-readable description of this source."
-  sections:
-    - id: "latest"
-      name: "Latest"
+  sections:                        # Reserved: stored, but not read by Kani 1.x (see below)
+    - id: "extra"
+      name: "Extra"
       nsfw: false                  # Default: false
 ```
+
+`sections` is accepted and carried in the extension's metadata, but **no part of Kani 1.x reads
+it**: it adds no tab, route or listing, and the browse page shows only `popular` and `search`. A
+future feature may give it meaning additively; until then, don't expect a declared section to
+display anything.
 
 All `metadata` fields are optional and additive — an extension YAML with no `metadata`/`schema_version`/`min_kani_version`/`requires_capabilities` keys at all continues to work unchanged. `metadata` is encoded into the generated `ExtensionMetadata` struct (`kani-shared/src/extension.rs`), which crosses the WIT boundary as a single JSON-encoded string returned by `get-metadata` — adding further fields to `ExtensionMetadata` in the future is a serde-only change and does not require touching the WIT interface.
 
 ##### Install-time gating and host persistence
 
-`install_source` (`kani-web/src/rest/mod.rs`) decodes the `ExtensionMetadata` JSON string returned by `get-metadata` and, before persisting anything, runs two compatibility checks (`kani-web/src/install_gating.rs`):
+Every install path decodes the artifact's metadata (a YAML extension's validated fields, or the
+`ExtensionMetadata` JSON a WASM extension returns from `get-metadata`) and, before persisting
+anything, runs the checks in `kani_core::install_gating::check_artifact` (§6.3), including:
 
-- **`min_kani_version`** — parsed as semver and compared against the running host's version (`kani_web::KANI_VERSION`). Install is rejected if the host is older than the declared floor.
-- **`requires_capabilities`** — each entry must appear in the host's `HOST_CAPABILITIES` allow-list (currently `["unrestricted_http"]`). Install is rejected if any requested capability is unrecognized.
+- **`min_kani_version`** — parsed as semver and compared against the running host's version. Install is rejected if the host is older than the declared floor.
+- **`requires_capabilities`** — each entry must be in `HOST_CAPABILITIES` (`unrestricted_http`, `rhai_scripting`, `scoped_cache`) or be `browser_payload` with a capable solver. Install is rejected if any requested capability is unrecognized.
 
-Both checks return a `Result<(), String>`; failures are surfaced as `AppError::ValidationError` with a human-readable message naming the offending version/capability. Installation that passes gating persists `icon`, `description`, `languages` (JSON-encoded `Vec<String>`), and `schema_version` onto the `sources` table row, alongside the existing `name`/`version`/`base_url`/`unrestricted_http` columns (`migrations/20260818000002_baseline.sql`). These four columns are also added to `kani_shared::types::Source` and round-trip through `get_source`/`list_sources`/library scan queries. The frontend (`static/js/pages/source-details.js`, `static/js/components/sources-sidebar.js`) reads them directly off the `Source` object: the sidebar list item swaps the initial-letter avatar for the decoded `icon` (`data:image/png;base64,...`) when present, and the source details page's "About" card shows the icon, description, and a `languages` chip list (parsed from the JSON column).
+A failure is a validation error naming the offending version or capability. Installation that passes gating persists `icon`, `description`, `languages` (JSON-encoded `Vec<String>`), and `schema_version` onto the `sources` table row, alongside the existing `name`/`version`/`base_url`/`unrestricted_http` columns (`migrations/20260818000002_baseline.sql`). These four columns are also added to `kani_shared::types::Source` and round-trip through `get_source`/`list_sources`/library scan queries. The frontend (`static/js/pages/source-details.js`, `static/js/components/sources-sidebar.js`) reads them directly off the `Source` object: the sidebar list item swaps the initial-letter avatar for the decoded `icon` (`data:image/png;base64,...`) when present, and the source details page's "About" card shows the icon, description, and a `languages` chip list (parsed from the JSON column).
 
 #### Chapter Sort
 
@@ -1708,7 +1722,7 @@ metadata:
   languages: [string]           # Optional.
   description: string           # Optional.
   sections:
-    - id: string                 # Required, non-empty, unique within `sections`.
+    - id: string                 # Required, non-empty, unique within `sections`. Reserved: not read by Kani 1.x.
       name: string
       nsfw: bool                 # Optional. Default: false.
 
@@ -1859,7 +1873,7 @@ scripts:
   pure:
     <name>: string                   # Rhai source defining `fn <name>(...)`; also shared with hooks
 
-pre_request: string                  # Rhai hook body; runs before every source-level HTTP request
+pre_request: string                  # Rhai hook body; runs before each request whose endpoint has no pre_request of its own
 on_status:                           # Rhai hook bodies by status pattern
   "401" | "4xx" | "5xx" | "default": string
 
@@ -2001,13 +2015,40 @@ defined under `scripts.pure:` (see §1.5).
 
 Hooks can be declared at two levels:
 
-- **Source-level** — top-level `pre_request:` / `on_status:` keys; fire on every HTTP request made by this extension.
+- **Source-level** — top-level `pre_request:` / `on_status:` keys; apply to every request whose endpoint declares no hook of its own for that event (see Dispatch).
 - **Per-endpoint** — the same keys inside an endpoint block (e.g. `endpoints.manga_details.pre_request:`); apply to that endpoint's requests and to its `then:` / `for_each:` sub-fetches. Per-endpoint hooks receive the same sandbox bindings.
 
 #### Dispatch
 
 Exactly one hook body runs per event. A per-endpoint hook **replaces** the source-level hook; the
-two never both run.
+two never both run. Setup the source-level hook performs, such as authentication, is therefore
+missing from an endpoint that declares its own hook, unless that hook performs it too. Put the
+shared part in a `scripts.pure` function and have every hook that needs it apply the result:
+
+```yaml
+scripts:
+  pure:
+    bearer: |
+      fn bearer(token) { "Bearer " + token }
+
+pre_request: |
+  req.set_header("Authorization", bearer(ctx.pref("api_token")));
+  proceed()
+
+endpoints:
+  search:
+    pre_request: |
+      req.set_header("Authorization", bearer(ctx.pref("api_token")));
+      req.set_query("sort", "relevance");
+      proceed()
+  chapter_list:
+    pre_request: |
+      req.set_header("X-Chapter-Order", "asc");
+      proceed()
+```
+
+Popular and details requests run the source-level hook and carry the header. `search` sets it in
+its own hook. `chapter_list` does not, so its requests carry **no** `Authorization` header.
 
 Sub-fetches (`then:` / `for_each:` steps) carry an `endpoint_id` of the form
 `"<parent_endpoint>/<merge_as>"` (e.g. `"manga_details/chapters"`). Hooks are looked up for the
@@ -2181,10 +2222,13 @@ namespace. Reinstalling the same version keeps the cache.
 
 ### 4.3 Capacity limits
 
-Each namespace is capped at 4 MB and 4096 entries; a declared `max_entries` lowers the entry cap
-for that namespace. When a write would exceed a cap, the entries closest to expiry are evicted
-first. An extension has its own namespace plus at most 16 declared ones, so its total cache
-storage is bounded at 68 MB.
+Each namespace is capped at 4 MB of stored values and 4096 entries; a declared `max_entries`
+lowers the entry cap for that namespace. After every write the host keeps the entries that expire
+latest, up to both caps, and removes the rest, so the entries closest to expiry go first and a
+single value larger than 4 MB is not kept at all. A source owns its extension namespace, at most
+16 declared hook namespaces, and its `fetched_opts:{source_id}` namespace (§3.4), so its cache
+storage is bounded at 18 × 4 MB = 72 MB. The bound is per source; the server-wide total grows
+with the number of installed sources.
 
 ### 4.4 Usage in Rust Extensions
 

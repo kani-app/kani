@@ -492,3 +492,76 @@ async fn every_spec_hook_example_compiles_and_runs() {
         failures.join("\n")
     );
 }
+
+#[tokio::test]
+async fn literals_are_numbers_and_bools_are_output() {
+    let blueprint = BlueprintBuilder::new("")
+        .field("sum", lower("2 + 2").unwrap())
+        .field("parsed", lower("\"7\".parse_int()").unwrap())
+        .field("flag", lower("true").unwrap())
+        .scalar("has_next_page", lower("1 < 2").unwrap())
+        .build();
+    let mut state = HostState::default();
+    let out = json_eval::extract_json_str(&mut state, "{}", &blueprint)
+        .await
+        .unwrap();
+    let row = &out["rows"][0];
+
+    assert_eq!(
+        lower("2").unwrap(),
+        Expr::Number(2.0),
+        "a literal is a Number"
+    );
+    assert!(row["sum"].is_f64(), "2 + 2 is a Number: {}", row["sum"]);
+    assert_eq!(row["sum"].as_f64(), Some(4.0));
+    assert!(
+        row["parsed"].is_i64(),
+        "parse_int gives an Int: {}",
+        row["parsed"]
+    );
+    assert_eq!(row["flag"], serde_json::json!(true));
+    assert_eq!(out["scalars"]["has_next_page"], serde_json::json!(true));
+}
+
+#[test]
+fn an_endpoint_hook_replaces_the_source_hooks_setup() {
+    use kani_core::scripting::bindings::ScriptableRequest;
+    let block = hook_blocks()
+        .into_iter()
+        .find(|b| b.pure.contains_key("bearer"))
+        .expect("the §3.10 replacement example");
+    let registry = kani_core::scripting::HookRegistry::compile(&block.hooks).unwrap();
+    let auth_for = |endpoint: Option<&str>| {
+        let mut req = ScriptableRequest {
+            method: "GET".into(),
+            url: "https://example.com/".into(),
+            headers: Vec::new(),
+            queries: Vec::new(),
+            body: None,
+            endpoint_id: endpoint.map(str::to_owned),
+        };
+        let mut ctx = hook_ctx();
+        ctx.prefs.insert("api_token".into(), "t0k".into());
+        registry.run_pre_request(&mut req, ctx).unwrap();
+        req.headers
+            .iter()
+            .find(|(k, _)| k == "Authorization")
+            .map(|(_, v)| v.clone())
+    };
+
+    assert_eq!(
+        auth_for(Some("popular")).as_deref(),
+        Some("Bearer t0k"),
+        "source hook"
+    );
+    assert_eq!(
+        auth_for(Some("search")).as_deref(),
+        Some("Bearer t0k"),
+        "endpoint hook sets it"
+    );
+    assert_eq!(
+        auth_for(Some("chapter_list")),
+        None,
+        "endpoint hook replaced the source hook"
+    );
+}
