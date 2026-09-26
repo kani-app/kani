@@ -22,6 +22,18 @@ pub struct HookScripts {
 }
 
 impl HookScripts {
+    /// A compiled extension's hooks, as its metadata declares them.
+    pub fn from_metadata(metadata: &kani_shared::ExtensionMetadata) -> Self {
+        Self {
+            shared: metadata.scripts.clone(),
+            pre_request: metadata.pre_request.clone(),
+            on_status: metadata.on_status.clone(),
+            endpoint_pre_request: metadata.endpoint_pre_request.clone(),
+            endpoint_on_status: metadata.endpoint_on_status.clone(),
+            cache: metadata.cache.clone(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.pre_request.is_none()
             && self.on_status.is_empty()
@@ -115,6 +127,59 @@ impl HookRegistry {
             endpoint_pre_request,
             endpoint_on_status,
         })
+    }
+
+    /// Each hook's calls that nothing defines, as `(hook, function)` pairs, from the same
+    /// compiled scripts and engine the hooks run on.
+    pub fn unresolved_calls(&self) -> Vec<(String, String)> {
+        let registered = super::lint::registered_function_names(&self.engine);
+        let mut found: Vec<(String, String)> = self
+            .hooks()
+            .flat_map(|(hook, ast)| {
+                super::lint::unresolved_calls(&registered, ast)
+                    .into_iter()
+                    .map(move |name| (hook.clone(), name))
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Literal cache namespaces each hook uses that the `cache:` block does not declare, as
+    /// `(hook, namespace)` pairs. The runtime refuses these on the first call.
+    pub fn undeclared_cache_namespaces(&self) -> Vec<(String, String)> {
+        let mut found: Vec<(String, String)> = self
+            .hooks()
+            .flat_map(|(hook, ast)| {
+                super::lint::literal_cache_namespaces(ast)
+                    .into_iter()
+                    .filter(|namespace| !self.cache_namespaces.contains_key(namespace))
+                    .map(move |namespace| (hook.clone(), namespace))
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    fn hooks(&self) -> impl Iterator<Item = (String, &AST)> {
+        let global = self
+            .global_pre_request
+            .iter()
+            .map(|ast| ("pre_request".to_string(), ast))
+            .chain(
+                self.global_on_status
+                    .iter()
+                    .map(|(key, ast)| (format!("on_status[{key}]"), ast)),
+            );
+        let endpoint = self
+            .endpoint_pre_request
+            .iter()
+            .map(|(id, ast)| (format!("endpoint '{id}' pre_request"), ast))
+            .chain(self.endpoint_on_status.iter().flat_map(|(id, map)| {
+                map.iter()
+                    .map(move |(key, ast)| (format!("endpoint '{id}' on_status[{key}]"), ast))
+            }));
+        global.chain(endpoint)
     }
 
     pub fn run_pre_request(

@@ -1919,3 +1919,87 @@ async fn a_version_change_found_at_startup_clears_the_extension_cache() {
         "a version bump on disk must clear the cache"
     );
 }
+
+/// Passes `kani-yaml` validation, which compiles each hook alone, but not the hook runtime,
+/// which prepends the shared scripts: the hook redefines a shared function.
+fn yaml_whose_hooks_do_not_compile(id: &str) -> String {
+    format!(
+        r#"id: {id}
+name: {id}
+version: "2.0.0"
+base_url: "https://example.com"
+scripts:
+  pure:
+    shout: |
+      fn shout(s) {{ s.to_upper() }}
+pre_request: |
+  fn shout(s) {{ s + "!" }}
+  req.set_header("X-A", shout("a"));
+  proceed()
+"#
+    )
+}
+
+#[tokio::test]
+async fn installing_yaml_whose_hooks_do_not_compile_is_refused() {
+    let svc = test_service().await;
+    let err = svc
+        .install_yaml_source(yaml_whose_hooks_do_not_compile("dup-install").as_bytes())
+        .await
+        .expect_err("hooks that do not compile must not be dropped silently");
+    assert!(
+        err.to_string().contains("hooks do not compile"),
+        "refused for the hooks, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn the_startup_scan_disables_yaml_whose_hooks_do_not_compile() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("dup-scan.yaml"),
+        yaml_whose_hooks_do_not_compile("dup-scan"),
+    )
+    .unwrap();
+    let svc = test_service().await;
+    svc.scan_and_load_yaml_dir_for_test(dir.path())
+        .await
+        .unwrap();
+
+    let (enabled, load_error): (bool, Option<String>) =
+        sqlx::query_as("SELECT enabled, load_error FROM sources WHERE name = 'dup-scan'")
+            .fetch_one(&svc.db)
+            .await
+            .unwrap();
+    assert!(
+        !enabled,
+        "a source whose hooks cannot run must not be enabled"
+    );
+    assert!(
+        load_error.is_some_and(|e| e.contains("hooks do not compile")),
+        "the load error names the hooks"
+    );
+}
+
+#[tokio::test]
+async fn reloading_yaml_whose_hooks_no_longer_compile_is_refused() {
+    let svc = test_service().await;
+    let valid =
+        "id: dup-reload\nname: dup-reload\nversion: \"1.0.0\"\nbase_url: \"https://example.com\"\n";
+    let id = svc.install_yaml_source(valid.as_bytes()).await.unwrap();
+    let storage = svc.settings.read().await.wasm_storage_path.clone();
+    std::fs::write(
+        storage.join("dup-reload.yaml"),
+        yaml_whose_hooks_do_not_compile("dup-reload"),
+    )
+    .unwrap();
+
+    let err = svc
+        .reload_source(id)
+        .await
+        .expect_err("a reload must not drop hooks silently");
+    assert!(
+        err.to_string().contains("hooks do not compile"),
+        "refused for the hooks, got: {err}"
+    );
+}

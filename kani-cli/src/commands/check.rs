@@ -1,0 +1,149 @@
+//! Checks an extension artifact the way the server does before installing it, so a repository
+//! never publishes one that Kani would refuse or that fails once it runs.
+
+use std::path::Path;
+
+use kani_core::http::SolverCapability;
+use kani_core::install_gating::{ArtifactFacts, check_artifact};
+use kani_core::scripting::{HookRegistry, HookScripts};
+
+use crate::error::CliError;
+
+const HOST_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub fn run(file: &str) -> Result<(), CliError> {
+    let problems = problems(Path::new(file))?;
+    if problems.is_empty() {
+        println!("✓ {file} would install on Kani {HOST_VERSION}");
+        return Ok(());
+    }
+    for problem in &problems {
+        eprintln!("error: {problem}");
+    }
+    Err(CliError::Other(format!(
+        "{} problem(s) in {file}",
+        problems.len()
+    )))
+}
+
+/// Everything that would stop the server installing the extension at `path`, or make its
+/// scripts fail once they run. Empty when there is nothing to report.
+pub fn problems(path: &Path) -> Result<Vec<String>, CliError> {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("yaml" | "yml") => check_yaml(path),
+        Some("wasm") => check_wasm(path),
+        _ => Err(CliError::Other(format!(
+            "{}: expected a .yaml or .wasm extension",
+            path.display()
+        ))),
+    }
+}
+
+fn check_yaml(path: &Path) -> Result<Vec<String>, CliError> {
+    let text = std::fs::read_to_string(path)?;
+    let ext = match kani_yaml::parse_and_validate(&text, path) {
+        Ok(ext) => ext,
+        Err(errors) => return Ok(errors.iter().map(ToString::to_string).collect()),
+    };
+    let hooks = HookScripts {
+        shared: ext.pure_scripts.clone(),
+        pre_request: ext.pre_request.clone(),
+        on_status: ext.on_status.clone(),
+        endpoint_pre_request: ext.endpoint_pre_request.clone(),
+        endpoint_on_status: ext.endpoint_on_status.clone(),
+        cache: ext.cache_limits(),
+    };
+    let mut problems = check_artifact(
+        &ArtifactFacts {
+            id: &ext.id,
+            min_kani_version: ext.min_kani_version.as_deref(),
+            dsl_schema_version: None,
+            requires_capabilities: &ext.requires_capabilities,
+            scripts: &hooks,
+        },
+        HOST_VERSION,
+        SolverCapability::Capture,
+    );
+    problems.extend(lint_hooks(&hooks));
+    Ok(problems)
+}
+
+fn check_wasm(path: &Path) -> Result<Vec<String>, CliError> {
+    let bytes = std::fs::read(path)?;
+    let runtime = kani_core::wasm::WasmRuntime::new_on_demand()
+        .map_err(|e| CliError::Other(format!("WASM runtime: {e}")))?;
+    let component = match runtime.compile_component(&bytes) {
+        Ok(component) => component,
+        Err(e) => return Ok(vec![format!("not a loadable WASM component: {e}")]),
+    };
+    if let Err(e) = runtime.instantiate_pre(&component) {
+        return Ok(vec![format!(
+            "does not link against Kani {HOST_VERSION}'s host interface: {e}"
+        )]);
+    }
+
+    let client = kani_core::http::SmartClient::new(None)
+        .map_err(|e| CliError::Other(format!("HTTP client: {e}")))?;
+    let tokio = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Other(format!("runtime: {e}")))?;
+    let raw = tokio.block_on(async {
+        let mut instance = kani_core::sources::SourceInstance::new(client, None, false);
+        instance
+            .load(runtime.engine(), &component, runtime.linker())
+            .await?;
+        instance.get_metadata().await
+    });
+    let raw = match raw {
+        Ok(raw) => raw,
+        Err(e) => {
+            return Ok(vec![format!(
+                "could not read the extension's metadata: {e}"
+            )]);
+        }
+    };
+    let metadata: kani_shared::ExtensionMetadata = match serde_json::from_str(&raw) {
+        Ok(metadata) => metadata,
+        Err(e) => return Ok(vec![format!("invalid extension metadata: {e}")]),
+    };
+
+    let hooks = HookScripts::from_metadata(&metadata);
+    let mut problems = check_artifact(
+        &ArtifactFacts {
+            id: &metadata.id,
+            min_kani_version: metadata.min_kani_version.as_deref(),
+            dsl_schema_version: metadata.dsl_schema_version,
+            requires_capabilities: &metadata.requires_capabilities,
+            scripts: &hooks,
+        },
+        HOST_VERSION,
+        SolverCapability::Capture,
+    );
+    problems.extend(lint_hooks(&hooks));
+    Ok(problems)
+}
+
+/// Problems in hooks that compile but would fail once they run: calls nothing defines, and
+/// cache namespaces the extension does not declare. Compile failures come from `check_artifact`.
+fn lint_hooks(hooks: &HookScripts) -> Vec<String> {
+    if hooks.is_empty() {
+        return Vec::new();
+    }
+    let Ok(registry) = HookRegistry::compile(hooks) else {
+        return Vec::new();
+    };
+    let calls = registry.unresolved_calls().into_iter().map(|(hook, name)| {
+        format!("{hook} calls `{name}`, which neither the scripts nor Kani define")
+    });
+    let namespaces = registry
+        .undeclared_cache_namespaces()
+        .into_iter()
+        .map(|(hook, namespace)| {
+            format!(
+                "{hook} uses cache namespace '{namespace}', which the `cache:` block does not \
+                 declare"
+            )
+        });
+    calls.chain(namespaces).collect()
+}

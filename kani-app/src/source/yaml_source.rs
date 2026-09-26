@@ -104,6 +104,20 @@ fn merge_capture(merged: &mut Option<serde_json::Value>, value: serde_json::Valu
     }
 }
 
+/// A YAML extension's scripts, as the hook runtime compiles them.
+pub(crate) fn yaml_hook_scripts(
+    config: &kani_yaml::ValidatedExtension,
+) -> kani_core::scripting::HookScripts {
+    kani_core::scripting::HookScripts {
+        shared: config.pure_scripts.clone(),
+        pre_request: config.pre_request.clone(),
+        on_status: config.on_status.clone(),
+        endpoint_pre_request: config.endpoint_pre_request.clone(),
+        endpoint_on_status: config.endpoint_on_status.clone(),
+        cache: config.cache_limits(),
+    }
+}
+
 pub struct YamlSource {
     pub config: Arc<kani_yaml::ValidatedExtension>,
     http: kani_core::http::SmartClient,
@@ -142,32 +156,31 @@ impl YamlSource {
             .map(|rl| rl.max_hook_requests)
             .unwrap_or(3);
 
-        let hook_scripts = kani_core::scripting::HookScripts {
-            shared: config.pure_scripts.clone(),
-            pre_request: config.pre_request.clone(),
-            on_status: config.on_status.clone(),
-            endpoint_pre_request: config.endpoint_pre_request.clone(),
-            endpoint_on_status: config.endpoint_on_status.clone(),
-            cache: config.cache_limits(),
-        };
-        let hook_registry = if hook_scripts.pre_request.is_some()
-            || !hook_scripts.on_status.is_empty()
-            || !hook_scripts.endpoint_pre_request.is_empty()
-            || !hook_scripts.endpoint_on_status.is_empty()
-        {
-            kani_core::scripting::HookRegistry::compile(&hook_scripts)
-                .ok()
-                .map(Arc::new)
-        } else {
+        // Install, reload and the startup scan refuse scripts that do not compile, so a
+        // failure here means that check was bypassed; it is logged, never dropped silently.
+        let hook_scripts = yaml_hook_scripts(&config);
+        let hook_registry = if hook_scripts.is_empty() {
             None
+        } else {
+            match kani_core::scripting::HookRegistry::compile(&hook_scripts) {
+                Ok(registry) => Some(Arc::new(registry)),
+                Err(e) => {
+                    tracing::error!(source = %config.id, "hooks do not compile: {e}");
+                    None
+                }
+            }
         };
 
-        let pure_fn_registry = if !config.pure_scripts.is_empty() {
-            kani_core::scripting::PureFunctionRegistry::compile(&config.pure_scripts)
-                .ok()
-                .map(Arc::new)
-        } else {
+        let pure_fn_registry = if config.pure_scripts.is_empty() {
             None
+        } else {
+            match kani_core::scripting::PureFunctionRegistry::compile(&config.pure_scripts) {
+                Ok(registry) => Some(Arc::new(registry)),
+                Err(e) => {
+                    tracing::error!(source = %config.id, "scripts do not compile: {e}");
+                    None
+                }
+            }
         };
 
         let browser_scripts = Arc::new(kani_core::scripting::BrowserScriptRegistry::from_map(

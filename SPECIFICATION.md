@@ -1037,6 +1037,10 @@ The YAML format is the developer-facing representation of a kani extension. It i
 
 ### 3.1 Top-Level Structure
 
+A key the schema does not define is an error, reported with the field's name, its line, and
+the keys allowed there, so a misspelt key cannot silently leave its setting without effect. The
+only exception is the retired `for_each.concurrency` (§3.2).
+
 <!-- schema sketch: not an executable example -->
 ```yaml
 # === Required metadata ===
@@ -2323,7 +2327,16 @@ signature) and finds or creates the source row by the artifact's own id. Replaci
 source (`POST /rest/sources/{id}/wasm`, `/{id}/wasm/fetch`) requires the artifact to declare that
 source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_version`, id form
 (§3.9), blueprint schema version (§2.4) and capability checks apply on every path; an artifact that fails any of them, or does not
-compile, is a `400` and changes nothing.
+compile, is a `400` and changes nothing. Its scripts must also compile on the engines they run on,
+the shared `scripts:` prepended to each hook, as they are at run time. Reload applies the same
+rule, and the startup scan records a failure as the source's load error and disables it, so a
+source never runs with its hooks silently missing.
+
+`kani-cli check <file>` runs the same checks without a server, so a repository can refuse an
+artifact before publishing it. It also compiles hooks on the engine they run on and reports any
+call to a function that neither the extension's scripts nor Kani define, which Rhai otherwise
+reports only when the call runs. It also reports a literal cache namespace a hook uses without
+declaring it in `cache:` (§3.2), which the runtime refuses on the first call.
 
 ### 6.4 SSE events
 

@@ -3,6 +3,7 @@
 pub mod archive;
 pub mod backup_verify;
 pub mod build;
+pub mod check;
 pub mod css;
 pub mod dsl_cmd;
 pub mod generate;
@@ -30,7 +31,14 @@ pub struct Cli {
 /// shape may gain optional additions but may not change meaning or be removed within a major
 /// version. Every other subcommand is repo plumbing or a diagnostic and carries no such promise,
 /// which its help text marks with `[unstable]`.
-pub const STABLE_COMMANDS: &[&str] = &["archive-verify", "build", "generate", "new", "validate"];
+pub const STABLE_COMMANDS: &[&str] = &[
+    "archive-verify",
+    "build",
+    "check",
+    "generate",
+    "new",
+    "validate",
+];
 
 /// Marker appended to the help text of a subcommand outside [`STABLE_COMMANDS`].
 pub const UNSTABLE_MARKER: &str = "[unstable]";
@@ -48,6 +56,11 @@ pub enum Command {
     /// Validate a YAML extension file
     Validate {
         /// Path to the YAML file
+        file: String,
+    },
+    /// Check a .yaml or .wasm extension the way the server does before installing it
+    Check {
+        /// Path to the extension file
         file: String,
     },
     /// Generate Rust source from a YAML extension file
@@ -343,6 +356,7 @@ pub fn run(cli: Cli) -> Result<(), CliError> {
     match cli.command {
         Command::New { name, rust } => new::run(&name, rust),
         Command::Validate { file } => validate::run(&file),
+        Command::Check { file } => check::run(&file),
         Command::Generate {
             file,
             force,

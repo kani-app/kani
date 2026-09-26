@@ -24,6 +24,19 @@ pub(super) fn compile_pure_registry(
     }
 }
 
+/// Refuses scripts that do not compile, which would otherwise leave a loaded source running
+/// without its hooks or pure functions.
+pub(super) fn refuse_uncompilable_scripts(
+    scripts: &kani_core::scripting::HookScripts,
+) -> Result<()> {
+    let problems = crate::install_gating::check_scripts_compile(scripts);
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(ServiceError::Validation(problems.join("; ")))
+    }
+}
+
 pub(super) async fn reconcile_wasm_row(
     db: &sqlx::SqlitePool,
     ext_cache: &dyn kani_core::cache::CacheBackend,
@@ -60,14 +73,7 @@ pub(super) async fn reconcile_wasm_row(
 pub(super) fn compile_hook_registry(
     metadata: &kani_shared::ExtensionMetadata,
 ) -> Option<std::sync::Arc<kani_core::scripting::HookRegistry>> {
-    let scripts = kani_core::scripting::HookScripts {
-        shared: metadata.scripts.clone(),
-        pre_request: metadata.pre_request.clone(),
-        on_status: metadata.on_status.clone(),
-        endpoint_pre_request: metadata.endpoint_pre_request.clone(),
-        endpoint_on_status: metadata.endpoint_on_status.clone(),
-        cache: metadata.cache.clone(),
-    };
+    let scripts = kani_core::scripting::HookScripts::from_metadata(metadata);
     if scripts.is_empty() {
         return None;
     }
@@ -356,6 +362,9 @@ impl AppService {
                     if let Some(m) = &meta {
                         crate::install_gating::check_dsl_schema_version(m.dsl_schema_version)
                             .map_err(ServiceError::Validation)?;
+                        refuse_uncompilable_scripts(
+                            &kani_core::scripting::HookScripts::from_metadata(m),
+                        )?;
                     }
                     let max_hk = meta
                         .as_ref()
@@ -1017,6 +1026,11 @@ impl AppService {
                                 env!("CARGO_PKG_VERSION"),
                             )
                             .err()
+                        })
+                        .or_else(|| {
+                            let scripts = crate::source::yaml_source::yaml_hook_scripts(&ext);
+                            let problems = crate::install_gating::check_scripts_compile(&scripts);
+                            (!problems.is_empty()).then(|| problems.join("; "))
                         });
                         (Some(ext), err)
                     }
@@ -1357,6 +1371,7 @@ impl AppService {
                 .map_err(|e| ServiceError::Internal(format!("Invalid extension metadata: {e}")))?;
             crate::install_gating::check_dsl_schema_version(meta.dsl_schema_version)
                 .map_err(ServiceError::Validation)?;
+            refuse_uncompilable_scripts(&kani_core::scripting::HookScripts::from_metadata(&meta))?;
             let schema = inst.get_preferences().await.ok();
             (meta, schema)
         };
@@ -1420,6 +1435,7 @@ impl AppService {
                 .join("; ");
             ServiceError::Validation(format!("Invalid YAML extension: {msg}"))
         })?;
+        refuse_uncompilable_scripts(&crate::source::yaml_source::yaml_hook_scripts(&validated))?;
 
         sqlx::query!(
             "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ? WHERE id = ?",

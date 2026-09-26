@@ -13,6 +13,7 @@ pub mod error;
 pub mod evaluator;
 pub mod file_storage;
 pub mod http;
+pub mod install_gating;
 pub mod manifest;
 pub mod network;
 pub mod option_set_fetcher;

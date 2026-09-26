@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 /// Top-level declarative extension document before semantic validation.
 /// Defaults and accepted wire shapes in this module are part of the authoring format.
 pub struct YamlExtension {
@@ -70,6 +71,7 @@ pub struct YamlExtension {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ScriptsBlock {
     /// Pure Rhai functions (name → source). Callable as `.user.<name>(args...)` in DSL expressions.
     #[serde(default)]
@@ -77,6 +79,7 @@ pub struct ScriptsBlock {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// Template and source matrix used to generate several extensions from one declaration.
 pub struct FactoryBlock {
     /// Optional external template file path; if absent the containing YAML is the template.
@@ -85,6 +88,7 @@ pub struct FactoryBlock {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FactorySource {
     pub id: String,
     pub name: String,
@@ -99,6 +103,7 @@ pub struct FactorySource {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChapterSortBlock {
     pub default: Option<String>,
     #[serde(default)]
@@ -106,6 +111,7 @@ pub struct ChapterSortBlock {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ChapterSortOptionYaml {
     pub id: String,
     pub label: String,
@@ -119,6 +125,7 @@ fn default_schema_version() -> u32 {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct MetadataBlock {
     /// Base64-encoded icon image (PNG/WebP/SVG), ≤64KB decoded.
     pub icon: Option<String>,
@@ -132,6 +139,7 @@ pub struct MetadataBlock {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// Host-enforced upstream request and response-hook budget.
 pub struct RateLimitCfg {
     /// Sustained requests per second.
@@ -162,6 +170,7 @@ fn default_max_hook_requests() -> u32 {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SectionEntry {
     pub id: String,
     pub name: String,
@@ -174,6 +183,7 @@ fn default_language() -> String {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 /// Declared provider endpoints keyed by the operation the host invokes.
 pub struct Endpoints {
     pub popular: Option<PopularEndpoint>,
@@ -184,19 +194,17 @@ pub struct Endpoints {
 }
 
 /// Popular can either delegate to another endpoint or define its own extraction.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug)]
 pub enum PopularEndpoint {
-    // Delegated must come first so serde tries it before Full (which is permissive).
     Delegated {
         delegate_to: String,
-        #[serde(default)]
         empty_without_filters: bool,
     },
     Full(Box<EndpointBody>),
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 /// Request, extraction, chaining, pagination, and hook declaration for one provider operation.
 pub struct EndpointBody {
     pub route: Option<String>,
@@ -292,6 +300,7 @@ impl<'de> serde::Deserialize<'de> for OnFailure {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThenStep {
     /// Name of a declared endpoint whose blueprint to use for extraction.
     pub endpoint: String,
@@ -303,6 +312,7 @@ pub struct ThenStep {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ForEachStep {
     /// Name of a declared endpoint whose blueprint to use for extraction.
     pub endpoint: String,
@@ -313,6 +323,9 @@ pub struct ForEachStep {
     pub on_failure: Option<OnFailure>,
     /// DSL expression for deduplication key; rows with duplicate keys are dropped.
     pub deduplicate_by: Option<String>,
+    /// Accepted from older extensions and ignored (SPECIFICATION.md §3.2).
+    #[serde(default, rename = "concurrency")]
+    _legacy_concurrency: Option<serde::de::IgnoredAny>,
 }
 
 fn default_method() -> String {
@@ -346,15 +359,10 @@ pub enum ResponseType {
 /// A field definition is either a bare DSL expression string, `{expr, optional}`,
 /// or a composite-id map (subfield name -> DSL expression) consumed together with
 /// a top-level `id_encoding` block.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug)]
 pub enum FieldDef {
     Expr(String),
-    Full {
-        expr: String,
-        #[serde(default)]
-        optional: bool,
-    },
+    Full { expr: String, optional: bool },
     Composite(BTreeMap<String, String>),
 }
 
@@ -384,15 +392,13 @@ impl FieldDef {
 
 /// Filter mapping entry: simple query-param name, a sort-pair split, or a
 /// tuple split (value split at `:` into two separate query params).
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum FilterMappingEntry {
     Simple(String),
     SortPair {
         #[allow(dead_code)]
         kind: SortPairKind,
         key_template: String,
-        #[serde(default)]
         direction_param: Option<String>,
     },
     TupleSplit {
@@ -416,6 +422,7 @@ pub enum TupleSplitKind {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// Fixed-size source pagination declaration lowered into a blueprint pagination config.
 pub struct PaginationCfg {
     pub native_page_size: usize,
@@ -437,6 +444,7 @@ pub enum YamlOffsetType {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// One author-facing filter control and its wire-mapping metadata.
 pub struct FilterEntry {
     pub id: String,
@@ -469,6 +477,7 @@ pub enum FilterKind {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FilterOption {
     pub name: String,
     pub value: String,
@@ -478,8 +487,7 @@ pub struct FilterOption {
 
 /// Default value for a filter — bool for checkbox, name+value for select/sort,
 /// or bare string for text_input.
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum FilterDefault {
     Bool(bool),
     Option { name: String, value: String },
@@ -495,6 +503,7 @@ pub enum FilterSemantic {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// One host-rendered and host-persisted extension preference.
 pub struct PreferenceEntry {
     pub key: String,
@@ -521,12 +530,14 @@ pub enum PreferenceKind {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct PrefOption {
     pub name: String,
     pub value: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FilterFormatCfg {
     #[serde(default)]
     pub multiselect: ArrayFormat,
@@ -567,8 +578,7 @@ pub enum BoolFormat {
 
 /// Either a static inline list of options, or a definition for fetching them
 /// lazily from the host at filter-panel render time.
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum OptionSetDef {
     Static(Vec<OptionSetItem>),
     Fetched {
@@ -577,6 +587,7 @@ pub enum OptionSetDef {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct OptionSetItem {
     pub name: String,
     pub value: String,
@@ -585,6 +596,7 @@ pub struct OptionSetItem {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// Host-fetched option-set extraction and caching declaration.
 pub struct FetchedOptionsDef {
     pub route: String,
@@ -598,6 +610,7 @@ pub struct FetchedOptionsDef {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 /// Inline fetched-option cache configuration.
 pub struct InlineCacheEntry {
     /// Cache lifetime in seconds.
@@ -611,6 +624,7 @@ fn default_cache_ttl() -> u32 {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 /// Composite identifier encoding declarations for manga and chapter identifiers.
 pub struct IdEncodingBlock {
     pub manga: Option<IdEncodingEntry>,
@@ -618,6 +632,7 @@ pub struct IdEncodingBlock {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct IdEncodingEntry {
     pub fields: Vec<String>,
     #[serde(default = "default_id_delimiter")]
@@ -678,5 +693,167 @@ mod tests {
         let disabled: EndpointBody =
             serde_yaml::from_str("route: /browse\nauto_scroll: false").unwrap();
         assert_eq!(disabled.auto_scroll, Some(false));
+    }
+}
+
+// The enums below take more than one shape. `#[serde(untagged)]` would try each shape in turn
+// and, when a key is misspelt, report only that no shape matched; choosing the shape first
+// keeps serde's "unknown field" error, which serde_yaml locates in the file.
+
+fn from_yaml<T: serde::de::DeserializeOwned, E: serde::de::Error>(
+    value: serde_yaml::Value,
+) -> Result<T, E> {
+    serde_yaml::from_value(value).map_err(E::custom)
+}
+
+fn has_key(value: &serde_yaml::Value, key: &str) -> bool {
+    value.as_mapping().is_some_and(|m| m.contains_key(key))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PopularDelegation {
+    delegate_to: String,
+    #[serde(default)]
+    empty_without_filters: bool,
+}
+
+impl<'de> Deserialize<'de> for PopularEndpoint {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        if has_key(&value, "delegate_to") {
+            let d: PopularDelegation = from_yaml(value)?;
+            Ok(Self::Delegated {
+                delegate_to: d.delegate_to,
+                empty_without_filters: d.empty_without_filters,
+            })
+        } else {
+            Ok(Self::Full(Box::new(from_yaml(value)?)))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FullField {
+    expr: String,
+    #[serde(default)]
+    optional: bool,
+}
+
+impl<'de> Deserialize<'de> for FieldDef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        match value {
+            serde_yaml::Value::String(expr) => Ok(Self::Expr(expr)),
+            value if has_key(&value, "expr") => {
+                let f: FullField = from_yaml(value)?;
+                Ok(Self::Full {
+                    expr: f.expr,
+                    optional: f.optional,
+                })
+            }
+            serde_yaml::Value::Mapping(_) => Ok(Self::Composite(from_yaml(value)?)),
+            _ => Err(serde::de::Error::custom(
+                "a field is a DSL expression, a mapping with `expr`, or a mapping of named parts",
+            )),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SortPairEntry {
+    kind: SortPairKind,
+    key_template: String,
+    #[serde(default)]
+    direction_param: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TupleSplitEntry {
+    kind: TupleSplitKind,
+    from_param: String,
+    to_param: String,
+}
+
+impl<'de> Deserialize<'de> for FilterMappingEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        if let serde_yaml::Value::String(key) = value {
+            return Ok(Self::Simple(key));
+        }
+        match value.get("kind").and_then(serde_yaml::Value::as_str) {
+            Some("sort_pair") => {
+                let e: SortPairEntry = from_yaml(value)?;
+                Ok(Self::SortPair {
+                    kind: e.kind,
+                    key_template: e.key_template,
+                    direction_param: e.direction_param,
+                })
+            }
+            Some("tuple_split") => {
+                let e: TupleSplitEntry = from_yaml(value)?;
+                Ok(Self::TupleSplit {
+                    kind: e.kind,
+                    from_param: e.from_param,
+                    to_param: e.to_param,
+                })
+            }
+            _ => Err(serde::de::Error::custom(
+                "a filter mapping is a parameter name, or a mapping with `kind: sort_pair` or \
+                 `kind: tuple_split`",
+            )),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OptionDefault {
+    name: String,
+    value: String,
+}
+
+impl<'de> Deserialize<'de> for FilterDefault {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match serde_yaml::Value::deserialize(deserializer)? {
+            serde_yaml::Value::Bool(b) => Ok(Self::Bool(b)),
+            serde_yaml::Value::String(text) => Ok(Self::Text(text)),
+            value @ serde_yaml::Value::Mapping(_) => {
+                let o: OptionDefault = from_yaml(value)?;
+                Ok(Self::Option {
+                    name: o.name,
+                    value: o.value,
+                })
+            }
+            _ => Err(serde::de::Error::custom(
+                "a filter default is a bool, a string, or a mapping with `name` and `value`",
+            )),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FetchedOptionSet {
+    options_fetched_by: FetchedOptionsDef,
+}
+
+impl<'de> Deserialize<'de> for OptionSetDef {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match serde_yaml::Value::deserialize(deserializer)? {
+            value @ serde_yaml::Value::Sequence(_) => Ok(Self::Static(from_yaml(value)?)),
+            value @ serde_yaml::Value::Mapping(_) => {
+                let f: FetchedOptionSet = from_yaml(value)?;
+                Ok(Self::Fetched {
+                    options_fetched_by: f.options_fetched_by,
+                })
+            }
+            _ => Err(serde::de::Error::custom(
+                "an option set is a list of options, or a mapping with `options_fetched_by`",
+            )),
+        }
     }
 }
