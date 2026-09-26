@@ -60,14 +60,7 @@ pub(super) async fn reconcile_wasm_row(
 pub(super) fn compile_hook_registry(
     metadata: &kani_shared::ExtensionMetadata,
 ) -> Option<std::sync::Arc<kani_core::scripting::HookRegistry>> {
-    let scripts = kani_core::scripting::HookScripts {
-        shared: metadata.scripts.clone(),
-        pre_request: metadata.pre_request.clone(),
-        on_status: metadata.on_status.clone(),
-        endpoint_pre_request: metadata.endpoint_pre_request.clone(),
-        endpoint_on_status: metadata.endpoint_on_status.clone(),
-        cache: metadata.cache.clone(),
-    };
+    let scripts = kani_core::scripting::HookScripts::from_metadata(metadata);
     if scripts.is_empty() {
         return None;
     }

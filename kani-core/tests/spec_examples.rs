@@ -431,6 +431,12 @@ async fn every_spec_hook_example_compiles_and_runs() {
         match kani_core::scripting::HookRegistry::compile(&block.hooks) {
             Err(e) => failures.push(format!("{}: hooks do not compile: {e}", block.origin)),
             Ok(registry) => {
+                for (hook, name) in registry.unresolved_calls() {
+                    failures.push(format!(
+                        "{}: {hook} calls `{name}`, which Kani does not define",
+                        block.origin
+                    ));
+                }
                 let ids = block
                     .endpoints
                     .iter()

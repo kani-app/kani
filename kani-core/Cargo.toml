@@ -49,13 +49,14 @@ thiserror.workspace = true
 zip = { version = "7.2.0", default-features = false, features = ["deflate"] }
 async_zip = { version = "0.0.18", features = ["tokio"] }
 dunce = "1"
+semver = "1"
 
 # Image dimension reading and pixel sampling (spread detection at CBZ creation)
 imagesize = "0.13"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 
 # Scripting
-rhai = { version = "1.19", features = ["sync"] }
+rhai = { version = "1.19", features = ["sync", "internals", "metadata"] }
 
 # Logging
 tracing.workspace = true

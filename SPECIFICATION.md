@@ -2325,6 +2325,11 @@ source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_
 (§3.9), blueprint schema version (§2.4) and capability checks apply on every path; an artifact that fails any of them, or does not
 compile, is a `400` and changes nothing.
 
+`kani-cli check <file>` runs the same checks without a server, so a repository can refuse an
+artifact before publishing it. It also compiles hooks on the engine they run on and reports any
+call to a function that neither the extension's scripts nor Kani define, which Rhai otherwise
+reports only when the call runs.
+
 ### 6.4 SSE events
 
 `SourceInstalled`, `RepoRefreshed`, `UpdateAvailable` (emitted by `refresh_repo` when a repo version exceeds the installed version, by semver compare), and `SourceUpdating` (emitted at the start of an update) are broadcast for live frontend indicators.

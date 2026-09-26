@@ -636,13 +636,13 @@ impl AppService {
 
         self.check_artifact_identity(&validated.id, expected_id, existing_id)
             .await?;
-        check_artifact_gating(&validated.id, validated.min_kani_version.as_deref())?;
-        crate::install_gating::check_required_capabilities_live(
-            &validated.requires_capabilities,
-            &self.smart_client,
-        )
-        .await
-        .map_err(ServiceError::Validation)?;
+        self.check_artifact(&crate::install_gating::ArtifactFacts {
+            id: &validated.id,
+            min_kani_version: validated.min_kani_version.as_deref(),
+            dsl_schema_version: None,
+            requires_capabilities: &validated.requires_capabilities,
+        })
+        .await?;
 
         let previous_version = self.stored_version(existing_id, &validated.id).await?;
         let previous = kani_core::file_storage::snapshot_artifacts(storage_path, &validated.id)
@@ -725,23 +725,17 @@ impl AppService {
             (meta, schema)
         };
 
-        if !kani_shared::types::is_valid_extension_id(&metadata.id) {
-            return Err(ServiceError::Validation(format!(
-                "Extension id '{}' must match [a-z][a-z0-9-]*",
-                metadata.id
-            )));
-        }
+        crate::install_gating::check_extension_id(&metadata.id)
+            .map_err(ServiceError::Validation)?;
         self.check_artifact_identity(&metadata.id, expected_id, existing_id)
             .await?;
-        check_artifact_gating(&metadata.id, metadata.min_kani_version.as_deref())?;
-        crate::install_gating::check_dsl_schema_version(metadata.dsl_schema_version)
-            .map_err(ServiceError::Validation)?;
-        crate::install_gating::check_required_capabilities_live(
-            &metadata.requires_capabilities,
-            &self.smart_client,
-        )
-        .await
-        .map_err(ServiceError::Validation)?;
+        self.check_artifact(&crate::install_gating::ArtifactFacts {
+            id: &metadata.id,
+            min_kani_version: metadata.min_kani_version.as_deref(),
+            dsl_schema_version: metadata.dsl_schema_version,
+            requires_capabilities: &metadata.requires_capabilities,
+        })
+        .await?;
         let instance_pre = self
             .wasm_runtime
             .instantiate_pre(&component)
@@ -806,6 +800,21 @@ impl AppService {
         }
         self.cache.invalidate_source(sid);
         Ok(sid)
+    }
+
+    /// Refuses an artifact that fails any check every install path applies to the artifact
+    /// itself, whichever way it arrived.
+    async fn check_artifact(&self, facts: &crate::install_gating::ArtifactFacts<'_>) -> Result<()> {
+        let solver =
+            crate::install_gating::solver_for(facts.requires_capabilities, &self.smart_client)
+                .await;
+        match crate::install_gating::check_artifact(facts, env!("CARGO_PKG_VERSION"), solver)
+            .into_iter()
+            .next()
+        {
+            Some(problem) => Err(ServiceError::Validation(problem)),
+            None => Ok(()),
+        }
     }
 
     /// Refuses an artifact whose own id differs from the repository entry it was installed
@@ -1064,16 +1073,4 @@ async fn restore_after_failed_install(
             "Install of '{extension_id}' failed and its previous artifacts could not be restored: {e}"
         );
     }
-}
-
-/// Checks every install path applies to the artifact itself, whichever way it arrived.
-fn check_artifact_gating(extension_id: &str, min_kani_version: Option<&str>) -> Result<()> {
-    const RESERVED_IDS: &[&str] = &["example", "test-abi"];
-    if RESERVED_IDS.contains(&extension_id) {
-        return Err(ServiceError::Validation(format!(
-            "Extension ID '{extension_id}' is reserved for development use and cannot be installed"
-        )));
-    }
-    crate::install_gating::check_min_kani_version(min_kani_version, env!("CARGO_PKG_VERSION"))
-        .map_err(ServiceError::Validation)
 }

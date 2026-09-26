@@ -5,6 +5,7 @@ pub mod browser_scripts;
 pub mod bytes;
 pub mod engine;
 pub mod hook_registry;
+pub mod lint;
 pub mod pure_bridge;
 
 pub use bindings::{
