@@ -69,6 +69,33 @@ async fn the_image_proxy_retries_a_429_then_succeeds() {
 }
 
 #[tokio::test]
+async fn the_image_proxy_retries_cloudflare_origin_errors() {
+    for status in [522, 523] {
+        let origin = TestOrigin::start().await;
+        origin.script(
+            "/img.jpg",
+            vec![
+                Response::status(status),
+                Response::image(kani_shared_test::origin::jpeg_page(16, 16, false, 80)),
+            ],
+        );
+        let mut state = test_state().await;
+        state.proxy_config = fast_proxy_config();
+        let (u, p) = create_admin(&state).await;
+        let app = build_test_app_with_proxy(state.clone()).await;
+        let cookie = login(&app, u, p).await;
+
+        let res = app
+            .oneshot(signed_get(&state, &origin.url("/img.jpg"), &cookie))
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK, "a {status} was retried");
+        assert_eq!(origin.hits("/img.jpg"), 2, "the {status} was retried once");
+    }
+}
+
+#[tokio::test]
 async fn the_image_proxy_times_out_rather_than_hanging() {
     let origin = TestOrigin::start().await;
     origin.set("/img.jpg", Response::status(200).body(OriginBody::Stall));
