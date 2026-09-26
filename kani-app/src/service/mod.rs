@@ -738,19 +738,19 @@ impl AppService {
                             serde_json::from_str::<kani_shared::ExtensionMetadata>(&raw).ok()
                         });
                         if let Some(m) = &meta {
-                            let loadable = match crate::install_gating::check_dsl_schema_version(
-                                m.dsl_schema_version,
-                            ) {
-                                Ok(()) => sources::reconcile_wasm_row(
-                                    &pool,
-                                    ext_cache.as_ref(),
-                                    &source,
-                                    m,
+                            let loadable: std::result::Result<(), String> = async {
+                                crate::install_gating::check_dsl_schema_version(
+                                    m.dsl_schema_version,
+                                )?;
+                                sources::refuse_uncompilable_scripts(
+                                    &kani_core::scripting::HookScripts::from_metadata(m),
                                 )
-                                .await
-                                .map_err(|e| e.to_string()),
-                                Err(reason) => Err(reason),
-                            };
+                                .map_err(|e| e.to_string())?;
+                                sources::reconcile_wasm_row(&pool, ext_cache.as_ref(), &source, m)
+                                    .await
+                                    .map_err(|e| e.to_string())
+                            }
+                            .await;
                             if let Err(reason) = loadable {
                                 degradation_registry.register(
                                     &degradations::ids::source_load(&source.name),

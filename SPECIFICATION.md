@@ -2327,7 +2327,10 @@ signature) and finds or creates the source row by the artifact's own id. Replaci
 source (`POST /rest/sources/{id}/wasm`, `/{id}/wasm/fetch`) requires the artifact to declare that
 source's id. Reserved ids (`example`, `test-abi`), the artifact's own `min_kani_version`, id form
 (§3.9), blueprint schema version (§2.4) and capability checks apply on every path; an artifact that fails any of them, or does not
-compile, is a `400` and changes nothing.
+compile, is a `400` and changes nothing. Its scripts must also compile on the engines they run on,
+the shared `scripts:` prepended to each hook, as they are at run time. Reload applies the same
+rule, and the startup scan records a failure as the source's load error and disables it, so a
+source never runs with its hooks silently missing.
 
 `kani-cli check <file>` runs the same checks without a server, so a repository can refuse an
 artifact before publishing it. It also compiles hooks on the engine they run on and reports any

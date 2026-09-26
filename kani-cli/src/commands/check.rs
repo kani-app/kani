@@ -5,7 +5,7 @@ use std::path::Path;
 
 use kani_core::http::SolverCapability;
 use kani_core::install_gating::{ArtifactFacts, check_artifact};
-use kani_core::scripting::{HookRegistry, HookScripts, PureFunctionRegistry};
+use kani_core::scripting::{HookRegistry, HookScripts};
 
 use crate::error::CliError;
 
@@ -45,16 +45,6 @@ fn check_yaml(path: &Path) -> Result<Vec<String>, CliError> {
         Ok(ext) => ext,
         Err(errors) => return Ok(errors.iter().map(ToString::to_string).collect()),
     };
-    let mut problems = check_artifact(
-        &ArtifactFacts {
-            id: &ext.id,
-            min_kani_version: ext.min_kani_version.as_deref(),
-            dsl_schema_version: None,
-            requires_capabilities: &ext.requires_capabilities,
-        },
-        HOST_VERSION,
-        SolverCapability::Capture,
-    );
     let hooks = HookScripts {
         shared: ext.pure_scripts.clone(),
         pre_request: ext.pre_request.clone(),
@@ -63,7 +53,18 @@ fn check_yaml(path: &Path) -> Result<Vec<String>, CliError> {
         endpoint_on_status: ext.endpoint_on_status.clone(),
         cache: ext.cache_limits(),
     };
-    problems.extend(check_scripts(&hooks));
+    let mut problems = check_artifact(
+        &ArtifactFacts {
+            id: &ext.id,
+            min_kani_version: ext.min_kani_version.as_deref(),
+            dsl_schema_version: None,
+            requires_capabilities: &ext.requires_capabilities,
+            scripts: &hooks,
+        },
+        HOST_VERSION,
+        SolverCapability::Capture,
+    );
+    problems.extend(lint_hooks(&hooks));
     Ok(problems)
 }
 
@@ -107,46 +108,42 @@ fn check_wasm(path: &Path) -> Result<Vec<String>, CliError> {
         Err(e) => return Ok(vec![format!("invalid extension metadata: {e}")]),
     };
 
+    let hooks = HookScripts::from_metadata(&metadata);
     let mut problems = check_artifact(
         &ArtifactFacts {
             id: &metadata.id,
             min_kani_version: metadata.min_kani_version.as_deref(),
             dsl_schema_version: metadata.dsl_schema_version,
             requires_capabilities: &metadata.requires_capabilities,
+            scripts: &hooks,
         },
         HOST_VERSION,
         SolverCapability::Capture,
     );
-    problems.extend(check_scripts(&HookScripts::from_metadata(&metadata)));
+    problems.extend(lint_hooks(&hooks));
     Ok(problems)
 }
 
-/// Compiles the scripts on the engines they run on, and reports calls nothing defines.
-fn check_scripts(hooks: &HookScripts) -> Vec<String> {
-    let mut problems = Vec::new();
-    if !hooks.shared.is_empty()
-        && let Err(e) = PureFunctionRegistry::compile(&hooks.shared)
-    {
-        problems.push(format!("scripts: {e}"));
-    }
+/// Problems in hooks that compile but would fail once they run: calls nothing defines, and
+/// cache namespaces the extension does not declare. Compile failures come from `check_artifact`.
+fn lint_hooks(hooks: &HookScripts) -> Vec<String> {
     if hooks.is_empty() {
-        return problems;
+        return Vec::new();
     }
-    match HookRegistry::compile(hooks) {
-        Ok(registry) => {
-            problems.extend(registry.unresolved_calls().into_iter().map(|(hook, name)| {
-                format!("{hook} calls `{name}`, which neither the scripts nor Kani define")
-            }));
-            problems.extend(registry.undeclared_cache_namespaces().into_iter().map(
-                |(hook, namespace)| {
-                    format!(
-                        "{hook} uses cache namespace '{namespace}', which the `cache:` block \
-                         does not declare"
-                    )
-                },
-            ));
-        }
-        Err(e) => problems.push(e),
-    }
-    problems
+    let Ok(registry) = HookRegistry::compile(hooks) else {
+        return Vec::new();
+    };
+    let calls = registry.unresolved_calls().into_iter().map(|(hook, name)| {
+        format!("{hook} calls `{name}`, which neither the scripts nor Kani define")
+    });
+    let namespaces = registry
+        .undeclared_cache_namespaces()
+        .into_iter()
+        .map(|(hook, namespace)| {
+            format!(
+                "{hook} uses cache namespace '{namespace}', which the `cache:` block does not \
+                 declare"
+            )
+        });
+    calls.chain(namespaces).collect()
 }

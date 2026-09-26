@@ -641,6 +641,7 @@ impl AppService {
             min_kani_version: validated.min_kani_version.as_deref(),
             dsl_schema_version: None,
             requires_capabilities: &validated.requires_capabilities,
+            scripts: &crate::source::yaml_source::yaml_hook_scripts(&validated),
         })
         .await?;
 
@@ -734,6 +735,7 @@ impl AppService {
             min_kani_version: metadata.min_kani_version.as_deref(),
             dsl_schema_version: metadata.dsl_schema_version,
             requires_capabilities: &metadata.requires_capabilities,
+            scripts: &kani_core::scripting::HookScripts::from_metadata(&metadata),
         })
         .await?;
         let instance_pre = self

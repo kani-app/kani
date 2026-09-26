@@ -110,6 +110,24 @@ pub struct ArtifactFacts<'a> {
     pub min_kani_version: Option<&'a str>,
     pub dsl_schema_version: Option<u32>,
     pub requires_capabilities: &'a [String],
+    pub scripts: &'a crate::scripting::HookScripts,
+}
+
+/// Scripts that do not compile on the engine they run on. A source loaded anyway would run
+/// without its hooks or pure functions, so these are refused rather than dropped.
+pub fn check_scripts_compile(scripts: &crate::scripting::HookScripts) -> Vec<String> {
+    let mut problems = Vec::new();
+    if !scripts.shared.is_empty()
+        && let Err(e) = crate::scripting::PureFunctionRegistry::compile(&scripts.shared)
+    {
+        problems.push(format!("scripts do not compile: {e}"));
+    }
+    if !scripts.is_empty()
+        && let Err(e) = crate::scripting::HookRegistry::compile(scripts)
+    {
+        problems.push(format!("hooks do not compile: {e}"));
+    }
+    problems
 }
 
 /// Every check an artifact must pass to install on `host_version`, in the order the server
@@ -127,6 +145,7 @@ pub fn check_artifact(
     ]
     .into_iter()
     .filter_map(Result::err)
+    .chain(check_scripts_compile(facts.scripts))
     .collect()
 }
 
@@ -170,6 +189,7 @@ mod tests {
                 min_kani_version: Some("99.0.0"),
                 dsl_schema_version: Some(kani_shared::ast::DSL_SCHEMA_VERSION + 1),
                 requires_capabilities: &caps,
+                scripts: &crate::scripting::HookScripts::default(),
             },
             "1.0.0",
             SolverCapability::Capture,
@@ -182,6 +202,39 @@ mod tests {
                 "{problem:?} should mention {needle:?}"
             );
         }
+    }
+
+    fn hooks(shared: &str, pre_request: &str) -> crate::scripting::HookScripts {
+        crate::scripting::HookScripts {
+            shared: [("f".to_string(), shared.to_string())]
+                .into_iter()
+                .collect(),
+            pre_request: Some(pre_request.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn scripts_that_compile_pass() {
+        let ok = hooks("fn f(x) { x }", "f(1); proceed()");
+        assert!(check_scripts_compile(&ok).is_empty());
+        assert!(check_scripts_compile(&crate::scripting::HookScripts::default()).is_empty());
+    }
+
+    #[test]
+    fn a_broken_shared_script_or_hook_is_reported_by_which_it_is() {
+        let broken_shared = check_scripts_compile(&hooks("fn f(x) { x", "proceed()"));
+        assert!(
+            broken_shared
+                .iter()
+                .any(|p| p.starts_with("scripts do not compile")),
+            "{broken_shared:?}"
+        );
+        let redefined = check_scripts_compile(&hooks("fn f(x) { x }", "fn f(x) { x } proceed()"));
+        assert!(
+            redefined.len() == 1 && redefined[0].starts_with("hooks do not compile"),
+            "{redefined:?}"
+        );
     }
 
     #[test]
