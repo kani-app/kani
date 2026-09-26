@@ -499,11 +499,17 @@ mod tests {
     /// adoption must not depend on them, since the migrations they record are gone.
     async fn pre_squash_pool() -> SqlitePool {
         let pool = pool().await;
-        MIGRATOR.run(&pool).await.unwrap();
-        sqlx::query("DELETE FROM _sqlx_migrations")
-            .execute(&pool)
+        for migration in MIGRATOR
+            .iter()
+            .filter(|migration| migration.version <= BASELINE_VERSION)
+        {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let mut conn = pool.acquire().await.unwrap();
+        sqlx::migrate::Migrate::ensure_migrations_table(&mut *conn)
             .await
             .unwrap();
+        drop(conn);
         for (index, version) in FOLDED_VERSIONS.iter().enumerate() {
             sqlx::query(
                 "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) \
