@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload the digest
         if: needs.version.outputs.publish == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digest-${{ matrix.arch }}
           path: /tmp/digests/*
