@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # A scheduled run checks out the default branch, so the cron must name its target itself.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
           persist-credentials: false
