@@ -77,7 +77,7 @@ impl EvalBudget {
     pub(crate) fn charge_step(&self) -> Result<(), String> {
         let prev = self
             .steps_remaining
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
                 if n > 0 { Some(n - 1) } else { None }
             });
         if prev.is_err() {
