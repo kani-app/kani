@@ -1,13 +1,13 @@
 // @ts-check
-// Combobox — searchable select with virtual scrolling.
-// Supports single-select (default) and multi-select (multiple={true}) modes.
 
-import { h } from 'preact';
+import { h, render } from 'preact';
 import { useState, useEffect, useRef, useMemo } from 'preact/hooks';
 import htm from 'htm';
-import { iconX, iconChevronDown } from '../icons.js';
+import { iconX, iconChevronDown, iconCheck } from '../icons.js';
 import { Icon } from './icon.js';
 import { Pill } from './pill.js';
+import { renderPopover, useOutsideClose } from './popover.js';
+import { t } from '../i18n.js';
 const html = htm.bind(h);
 
 const ITEM_H = 36;
@@ -20,16 +20,30 @@ const VISIBLE = 8;
  * Multi-select mode (multiple={true}):
  *   value: number[], onChange: (ids: number[]) => void
  *
+ * Creatable multi-select (creatable={true}):
+ *   value: string[], onChange: (names: string[]) => void
+ *   Options are suggestions only — new values can be typed and added freely.
+ *
  * @param {{
  *   options: Array<{ id: number, name: string }>,
- *   value: number | null | number[],
- *   onChange: ((id: number | null) => void) | ((ids: number[]) => void),
+ *   value: number | null | number[] | string[],
+ *   onChange: ((id: number | null) => void) | ((ids: number[]) => void) | ((names: string[]) => void),
  *   placeholder?: string,
  *   disabled?: boolean,
  *   multiple?: boolean,
+ *   creatable?: boolean,
  * }} props
  */
-export function Combobox({ options, value, onChange, placeholder = 'Select…', disabled = false, multiple = false }) {
+export function Combobox({ options, value, onChange, placeholder = 'Select…', disabled = false, multiple = false, creatable = false }) {
+  if (creatable) {
+    return html`<${CreatableMultiCombobox}
+      options=${options}
+      value=${/** @type {string[]} */ (Array.isArray(value) ? value : [])}
+      onChange=${/** @type {(names: string[]) => void} */ (onChange)}
+      placeholder=${placeholder}
+      disabled=${disabled}
+    />`;
+  }
   if (multiple) {
     return html`<${MultiCombobox}
       options=${options}
@@ -48,7 +62,6 @@ export function Combobox({ options, value, onChange, placeholder = 'Select…', 
   />`;
 }
 
-// ── Single-select ─────────────────────────────────────────────────────────────
 
 function SingleCombobox({ options, value, onChange, placeholder, disabled }) {
   const [inputText, setInputText] = useState(() => {
@@ -65,7 +78,6 @@ function SingleCombobox({ options, value, onChange, placeholder, disabled }) {
   const dropdownRef = useRef(/** @type {HTMLDivElement | null} */(null));
   const wrapRef = useRef(/** @type {HTMLDivElement | null} */(null));
 
-  // Sync input text and selectedIdRef from value prop when not typing
   useEffect(() => {
     selectedIdRef.current = value;
     if (isTyping.current) return;
@@ -79,23 +91,73 @@ function SingleCombobox({ options, value, onChange, placeholder, disabled }) {
     return options.filter(o => o.name.toLowerCase().includes(q));
   }, [inputText, options]);
 
-  // Reset highlight when filtered list changes
   useEffect(() => { setHighlighted(0); }, [filtered]);
 
-  // Close on outside click
+  useOutsideClose(open, [wrapRef, dropdownRef], _close);
+
+  // Portal the dropdown into #popover-root so it escapes overflow:hidden in modals.
   useEffect(() => {
-    if (!open) return;
-    /** @param {MouseEvent} e */
-    const handler = (e) => {
-      const target = /** @type {Node} */ (e.target);
-      // If the clicked element was detached by a synchronous re-render triggered from
-      // onChange (e.g. _mountComboboxes), treat it as an inside click.
-      if (!document.contains(target)) return;
-      if (!wrapRef.current?.contains(target)) _close();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    if (!open || !filtered.length || !wrapRef.current) {
+      renderPopover(null);
+      return;
+    }
+    const rect = wrapRef.current.getBoundingClientRect();
+    const localWinStart = Math.max(0, Math.floor(scrollTop / ITEM_H) - 2);
+    const localWinItems = filtered.slice(localWinStart, localWinStart + VISIBLE + 4);
+    const localTotalH = filtered.length * ITEM_H;
+    const localDropH = Math.min(filtered.length, VISIBLE) * ITEM_H;
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const openUp = spaceBelow < localDropH && spaceAbove > localDropH;
+    const dropTop = openUp ? rect.top - localDropH - 4 : rect.bottom + 4;
+    // Clamp horizontally so the popover never clips off the viewport edge on narrow screens.
+    const dropWidth = Math.min(rect.width, window.innerWidth - 8);
+    const dropLeft  = Math.max(4, Math.min(rect.left, window.innerWidth - dropWidth - 4));
+
+    renderPopover(html`
+      <div
+        role="listbox"
+        style=${{
+          position: 'fixed',
+          top: dropTop + 'px',
+          left: dropLeft + 'px',
+          width: dropWidth + 'px',
+          height: localDropH + 'px',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-popover)',
+          overflowY: 'auto',
+          zIndex: 'var(--z-popover)',
+          pointerEvents: 'auto',
+        }}
+        ref=${dropdownRef}
+        onScroll=${(e) => setScrollTop(/** @type {HTMLElement} */(e.target).scrollTop)}
+      >
+        <div style=${{ height: localTotalH + 'px', position: 'relative' }}>
+          ${localWinItems.map((opt, i) => {
+            const idx = localWinStart + i;
+            return html`
+              <div
+                id=${'combobox-opt-' + opt.id}
+                key=${opt.id}
+                role="option"
+                aria-selected=${idx === highlighted}
+                class=${'flex items-center px-3 text-sm cursor-pointer ' + (idx === highlighted ? 'bg-surface-2 text-text' : 'text-text hover:bg-surface-2')}
+                style=${{ position: 'absolute', top: idx * ITEM_H + 'px', width: '100%', height: ITEM_H + 'px' }}
+                onMouseDown=${(e) => { e.preventDefault(); _select(opt); }}
+                onMouseEnter=${() => setHighlighted(idx)}
+              >
+                ${opt.name}
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+    `);
+  }, [open, filtered, highlighted, scrollTop]);
+
+  useEffect(() => () => renderPopover(null), []);
 
   function _close() {
     isTyping.current = false;
@@ -153,12 +215,6 @@ function SingleCombobox({ options, value, onChange, placeholder, disabled }) {
     }
   }
 
-  // Virtual scroll window
-  const winStart = Math.max(0, Math.floor(scrollTop / ITEM_H) - 2);
-  const winItems = filtered.slice(winStart, winStart + VISIBLE + 4);
-  const totalH = filtered.length * ITEM_H;
-  const dropH = Math.min(filtered.length, VISIBLE) * ITEM_H;
-
   return html`
     <div class="relative" ref=${wrapRef}>
       <div class="relative flex items-center">
@@ -181,47 +237,21 @@ function SingleCombobox({ options, value, onChange, placeholder, disabled }) {
           onKeyDown=${_onKeyDown}
         />
         ${(value != null || inputText.trim() !== '')
-          ? html`<button type="button" class="absolute right-1 top-1/2 -translate-y-1/2 btn-icon w-8 h-8 border-0" aria-label="Clear" onClick=${_clear}><${Icon} svg=${iconX} /></button>`
-          : html`<span class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none [&_svg]:w-4 [&_svg]:h-4" aria-hidden="true"><${Icon} svg=${iconChevronDown} /></span>`
+          ? html`<button type="button" class="absolute right-1 top-1/2 -translate-y-1/2 btn-icon w-8 h-8 border-0" aria-label=${t('common.clear')} onClick=${_clear}><${Icon} svg=${iconX} /></button>`
+          : html`<span class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none icon-sm" aria-hidden="true"><${Icon} svg=${iconChevronDown} /></span>`
         }
       </div>
-      ${open && filtered.length > 0 && html`
-        <div
-          role="listbox"
-          class="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-lg shadow-lg z-[300] overflow-y-auto"
-          ref=${dropdownRef}
-          style=${{ height: dropH + 'px' }}
-          onScroll=${(e) => setScrollTop(/** @type {HTMLElement} */(e.target).scrollTop)}
-        >
-          <div style=${{ height: totalH + 'px', position: 'relative' }}>
-            ${winItems.map((opt, i) => {
-              const idx = winStart + i;
-              return html`
-                <div
-                  id=${'combobox-opt-' + opt.id}
-                  key=${opt.id}
-                  role="option"
-                  aria-selected=${idx === highlighted}
-                  class=${'flex items-center px-3 text-sm cursor-pointer ' + (idx === highlighted ? 'bg-surface-2 text-text' : 'text-text hover:bg-surface-2')}
-                  style=${{ position: 'absolute', top: idx * ITEM_H + 'px', width: '100%', height: ITEM_H + 'px' }}
-                  onMouseDown=${(e) => { e.preventDefault(); _select(opt); }}
-                  onMouseEnter=${() => setHighlighted(idx)}
-                >
-                  ${opt.name}
-                </div>
-              `;
-            })}
-          </div>
-        </div>
-      `}
     </div>
   `;
 }
 
-// ── Multi-select ──────────────────────────────────────────────────────────────
 
 function MultiCombobox({ options, value, onChange, placeholder, disabled }) {
-  const selectedIds = /** @type {number[]} */ (Array.isArray(value) ? value : []);
+  const [selectedIds, setSelectedIds] = useState(/** @type {number[]} */ (Array.isArray(value) ? value : []));
+
+  useEffect(() => {
+    setSelectedIds(Array.isArray(value) ? /** @type {number[]} */ (value) : []);
+  }, [value]);
 
   const [inputText, setInputText] = useState('');
   const [open, setOpen] = useState(false);
@@ -239,22 +269,84 @@ function MultiCombobox({ options, value, onChange, placeholder, disabled }) {
 
   useEffect(() => { setHighlighted(0); }, [filtered]);
 
-  // Close on outside click
+  useOutsideClose(open, [wrapRef, dropdownRef], () => { setOpen(false); setInputText(''); });
+
   useEffect(() => {
-    if (!open) return;
-    /** @param {MouseEvent} e */
-    const handler = (e) => {
-      const target = /** @type {Node} */ (e.target);
-      if (!document.contains(target)) return;
-      if (!wrapRef.current?.contains(target)) { setOpen(false); setInputText(''); }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    if (!open || !filtered.length || !wrapRef.current) {
+      renderPopover(null);
+      return;
+    }
+    const rect = wrapRef.current.getBoundingClientRect();
+    const localWinStart = Math.max(0, Math.floor(scrollTop / ITEM_H) - 2);
+    const localWinItems = filtered.slice(localWinStart, localWinStart + VISIBLE + 4);
+    const localTotalH = filtered.length * ITEM_H;
+    const localDropH = Math.min(filtered.length, VISIBLE) * ITEM_H;
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const openUp = spaceBelow < localDropH && spaceAbove > localDropH;
+    const dropTop = openUp ? rect.top - localDropH - 4 : rect.bottom + 4;
+    const dropWidth = Math.min(rect.width, window.innerWidth - 8);
+    const dropLeft  = Math.max(4, Math.min(rect.left, window.innerWidth - dropWidth - 4));
+
+    renderPopover(html`
+      <div
+        role="listbox"
+        aria-multiselectable="true"
+        style=${{
+          position: 'fixed',
+          top: dropTop + 'px',
+          left: dropLeft + 'px',
+          width: dropWidth + 'px',
+          height: localDropH + 'px',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-popover)',
+          overflowY: 'auto',
+          zIndex: 'var(--z-popover)',
+          pointerEvents: 'auto',
+        }}
+        ref=${dropdownRef}
+        onScroll=${(/** @type {any} */ e) => setScrollTop(/** @type {HTMLElement} */(e.target).scrollTop)}
+      >
+        <div style=${{ height: localTotalH + 'px', position: 'relative' }}>
+          ${localWinItems.map((opt, i) => {
+            const idx = localWinStart + i;
+            const isSelected = selectedIds.includes(opt.id);
+            const isHighlighted = idx === highlighted;
+            return html`
+              <div
+                id=${'combobox-multi-opt-' + opt.id}
+                key=${opt.id}
+                role="option"
+                aria-selected=${isSelected}
+                class=${'flex items-center gap-2 px-3 text-sm cursor-pointer select-none '
+                  + (isHighlighted ? 'bg-surface-2 text-text' : 'text-text hover:bg-surface-2')}
+                style=${{ position: 'absolute', top: idx * ITEM_H + 'px', width: '100%', height: ITEM_H + 'px' }}
+                onMouseDown=${(/** @type {MouseEvent} */ e) => { e.preventDefault(); _toggle(opt); }}
+                onMouseEnter=${() => setHighlighted(idx)}
+              >
+                <span class=${'shrink-0 w-4 h-4 rounded border flex items-center justify-center text-2xs leading-none '
+                  + (isSelected ? 'bg-accent border-accent text-on-accent' : 'border-border bg-surface')}>
+                  ${isSelected ? html`<span class="icon-2xs"><${Icon} svg=${iconCheck} /></span>` : ''}
+                </span>
+                ${opt.name}
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+    `);
+  }, [open, filtered, highlighted, scrollTop, selectedIds]);
+
+  useEffect(() => () => renderPopover(null), []);
 
   function _toggle(opt) {
-    const idx = selectedIds.indexOf(opt.id);
-    onChange(idx === -1 ? [...selectedIds, opt.id] : selectedIds.filter(id => id !== opt.id));
+    const next = selectedIds.indexOf(opt.id) === -1
+      ? [...selectedIds, opt.id]
+      : selectedIds.filter(id => id !== opt.id);
+    setSelectedIds(next);
+    onChange(/** @type {any} */ (next));
   }
 
   function _scrollTo(idx) {
@@ -268,8 +360,9 @@ function MultiCombobox({ options, value, onChange, placeholder, disabled }) {
   /** @param {KeyboardEvent} e */
   function _onKeyDown(e) {
     if (e.key === 'Backspace' && inputText === '' && selectedIds.length > 0) {
-      // Remove last pill on backspace when search is empty
-      onChange(selectedIds.slice(0, -1));
+      const next = selectedIds.slice(0, -1);
+      setSelectedIds(next);
+      onChange(/** @type {any} */ (next));
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       const next = Math.min(highlighted + 1, filtered.length - 1);
@@ -290,37 +383,28 @@ function MultiCombobox({ options, value, onChange, placeholder, disabled }) {
     }
   }
 
-  const winStart = Math.max(0, Math.floor(scrollTop / ITEM_H) - 2);
-  const winItems = filtered.slice(winStart, winStart + VISIBLE + 4);
-  const totalH = filtered.length * ITEM_H;
-  const dropH = Math.min(filtered.length, VISIBLE) * ITEM_H;
-
   return html`
-    <div class="relative flex flex-col gap-1.5" ref=${wrapRef}>
-      ${selectedIds.length > 0 && html`
-        <div
-          class="flex flex-wrap gap-1.5"
-          onClick=${(/** @type {MouseEvent} */ e) => { e.stopPropagation(); if (open) { setOpen(false); setInputText(''); } }}
-        >
-          ${selectedIds.map(id => {
-            const opt = options.find(o => o.id === id);
-            if (!opt) return null;
-            return html`<${Pill} key=${id} label=${opt.name} onDismiss=${() => _toggle(opt)} />`;
-          })}
-        </div>
-      `}
-      <div class="relative flex items-center">
+    <div class="relative" ref=${wrapRef}>
+      <div
+        class="input-chips pr-8 relative"
+        onClick=${() => { if (!disabled) inputRef.current?.focus(); }}
+      >
+        ${selectedIds.map(id => {
+          const opt = options.find(o => o.id === id);
+          if (!opt) return null;
+          return html`<${Pill} key=${id} label=${opt.name} onDismiss=${() => _toggle(opt)} />`;
+        })}
         <input
           ref=${inputRef}
           type="text"
           role="combobox"
-          class="input pr-8"
           value=${inputText}
-          placeholder=${placeholder}
+          placeholder=${selectedIds.length === 0 ? placeholder : ''}
           disabled=${disabled}
           aria-expanded=${open}
           aria-autocomplete="list"
           aria-multiselectable="true"
+          aria-activedescendant=${open && filtered[highlighted] ? 'combobox-multi-opt-' + filtered[highlighted].id : undefined}
           onInput=${(/** @type {any} */ e) => {
             setInputText(/** @type {HTMLInputElement} */(e.target).value);
             if (!open) setOpen(true);
@@ -328,47 +412,185 @@ function MultiCombobox({ options, value, onChange, placeholder, disabled }) {
           onFocus=${() => { if (!disabled) setOpen(true); }}
           onKeyDown=${_onKeyDown}
         />
-        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none [&_svg]:w-4 [&_svg]:h-4" aria-hidden="true">
+        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none icon-sm" aria-hidden="true">
           <${Icon} svg=${iconChevronDown} />
         </span>
       </div>
-      ${open && filtered.length > 0 && html`
-        <div
-          role="listbox"
-          aria-multiselectable="true"
-          class="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-lg shadow-lg z-[300] overflow-y-auto"
-          ref=${dropdownRef}
-          style=${{ height: dropH + 'px' }}
-          onScroll=${(/** @type {any} */ e) => setScrollTop(/** @type {HTMLElement} */(e.target).scrollTop)}
-        >
-          <div style=${{ height: totalH + 'px', position: 'relative' }}>
-            ${winItems.map((opt, i) => {
-              const idx = winStart + i;
-              const isSelected = selectedIds.includes(opt.id);
-              const isHighlighted = idx === highlighted;
-              return html`
-                <div
-                  id=${'combobox-multi-opt-' + opt.id}
-                  key=${opt.id}
-                  role="option"
-                  aria-selected=${isSelected}
-                  class=${'flex items-center gap-2 px-3 text-sm cursor-pointer select-none '
-                    + (isHighlighted ? 'bg-surface-2 text-text' : 'text-text hover:bg-surface-2')}
-                  style=${{ position: 'absolute', top: idx * ITEM_H + 'px', width: '100%', height: ITEM_H + 'px' }}
-                  onMouseDown=${(/** @type {MouseEvent} */ e) => { e.preventDefault(); _toggle(opt); }}
-                  onMouseEnter=${() => setHighlighted(idx)}
-                >
-                  <span class=${'shrink-0 w-4 h-4 rounded border flex items-center justify-center text-[10px] leading-none '
-                    + (isSelected ? 'bg-accent border-accent text-white' : 'border-border bg-surface')}>
-                    ${isSelected ? '✓' : ''}
-                  </span>
-                  ${opt.name}
-                </div>
-              `;
-            })}
-          </div>
+    </div>
+  `;
+}
+
+
+const _CREATE_ID = '__create__';
+
+function CreatableMultiCombobox({ options, value, onChange, placeholder, disabled }) {
+  const selectedNames = /** @type {string[]} */ (Array.isArray(value) ? value : []);
+
+  const [inputText, setInputText] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const dropdownRef = useRef(/** @type {HTMLDivElement | null} */(null));
+  const wrapRef = useRef(/** @type {HTMLDivElement | null} */(null));
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */(null));
+
+  const dropItems = useMemo(() => {
+    const q = inputText.trim().toLowerCase();
+    const filtered = options.filter(o => {
+      if (selectedNames.some(n => n.toLowerCase() === o.name.toLowerCase())) return false;
+      return !q || o.name.toLowerCase().includes(q);
+    });
+    const trimmed = inputText.trim();
+    const alreadyExact = trimmed
+      && (options.some(o => o.name.toLowerCase() === trimmed.toLowerCase())
+        || selectedNames.some(n => n.toLowerCase() === trimmed.toLowerCase()));
+    if (trimmed && !alreadyExact) {
+      return [...filtered, { id: _CREATE_ID, name: trimmed }];
+    }
+    return filtered;
+  }, [inputText, options, selectedNames]);
+
+  useEffect(() => { setHighlighted(0); }, [dropItems]);
+
+  useOutsideClose(open, [wrapRef, dropdownRef], () => { setOpen(false); setInputText(''); });
+
+  useEffect(() => {
+    if (!open || !dropItems.length || !wrapRef.current) {
+      renderPopover(null);
+      return;
+    }
+    const rect = wrapRef.current.getBoundingClientRect();
+    const localWinStart = Math.max(0, Math.floor(scrollTop / ITEM_H) - 2);
+    const localWinItems = dropItems.slice(localWinStart, localWinStart + VISIBLE + 4);
+    const localTotalH = dropItems.length * ITEM_H;
+    const localDropH = Math.min(dropItems.length, VISIBLE) * ITEM_H;
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const openUp = spaceBelow < localDropH && spaceAbove > localDropH;
+    const dropTop = openUp ? rect.top - localDropH - 4 : rect.bottom + 4;
+    const dropWidth = Math.min(rect.width, window.innerWidth - 8);
+    const dropLeft  = Math.max(4, Math.min(rect.left, window.innerWidth - dropWidth - 4));
+
+    renderPopover(html`
+      <div
+        role="listbox"
+        style=${{
+          position: 'fixed',
+          top: dropTop + 'px',
+          left: dropLeft + 'px',
+          width: dropWidth + 'px',
+          height: localDropH + 'px',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-popover)',
+          overflowY: 'auto',
+          zIndex: 'var(--z-popover)',
+          pointerEvents: 'auto',
+        }}
+        ref=${dropdownRef}
+        onScroll=${(/** @type {any} */ e) => setScrollTop(/** @type {HTMLElement} */(e.target).scrollTop)}
+      >
+        <div style=${{ height: localTotalH + 'px', position: 'relative' }}>
+          ${localWinItems.map((opt, i) => {
+            const idx = localWinStart + i;
+            const isCreate = opt.id === _CREATE_ID;
+            const isHighlighted = idx === highlighted;
+            return html`
+              <div
+                id=${'combobox-create-opt-' + (isCreate ? _CREATE_ID : opt.id)}
+                key=${isCreate ? _CREATE_ID : opt.id}
+                role="option"
+                class=${'flex items-center gap-2 px-3 text-sm cursor-pointer select-none '
+                  + (isHighlighted ? 'bg-surface-2 text-text' : 'text-text hover:bg-surface-2')}
+                style=${{ position: 'absolute', top: idx * ITEM_H + 'px', width: '100%', height: ITEM_H + 'px' }}
+                onMouseDown=${(/** @type {MouseEvent} */ e) => { e.preventDefault(); _add(opt); }}
+                onMouseEnter=${() => setHighlighted(idx)}
+              >
+                ${isCreate
+                  ? html`<span class="text-accent font-medium">+</span><span>${t('combobox.add_new')} "<em>${opt.name}</em>"</span>`
+                  : opt.name
+                }
+              </div>
+            `;
+          })}
         </div>
-      `}
+      </div>
+    `);
+  }, [open, dropItems, highlighted, scrollTop]);
+
+  useEffect(() => () => renderPopover(null), []);
+
+  /** @param {{ id: any, name: string }} opt */
+  function _add(opt) {
+    onChange([...selectedNames, opt.name]);
+    setInputText('');
+    inputRef.current?.focus();
+  }
+
+  function _scrollTo(idx) {
+    const dd = dropdownRef.current;
+    if (!dd) return;
+    const top = idx * ITEM_H;
+    if (top < dd.scrollTop) dd.scrollTop = top;
+    else if (top + ITEM_H > dd.scrollTop + dd.clientHeight) dd.scrollTop = top + ITEM_H - dd.clientHeight;
+  }
+
+  /** @param {KeyboardEvent} e */
+  function _onKeyDown(e) {
+    if (e.key === 'Backspace' && inputText === '' && selectedNames.length > 0) {
+      onChange(selectedNames.slice(0, -1));
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = Math.min(highlighted + 1, dropItems.length - 1);
+      setHighlighted(next);
+      _scrollTo(next);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = Math.max(highlighted - 1, 0);
+      setHighlighted(prev);
+      _scrollTo(prev);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open && dropItems[highlighted]) _add(dropItems[highlighted]);
+      else setOpen(true);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setInputText('');
+    }
+  }
+
+  return html`
+    <div class="relative" ref=${wrapRef}>
+      <div
+        class="input-chips pr-8 relative"
+        onClick=${() => { if (!disabled) inputRef.current?.focus(); }}
+      >
+        ${selectedNames.map(name => html`
+          <${Pill} key=${name} label=${name}
+            onDismiss=${() => onChange(selectedNames.filter(n => n !== name))} />
+        `)}
+        <input
+          ref=${inputRef}
+          type="text"
+          role="combobox"
+          value=${inputText}
+          placeholder=${selectedNames.length === 0 ? placeholder : ''}
+          disabled=${disabled}
+          aria-expanded=${open}
+          aria-autocomplete="list"
+          aria-activedescendant=${open && dropItems[highlighted] ? 'combobox-create-opt-' + (dropItems[highlighted].id === _CREATE_ID ? _CREATE_ID : dropItems[highlighted].id) : undefined}
+          onInput=${(/** @type {any} */ e) => {
+            setInputText(/** @type {HTMLInputElement} */(e.target).value);
+            if (!open) setOpen(true);
+          }}
+          onFocus=${() => { if (!disabled) setOpen(true); }}
+          onKeyDown=${_onKeyDown}
+        />
+        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none icon-sm" aria-hidden="true">
+          <${Icon} svg=${iconChevronDown} />
+        </span>
+      </div>
     </div>
   `;
 }

@@ -1,0 +1,18 @@
+id: test-popular
+name: TestPopular
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+endpoints:
+  popular:
+    route: "/manga"
+    queries:
+      order: popular
+    container: ".manga-list .item"
+    fields:
+      id: 'self.first("a").attr("href").split("/").at(-1)'
+      title: 'self.first(".title").text().trim()'
+      cover_url:
+        expr: 'self.first("img").attr("src")'
+        optional: true

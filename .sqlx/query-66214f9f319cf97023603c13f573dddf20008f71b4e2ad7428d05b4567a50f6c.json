@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM user_page_bookmarks WHERE user_id = ? AND chapter_id = ? AND page_index = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "66214f9f319cf97023603c13f573dddf20008f71b4e2ad7428d05b4567a50f6c"
+}

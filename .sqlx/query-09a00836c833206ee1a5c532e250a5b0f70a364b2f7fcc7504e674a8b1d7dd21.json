@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE sources SET icon = ?, description = ?, languages = ?, schema_version = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "09a00836c833206ee1a5c532e250a5b0f70a364b2f7fcc7504e674a8b1d7dd21"
+}

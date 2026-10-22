@@ -1,0 +1,80 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SQLX_OFFLINE: "true"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune --all --force
+          df -h
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "coverage"
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools, wasm-opt, nextest
+
+      - name: Cache kani-cli binary
+        uses: actions/cache@v6
+        id: kani-cli-cache
+        with:
+          path: target/release/kani-cli
+          key: kani-cli-${{ runner.os }}-${{ hashFiles('kani-cli/**', 'kani-shared/**', 'Cargo.lock') }}
+
+      - name: Build kani-cli
+        if: steps.kani-cli-cache.outputs.cache-hit != 'true'
+        run: cargo build --release -p kani-cli
+
+      - name: Cache WASM extensions
+        uses: actions/cache@v6
+        id: wasm-cache
+        with:
+          path: wasm_sources/
+          key: wasm-${{ runner.os }}-${{ hashFiles('kani-extensions/**', 'kani-shared/**', 'kani-core/wit/**', 'kani-cli/**', 'Cargo.lock') }}
+
+      - name: Build dev/test WASM extensions
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: ./target/release/kani-cli build --dev
+
+      - name: Collect coverage
+        run: cargo llvm-cov nextest --locked --lcov --output-path lcov.info
+
+      - uses: codecov/codecov-action@v7
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

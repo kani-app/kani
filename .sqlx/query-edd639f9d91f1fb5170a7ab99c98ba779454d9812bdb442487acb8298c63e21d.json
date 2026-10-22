@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO roles (slug, parent) VALUES ('manager', null)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "edd639f9d91f1fb5170a7ab99c98ba779454d9812bdb442487acb8298c63e21d"
+}

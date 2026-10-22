@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET file_path = ? || substr(file_path, length(?) + 1) WHERE manga_id = ? AND substr(file_path, 1, length(?)) = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "f3be15d54375e0620765c632a3fa5f7c986a280c858f700c1df875ac71380873"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT mt.manga_id as \"manga_id: MangaId\"\n                       FROM manga_tags mt\n                       JOIN tags t ON t.id = mt.tag_id\n                       WHERE t.name = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "manga_id: MangaId",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c76094e2666e70b4de285099bf8386538ca4947ad1799d7493783571f1287d7d"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM manga",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "981d27caf0bf98e12bf6e6ecf1391b9c22beeead30bfec931048b8a30460009b"
+}

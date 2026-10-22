@@ -1,0 +1,20 @@
+id: test-details
+name: TestDetails
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+endpoints:
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id: '"$manga_id$"'
+      title: 'dom("h1").text().trim()'
+      status: 'dom(".status").text().trim().lower()'
+      description:
+        expr: 'dom(".description").text()'
+        optional: true
+      cover_url:
+        expr: 'dom("img.cover").attr("src")'
+        optional: true

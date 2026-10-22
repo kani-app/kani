@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT ucn.chapter_id as \"chapter_id: i64\",\n                      c.chapter_number as \"chapter_number: f64\",\n                      ucn.note\n               FROM user_chapter_notes ucn\n               JOIN chapters c ON c.id = ucn.chapter_id\n               WHERE ucn.user_id = ? AND c.manga_id = ? AND ucn.note != ''\n               ORDER BY c.chapter_number ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "chapter_id: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "chapter_number: f64",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "note",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c66f140acd2234496c24632573e8fe341cefe8a2fb78fc35d3b31460d1775f3d"
+}

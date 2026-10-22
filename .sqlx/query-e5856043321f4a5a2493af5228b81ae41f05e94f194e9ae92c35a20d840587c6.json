@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET download_status = ?, download_error = ?, resume_offset = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "e5856043321f4a5a2493af5228b81ae41f05e94f194e9ae92c35a20d840587c6"
+}

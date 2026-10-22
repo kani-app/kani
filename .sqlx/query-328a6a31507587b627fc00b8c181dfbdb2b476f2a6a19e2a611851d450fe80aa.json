@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET trash_retention_days = ?, audit_retention_days = ?, audit_security_retention_days = ?, disk_warn_threshold = ?, thumbnail_formats = ?, max_login_attempts = ?, max_ip_attempts = ?, login_lockout_seconds = ?, session_timeout_secs = ? WHERE id = 'singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "328a6a31507587b627fc00b8c181dfbdb2b476f2a6a19e2a611851d450fe80aa"
+}

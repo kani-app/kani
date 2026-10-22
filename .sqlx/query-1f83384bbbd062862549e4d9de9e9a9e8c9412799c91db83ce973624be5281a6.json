@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP\n             WHERE user_id = ? AND used_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "1f83384bbbd062862549e4d9de9e9a9e8c9412799c91db83ce973624be5281a6"
+}

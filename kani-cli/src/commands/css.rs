@@ -1,9 +1,13 @@
+use crate::error::CliError;
 use std::path::Path;
 use std::process::Command;
-use crate::error::CliError;
 
 pub fn run(watch: bool, prod: bool) -> Result<(), CliError> {
-    let binary = if cfg!(windows) { "tools/tailwindcss.exe" } else { "tools/tailwindcss" };
+    let binary = if cfg!(windows) {
+        "tools/tailwindcss.exe"
+    } else {
+        "tools/tailwindcss"
+    };
 
     if !Path::new(binary).exists() {
         return Err(CliError::Other(format!(
@@ -26,7 +30,9 @@ pub fn run(watch: bool, prod: bool) -> Result<(), CliError> {
 
     let status = cmd.status()?;
     if !status.success() {
-        return Err(CliError::Other("tailwindcss exited with a non-zero status".into()));
+        return Err(CliError::Other(
+            "tailwindcss exited with a non-zero status".into(),
+        ));
     }
 
     if !watch {

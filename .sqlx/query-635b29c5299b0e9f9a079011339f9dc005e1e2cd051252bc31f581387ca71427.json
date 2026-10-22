@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET email_enabled=?, email_provider=?, email_provider_config=?, email_from_address=?, app_url=?, password_reset_enabled=?, email_verification_required=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "635b29c5299b0e9f9a079011339f9dc005e1e2cd051252bc31f581387ca71427"
+}

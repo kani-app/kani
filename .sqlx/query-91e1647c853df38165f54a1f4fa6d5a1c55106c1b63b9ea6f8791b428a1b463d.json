@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET source_page_count = ? WHERE manga_id = ? AND source_chapter_id = ? AND (source_page_count IS NULL OR source_page_count != ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "91e1647c853df38165f54a1f4fa6d5a1c55106c1b63b9ea6f8791b428a1b463d"
+}

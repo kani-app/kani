@@ -1,0 +1,76 @@
+name: Cache Warmer
+
+on:
+  push:
+    branches: [develop]
+
+concurrency:
+  group: cache-warmer
+  cancel-in-progress: true
+
+# rust-cache keys on CARGO_*/RUST* env, so this block must stay identical to ci.yml's or the
+# PR jobs resolve a cache this workflow never wrote.
+env:
+  SQLX_OFFLINE: "true"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_BUILD_JOBS: "4"
+
+jobs:
+  warm:
+    name: Warm Rust cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune --all --force
+          df -h
+
+      # Kept identical to ci.yml's lint and test jobs so all three resolve one cache key.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci"
+          cache-on-failure: true
+
+      # --benches warms criterion for the lint job's `cargo check --benches`.
+      - name: Build workspace (populate cache)
+        run: cargo build --locked --tests --benches
+
+      - name: Cache kani-cli binary
+        uses: actions/cache@v6
+        id: kani-cli-cache
+        with:
+          path: target/release/kani-cli
+          key: kani-cli-${{ runner.os }}-${{ hashFiles('kani-cli/**', 'kani-shared/**', 'Cargo.lock') }}
+
+      - name: Build kani-cli
+        if: steps.kani-cli-cache.outputs.cache-hit != 'true'
+        run: cargo build --release -p kani-cli
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools, wasm-opt
+
+      - name: Cache WASM extensions
+        uses: actions/cache@v6
+        id: wasm-cache
+        with:
+          path: wasm_sources/
+          key: wasm-${{ runner.os }}-${{ hashFiles('kani-extensions/**', 'kani-shared/**', 'kani-core/wit/**', 'kani-cli/**', 'Cargo.lock') }}
+
+      - name: Build dev/test WASM extensions
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: ./target/release/kani-cli build --dev

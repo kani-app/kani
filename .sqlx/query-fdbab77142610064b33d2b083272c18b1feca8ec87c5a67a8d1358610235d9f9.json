@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT c.manga_id as \"manga_id: MangaId\"\n                       FROM chapters c\n                       LEFT JOIN user_chapter_tracking uct\n                         ON uct.chapter_id = c.id AND uct.user_id = ?\n                       WHERE uct.is_read IS NULL OR uct.is_read = 0",
+  "describe": {
+    "columns": [
+      {
+        "name": "manga_id: MangaId",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fdbab77142610064b33d2b083272c18b1feca8ec87c5a67a8d1358610235d9f9"
+}

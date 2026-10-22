@@ -1,10 +1,20 @@
+//! Request-result caches and their cross-entity invalidation helpers.
+
+use crate::models::ReadingStats;
 use dashmap::DashMap;
+use kani_core::cache::CacheBackend;
 use moka::future::Cache;
+use sqlx::SqlitePool;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+type LibraryListingCache =
+    Cache<(i64, u64, i32, i32), Arc<(Vec<crate::models::LibraryManga>, bool, Option<u32>)>>;
+
 #[derive(Clone)]
+/// Bounded application read caches shared by cloned [`crate::AppService`] handles.
+/// Mutating service methods must invalidate every affected key through this type's helpers.
 pub struct RequestCache {
     manga_details: Cache<(i64, String), String>,
     popular_manga: Cache<(i64, i32, i32, String), String>,
@@ -12,10 +22,39 @@ pub struct RequestCache {
     pages: Cache<(i64, String, String), String>,
     search_results: Cache<(i64, String, i32, i32, String), String>,
     pub preference_schema: DashMap<i64, Vec<kani_core::PreferenceSpec>>,
+    /// Filter defaults an extension declares, by source. Fixed until the
+    /// extension is replaced, and consulted on every browse.
+    filter_defaults: DashMap<i64, Vec<kani_shared::types::ActiveFilter>>,
+    /// Reading stats keyed by (user_id, period_days). 10-minute TTL.
+    pub stats: Cache<(i64, i32), Arc<ReadingStats>>,
+    /// CBZ page-index lists keyed by (chapter_id, file_mtime_unix). A changed file
+    /// changes the key, so no invalidation hook is needed.
+    cbz_pages: Cache<(i64, i64), Arc<Vec<String>>>,
+    library_listing: Option<LibraryListingCache>,
 }
 
 impl RequestCache {
     pub fn new() -> Self {
+        let library_ttl: u64 = std::env::var("KANI_LIBRARY_CACHE_TTL_SECONDS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+        Self::build_with_library_ttl(library_ttl)
+    }
+
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn new_with_library_ttl(ttl_secs: u64) -> Self {
+        Self::build_with_library_ttl(ttl_secs)
+    }
+
+    fn build_with_library_ttl(library_ttl: u64) -> Self {
+        let library_listing = (library_ttl > 0).then(|| {
+            Cache::builder()
+                .max_capacity(2000)
+                .time_to_live(Duration::from_secs(library_ttl))
+                .support_invalidation_closures()
+                .build()
+        });
         Self {
             manga_details: Cache::builder()
                 .max_capacity(500)
@@ -43,10 +82,29 @@ impl RequestCache {
                 .support_invalidation_closures()
                 .build(),
             preference_schema: DashMap::new(),
+            filter_defaults: DashMap::new(),
+            stats: Cache::builder()
+                .max_capacity(500)
+                .time_to_live(Duration::from_secs(10 * 60))
+                .support_invalidation_closures()
+                .build(),
+            cbz_pages: Cache::builder()
+                .max_capacity(crate::tuning::OPDS_PAGE_INDEX_CACHE_ENTRIES)
+                .time_to_live(Duration::from_secs(10 * 60))
+                .build(),
+            library_listing,
         }
     }
 
-    pub async fn get_or_fetch_manga_details<F, E>(
+    pub(crate) async fn cbz_pages_get(&self, key: (i64, i64)) -> Option<Arc<Vec<String>>> {
+        self.cbz_pages.get(&key).await
+    }
+
+    pub(crate) async fn cbz_pages_put(&self, key: (i64, i64), value: Arc<Vec<String>>) {
+        self.cbz_pages.insert(key, value).await;
+    }
+
+    pub(crate) async fn get_or_fetch_manga_details<F, E>(
         &self,
         source_id: i64,
         manga_id: &str,
@@ -61,7 +119,7 @@ impl RequestCache {
             .await
     }
 
-    pub async fn get_or_fetch_popular_manga<F, E>(
+    pub(crate) async fn get_or_fetch_popular_manga<F, E>(
         &self,
         source_id: i64,
         page: i32,
@@ -78,7 +136,7 @@ impl RequestCache {
             .await
     }
 
-    pub async fn get_or_fetch_chapter_list<F, E>(
+    pub(crate) async fn get_or_fetch_chapter_list<F, E>(
         &self,
         source_id: i64,
         manga_id: &str,
@@ -92,11 +150,20 @@ impl RequestCache {
         E: Send + Sync + 'static,
     {
         self.chapter_list
-            .try_get_with((source_id, manga_id.to_string(), page, page_size, sort.to_string()), init)
+            .try_get_with(
+                (
+                    source_id,
+                    manga_id.to_string(),
+                    page,
+                    page_size,
+                    sort.to_string(),
+                ),
+                init,
+            )
             .await
     }
 
-    pub async fn get_or_fetch_search_results<F, E>(
+    pub(crate) async fn get_or_fetch_search_results<F, E>(
         &self,
         source_id: i64,
         query: &str,
@@ -110,11 +177,14 @@ impl RequestCache {
         E: Send + Sync + 'static,
     {
         self.search_results
-            .try_get_with((source_id, query.to_string(), page, page_size, filters_key), init)
+            .try_get_with(
+                (source_id, query.to_string(), page, page_size, filters_key),
+                init,
+            )
             .await
     }
 
-    pub async fn get_or_fetch_pages<F, E>(
+    pub(crate) async fn get_or_fetch_pages<F, E>(
         &self,
         source_id: i64,
         manga_id: &str,
@@ -133,7 +203,7 @@ impl RequestCache {
             .await
     }
 
-    pub fn get_preference_schema(
+    pub(crate) fn get_preference_schema(
         &self,
         source_id: i64,
     ) -> Option<Vec<kani_core::PreferenceSpec>> {
@@ -142,24 +212,92 @@ impl RequestCache {
             .map(|r| r.value().clone())
     }
 
-    pub fn insert_preference_schema(
+    pub(crate) fn insert_preference_schema(
         &self,
         source_id: i64,
         schema: Vec<kani_core::PreferenceSpec>,
     ) {
         self.preference_schema.insert(source_id, schema);
+        // A replaced extension can declare different defaults.
+        self.filter_defaults.remove(&source_id);
     }
 
-    pub async fn invalidate_chapter_list_for_manga(&self, source_id: i64, manga_id: &str) {
+    pub(crate) fn get_filter_defaults(
+        &self,
+        source_id: i64,
+    ) -> Option<Vec<kani_shared::types::ActiveFilter>> {
+        self.filter_defaults
+            .get(&source_id)
+            .map(|r| r.value().clone())
+    }
+
+    pub(crate) fn insert_filter_defaults(
+        &self,
+        source_id: i64,
+        defaults: Vec<kani_shared::types::ActiveFilter>,
+    ) {
+        self.filter_defaults.insert(source_id, defaults);
+    }
+
+    pub(crate) async fn invalidate_chapter_list_for_manga(&self, source_id: i64, manga_id: &str) {
         let owned = manga_id.to_string();
-        let _ = self
-            .chapter_list
-            .invalidate_entries_if(move |(sid, mid, _page, _page_size, _sort), _| {
-                *sid == source_id && *mid == owned
-            });
+        let _ = self.chapter_list.invalidate_entries_if(
+            move |(sid, mid, _page, _page_size, _sort), _| *sid == source_id && *mid == owned,
+        );
     }
 
-    pub fn invalidate_source(&self, source_id: i64) {
+    pub(crate) fn invalidate_stats(&self, user_id: crate::ids::UserId) {
+        let raw = user_id.0;
+        let _ = self
+            .stats
+            .invalidate_entries_if(move |(id, _period), _| *id == raw);
+    }
+
+    pub async fn get_library_listing(
+        &self,
+        user_id: i64,
+        filter_hash: u64,
+        page: i32,
+        page_size: i32,
+    ) -> Option<Arc<(Vec<crate::models::LibraryManga>, bool, Option<u32>)>> {
+        self.library_listing
+            .as_ref()?
+            .get(&(user_id, filter_hash, page, page_size))
+            .await
+    }
+
+    pub async fn insert_library_listing(
+        &self,
+        user_id: i64,
+        filter_hash: u64,
+        page: i32,
+        page_size: i32,
+        val: Arc<(Vec<crate::models::LibraryManga>, bool, Option<u32>)>,
+    ) {
+        if let Some(cache) = &self.library_listing {
+            cache
+                .insert((user_id, filter_hash, page, page_size), val)
+                .await;
+        }
+    }
+
+    pub fn invalidate_library(&self) {
+        if let Some(cache) = &self.library_listing {
+            cache.invalidate_all();
+        }
+    }
+
+    pub fn clear_all(&self) {
+        self.manga_details.invalidate_all();
+        self.popular_manga.invalidate_all();
+        self.chapter_list.invalidate_all();
+        self.pages.invalidate_all();
+        self.search_results.invalidate_all();
+        self.stats.invalidate_all();
+        self.invalidate_library();
+    }
+
+    pub(crate) fn invalidate_source(&self, source_id: i64) {
         let sid = source_id;
         let _ = self
             .manga_details
@@ -186,8 +324,146 @@ impl Default for RequestCache {
     }
 }
 
+const NS_MAX_BYTES: i64 = 4 * 1024 * 1024;
+const NS_MAX_ROWS: i64 = 4096;
+
+/// Drops what an extension cached under an earlier version: its own namespace, its hooks'
+/// namespaces (all prefixed `"<id>:"`), and its fetched option sets.
+pub(crate) async fn invalidate_extension_cache(
+    cache: &dyn CacheBackend,
+    extension_id: &str,
+    source_id: i64,
+) {
+    cache
+        .clear_namespaces_with_prefix(&format!("{extension_id}:"))
+        .await;
+    cache
+        .clear_namespace(&format!("fetched_opts:{source_id}"))
+        .await;
+}
+
+pub(crate) struct SqliteCache {
+    pool: SqlitePool,
+}
+
+impl SqliteCache {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait::async_trait]
+impl CacheBackend for SqliteCache {
+    async fn get(&self, namespace: &str, key: &str) -> Option<Vec<u8>> {
+        let now = now_secs();
+        sqlx::query_as::<_, (Vec<u8>,)>(
+            "SELECT value FROM extension_cache WHERE namespace = ? AND key = ? AND expires_at > ?",
+        )
+        .bind(namespace)
+        .bind(key)
+        .bind(now)
+        .fetch_optional(&self.pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|(v,)| v)
+    }
+
+    async fn put_limited(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: Vec<u8>,
+        ttl: Duration,
+        max_entries: usize,
+    ) {
+        let max_rows = (max_entries as i64).clamp(1, NS_MAX_ROWS);
+        let expires_at = now_secs() + kani_core::cache::effective_ttl(ttl).as_secs() as i64;
+
+        let _ = sqlx::query(
+            "INSERT OR REPLACE INTO extension_cache (namespace, key, value, expires_at)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(namespace)
+        .bind(key)
+        .bind(&value)
+        .bind(expires_at)
+        .execute(&self.pool)
+        .await;
+
+        let _ = sqlx::query(
+            "DELETE FROM extension_cache WHERE namespace = ? AND key IN (
+                SELECT key FROM extension_cache WHERE namespace = ?
+                ORDER BY expires_at ASC
+                LIMIT MAX(0, (SELECT COUNT(*) FROM extension_cache WHERE namespace = ?) - ?)
+             )",
+        )
+        .bind(namespace)
+        .bind(namespace)
+        .bind(namespace)
+        .bind(max_rows)
+        .execute(&self.pool)
+        .await;
+
+        let _ = sqlx::query(
+            "DELETE FROM extension_cache WHERE namespace = ? AND key IN (
+                SELECT key FROM (
+                    SELECT key, SUM(LENGTH(value)) OVER (
+                        ORDER BY expires_at DESC, key ROWS UNBOUNDED PRECEDING
+                    ) AS kept
+                    FROM extension_cache WHERE namespace = ?
+                ) WHERE kept > ?
+             )",
+        )
+        .bind(namespace)
+        .bind(namespace)
+        .bind(NS_MAX_BYTES)
+        .execute(&self.pool)
+        .await;
+    }
+
+    async fn delete(&self, namespace: &str, key: &str) {
+        let _ = sqlx::query("DELETE FROM extension_cache WHERE namespace = ? AND key = ?")
+            .bind(namespace)
+            .bind(key)
+            .execute(&self.pool)
+            .await;
+    }
+
+    async fn clear_namespace(&self, namespace: &str) {
+        let _ = sqlx::query("DELETE FROM extension_cache WHERE namespace = ?")
+            .bind(namespace)
+            .execute(&self.pool)
+            .await;
+    }
+
+    async fn clear_namespaces_with_prefix(&self, prefix: &str) {
+        let _ =
+            sqlx::query("DELETE FROM extension_cache WHERE substr(namespace, 1, length(?1)) = ?1")
+                .bind(prefix)
+                .execute(&self.pool)
+                .await;
+    }
+
+    async fn prune_expired(&self) {
+        let now = now_secs();
+        let _ = sqlx::query("DELETE FROM extension_cache WHERE expires_at <= ?")
+            .bind(now)
+            .execute(&self.pool)
+            .await;
+    }
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
+
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -195,6 +471,105 @@ mod tests {
     fn default_is_equivalent_to_new() {
         let _a = RequestCache::new();
         let _b = RequestCache::default();
+    }
+
+    async fn sqlite_cache() -> SqliteCache {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE extension_cache (namespace TEXT NOT NULL, key TEXT NOT NULL, \
+             value BLOB NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (namespace, key))",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        SqliteCache::new(pool)
+    }
+
+    #[tokio::test]
+    async fn sqlite_put_limited_evicts_down_to_max_entries() {
+        let cache = sqlite_cache().await;
+        for (key, ttl) in [("a", 100), ("b", 200), ("c", 300)] {
+            cache
+                .put_limited("ns", key, b"v".to_vec(), Duration::from_secs(ttl), 2)
+                .await;
+        }
+        assert_eq!(
+            cache.get("ns", "a").await,
+            None,
+            "the soonest to expire is evicted"
+        );
+        assert!(cache.get("ns", "b").await.is_some());
+        assert!(cache.get("ns", "c").await.is_some());
+    }
+
+    async fn namespace_bytes(cache: &SqliteCache, ns: &str) -> i64 {
+        sqlx::query_scalar(
+            "SELECT COALESCE(SUM(LENGTH(value)), 0) FROM extension_cache WHERE namespace = ?",
+        )
+        .bind(ns)
+        .fetch_one(&cache.pool)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn sqlite_namespace_never_exceeds_its_byte_cap() {
+        let cache = sqlite_cache().await;
+        let mb = |n: f64| vec![0u8; (n * 1024.0 * 1024.0) as usize];
+
+        cache
+            .put("ns", "old", mb(3.0), Duration::from_secs(100))
+            .await;
+        cache
+            .put("ns", "new", mb(1.5), Duration::from_secs(200))
+            .await;
+        assert!(namespace_bytes(&cache, "ns").await <= NS_MAX_BYTES);
+        assert_eq!(
+            cache.get("ns", "old").await,
+            None,
+            "the soonest to expire is evicted"
+        );
+        assert!(cache.get("ns", "new").await.is_some());
+
+        cache
+            .put("big", "k", mb(5.0), Duration::from_secs(100))
+            .await;
+        assert!(
+            namespace_bytes(&cache, "big").await <= NS_MAX_BYTES,
+            "a value larger than the cap is not kept"
+        );
+    }
+
+    #[tokio::test]
+    async fn sqlite_prefix_clear_spares_other_extensions() {
+        let cache = sqlite_cache().await;
+        let ttl = Duration::from_secs(60);
+        for ns in ["a:", "a:auth", "ab:", "b:a:", "a%:"] {
+            cache.put(ns, "k", b"v".to_vec(), ttl).await;
+        }
+        cache.clear_namespaces_with_prefix("a:").await;
+        assert_eq!(cache.get("a:", "k").await, None);
+        assert_eq!(cache.get("a:auth", "k").await, None);
+        for spared in ["ab:", "b:a:", "a%:"] {
+            assert!(
+                cache.get(spared, "k").await.is_some(),
+                "{spared} was cleared"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn sqlite_cache_zero_ttl_never_expires() {
+        let cache = sqlite_cache().await;
+
+        cache.put("ns", "key", b"v".to_vec(), Duration::ZERO).await;
+        cache.prune_expired().await;
+
+        assert_eq!(cache.get("ns", "key").await, Some(b"v".to_vec()));
     }
 
     #[tokio::test]
@@ -292,7 +667,7 @@ mod tests {
 
         let c = calls.clone();
         let _ = cache
-            .get_or_fetch_chapter_list(1, "m1", 1, 20, "".into(), async move {
+            .get_or_fetch_chapter_list(1, "m1", 1, 20, "", async move {
                 c.fetch_add(1, Ordering::SeqCst);
                 Ok::<_, std::io::Error>("chapters".to_string())
             })
@@ -355,6 +730,68 @@ mod tests {
             .unwrap();
 
         assert_eq!(calls.load(Ordering::SeqCst), 1, "m2 should remain cached");
+    }
+
+    #[tokio::test]
+    async fn a_failed_page_fetch_is_not_cached_as_a_success() {
+        let cache = RequestCache::new();
+        let calls = Arc::new(AtomicU32::new(0));
+
+        let c = calls.clone();
+        let first = cache
+            .get_or_fetch_pages(1, "m1", "c1", async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Err::<String, std::io::Error>(std::io::Error::other("upstream 500"))
+            })
+            .await;
+        assert!(first.is_err(), "the failing fetch surfaces its error");
+
+        let c = calls.clone();
+        let second = cache
+            .get_or_fetch_pages(1, "m1", "c1", async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, std::io::Error>("pages".to_string())
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            second.as_str(),
+            "pages",
+            "the retry succeeds, not a cached error"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "init must run again after a failure — the error was not cached"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_chapter_list_fetch_is_not_cached_as_a_success() {
+        let cache = RequestCache::new();
+        let calls = Arc::new(AtomicU32::new(0));
+
+        let c = calls.clone();
+        let first = cache
+            .get_or_fetch_chapter_list(1, "m1", 1, 20, "", async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Err::<String, std::io::Error>(std::io::Error::other("upstream 500"))
+            })
+            .await;
+        assert!(first.is_err());
+
+        let c = calls.clone();
+        let second = cache
+            .get_or_fetch_chapter_list(1, "m1", 1, 20, "", async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, std::io::Error>("chapters".to_string())
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(second.as_str(), "chapters");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
     #[test]

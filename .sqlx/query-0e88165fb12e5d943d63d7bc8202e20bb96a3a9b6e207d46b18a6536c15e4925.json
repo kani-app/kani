@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n                (SELECT json_group_array(json_object('id', p.id, 'name', p.name))\n                 FROM manga_people mp JOIN people p ON mp.person_id = p.id\n                 WHERE mp.manga_id = m.id AND role = 'author') as \"authors!: String\",\n                (SELECT json_group_array(json_object('id', p.id, 'name', p.name))\n                 FROM manga_people mp JOIN people p ON mp.person_id = p.id\n                 WHERE mp.manga_id = m.id AND role = 'artist') as \"artists!: String\",\n                (SELECT json_group_array(json_object('id', t.id, 'name', t.name))\n                 FROM manga_tags mt JOIN tags t ON mt.tag_id = t.id\n                 WHERE mt.manga_id = m.id) as \"tags!: String\",\n                (SELECT json_group_array(name) FROM manga_local_authors\n                 WHERE manga_id = m.id AND role = 'author') as \"local_authors: String\",\n                (SELECT json_group_array(name) FROM manga_local_authors\n                 WHERE manga_id = m.id AND role = 'artist') as \"local_artists: String\",\n                (SELECT json_group_array(name) FROM manga_local_tags\n                 WHERE manga_id = m.id) as \"local_tags: String\",\n                EXISTS(SELECT 1 FROM manga_local_authors WHERE manga_id = m.id) as \"has_local_people: bool\",\n                EXISTS(SELECT 1 FROM manga_local_tags WHERE manga_id = m.id) as \"has_local_tags: bool\"\n               FROM manga m WHERE m.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "authors!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "artists!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "tags!: String",
+        "ordinal": 2,
+        "type_info": "Null"
+      },
+      {
+        "name": "local_authors: String",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_artists: String",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_tags: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "has_local_people: bool",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "has_local_tags: bool",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "0e88165fb12e5d943d63d7bc8202e20bb96a3a9b6e207d46b18a6536c15e4925"
+}

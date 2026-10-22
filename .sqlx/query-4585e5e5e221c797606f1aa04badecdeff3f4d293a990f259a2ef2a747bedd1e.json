@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET first_run_complete = 1 WHERE id = 'singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "4585e5e5e221c797606f1aa04badecdeff3f4d293a990f259a2ef2a747bedd1e"
+}

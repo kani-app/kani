@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_chapter_notes (user_id, chapter_id, note, updated_at)\n               VALUES (?, ?, ?, datetime('now'))\n               ON CONFLICT (user_id, chapter_id) DO UPDATE SET\n                   note = excluded.note,\n                   updated_at = excluded.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "5f45f92e229a3e04fcc70c062efbc090e1ba0f617d889f5f424143cdcdb68a61"
+}

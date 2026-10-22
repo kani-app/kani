@@ -1,0 +1,18 @@
+- name: Install NASM (BoringSSL assembles with it on MSVC)
+  if: runner.os == 'Windows'
+  shell: pwsh
+  run: |
+    choco install nasm --no-progress -y
+    $dirs = @("C:\Program Files\NASM", "C:\Program Files (x86)\NASM")
+    $found = Get-ChildItem -Path $dirs -Filter nasm.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $found) { throw "nasm.exe not found after install; checked $($dirs -join ', ')" }
+    $found.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+- name: Install node (kani-web build.rs runs esbuild + tailwind)
+  uses: actions/setup-node@v4
+  with:
+    node-version: "22"
+# Must match `dist build`'s profile, target and RUSTFLAGS; see the constraints register.
+- name: Fetch JS vendors and CSS toolchain
+  env:
+    RUSTFLAGS: ${{ runner.os == 'Windows' && '-Ctarget-feature=+crt-static' || '' }}
+  run: cargo run --profile dist --target ${{ join(matrix.targets, '') }} -p kani-cli -- setup

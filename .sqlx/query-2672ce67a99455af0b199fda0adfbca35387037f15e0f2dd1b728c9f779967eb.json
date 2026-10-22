@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE ui_themes SET is_active = TRUE WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "2672ce67a99455af0b199fda0adfbca35387037f15e0f2dd1b728c9f779967eb"
+}

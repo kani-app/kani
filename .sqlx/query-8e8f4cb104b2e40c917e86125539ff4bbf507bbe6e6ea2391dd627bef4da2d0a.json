@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE jobs SET status = 'failed', completed_at = ?, error_json = ?, params_json = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "8e8f4cb104b2e40c917e86125539ff4bbf507bbe6e6ea2391dd627bef4da2d0a"
+}

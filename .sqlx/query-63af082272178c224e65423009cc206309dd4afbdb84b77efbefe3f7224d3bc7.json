@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT prt.user_id, u.email FROM password_reset_tokens prt\n             JOIN users u ON u.id = prt.user_id\n             WHERE prt.token_hash = ?\n               AND prt.used_at IS NULL\n               AND prt.expires_at > CURRENT_TIMESTAMP",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "email",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "63af082272178c224e65423009cc206309dd4afbdb84b77efbefe3f7224d3bc7"
+}

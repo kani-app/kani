@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM webhook_manga_overrides WHERE webhook_id = 0 AND manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8f36db521b37987dd0e16257c75e34af0b17aec955820520bf7734bc285ca040"
+}

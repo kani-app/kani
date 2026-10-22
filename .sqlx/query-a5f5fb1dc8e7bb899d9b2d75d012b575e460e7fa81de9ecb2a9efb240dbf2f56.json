@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) FROM webhook_manga_overrides WHERE webhook_id = 0 AND manga_id = ? AND enabled = FALSE",
+  "describe": {
+    "columns": [
+      {
+        "name": "COUNT(*)",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a5f5fb1dc8e7bb899d9b2d75d012b575e460e7fa81de9ecb2a9efb240dbf2f56"
+}

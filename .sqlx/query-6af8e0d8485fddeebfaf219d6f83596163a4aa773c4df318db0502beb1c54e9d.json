@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT job_type FROM jobs ORDER BY job_type",
+  "describe": {
+    "columns": [
+      {
+        "name": "job_type",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6af8e0d8485fddeebfaf219d6f83596163a4aa773c4df318db0502beb1c54e9d"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO pending_imports (user_id, origin, title, source_hint, source_manga_id, tracking, chapter_progress, possible_duplicate_of, duplicate_similarity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "deaed0abf6db8c8e17ad6239066432f5eae5d8e1d1e38e4381a1cb4bd8b0cd29"
+}

@@ -1,31 +1,22 @@
 // @ts-check
-// Error state — error message with optional retry action.
+import { h, render } from 'preact';
+import htm from 'htm';
+import { t } from '../i18n.js';
 
-/**
- * Creates an error state element.
- * @param {{
- *   message?: string,
- *   onRetry?: () => void,
- * }} props
- * @returns {HTMLElement}
- */
-export function createErrorState({ message = 'Something went wrong.', onRetry } = {}) {
+const html = htm.bind(h);
+
+export function ErrorState({ message, onRetry }) {
+  const msg = message ?? t('common.something_wrong');
+  return html`
+    <div class="flex flex-col items-center gap-4 py-8 text-center">
+      <p class="text-sm text-danger">${msg}</p>
+      ${onRetry && html`<button type="button" class="btn-ghost" onClick=${onRetry}>${t('common.retry')}</button>`}
+    </div>
+  `;
+}
+
+export function createErrorState({ message, onRetry } = {}) {
   const el = document.createElement('div');
-  el.className = 'flex flex-col items-center gap-4 py-8 text-center';
-
-  const msg = document.createElement('p');
-  msg.className = 'text-sm text-danger';
-  msg.textContent = message;
-  el.appendChild(msg);
-
-  if (onRetry) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn-ghost';
-    btn.textContent = 'Try again';
-    btn.addEventListener('click', onRetry);
-    el.appendChild(btn);
-  }
-
+  render(html`<${ErrorState} message=${message} onRetry=${onRetry} />`, el);
   return el;
 }

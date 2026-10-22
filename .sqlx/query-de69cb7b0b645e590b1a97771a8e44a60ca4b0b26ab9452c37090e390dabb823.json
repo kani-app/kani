@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT page_index as \"page_index: i64\" FROM user_page_bookmarks\n               WHERE user_id = ? AND chapter_id = ?\n               ORDER BY page_index",
+  "describe": {
+    "columns": [
+      {
+        "name": "page_index: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "de69cb7b0b645e590b1a97771a8e44a60ca4b0b26ab9452c37090e390dabb823"
+}

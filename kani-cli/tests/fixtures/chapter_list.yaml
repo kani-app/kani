@@ -1,0 +1,20 @@
+id: test-chapters
+name: TestChapters
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+endpoints:
+  chapter_list:
+    route: "/manga/$manga_id$/chapters"
+    container: ".chapter-list .chapter"
+    has_next_page: false
+    fields:
+      id: 'self.attr("data-id")'
+      number:
+        expr: 'self.first(".num").text().trim().parse_float().fallback(0.0)'
+        optional: true
+      title:
+        expr: 'self.first(".title").text().trim()'
+        optional: true
+      language: '"en"'

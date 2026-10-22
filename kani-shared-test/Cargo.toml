@@ -1,0 +1,20 @@
+[package]
+name = "kani-shared-test"
+version = "1.0.0"
+license.workspace = true
+repository.workspace = true
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+kani-app = { path = "../kani-app", features = ["test-util"] }
+sqlx.workspace = true
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["workspace-hack"]

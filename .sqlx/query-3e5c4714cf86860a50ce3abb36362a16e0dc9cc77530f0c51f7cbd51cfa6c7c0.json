@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM user_chapter_tracking WHERE user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3e5c4714cf86860a50ce3abb36362a16e0dc9cc77530f0c51f7cbd51cfa6c7c0"
+}

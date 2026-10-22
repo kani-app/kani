@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT job_type, priority, params_json FROM jobs WHERE id = ? AND status = 'paused'",
+  "describe": {
+    "columns": [
+      {
+        "name": "job_type",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "priority",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "params_json",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7afe9ee3c8a81047261603c50f20ea42a50fa9cf87c4715788ad28a3b5a22e76"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE repo_trust SET trusted_level = 'official' WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "06183a3dd39fb50755030434353663e19ce7b0ad70341aaab130a993b28ed01a"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT content_hash, manifest_json, id FROM chapters WHERE content_hash IS NOT NULL AND download_status = 2 ORDER BY content_hash, id",
+  "describe": {
+    "columns": [
+      {
+        "name": "content_hash",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "manifest_json",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "59e5275e505c76306909e53a7a9e287934561ec2203c72e7b3079bd3e5a6e44b"
+}

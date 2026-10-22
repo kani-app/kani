@@ -1,10 +1,8 @@
 // @ts-check
-// Tag list — renders genre/tag chips for manga details.
 
 import { escapeHtml } from '../utils.js';
 
 /**
- * Creates a tag list element.
  * @param {{
  *   tags: string[],
  *   getHref?: (tag: string) => string | null,

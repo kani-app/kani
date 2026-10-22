@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO jobs (id, job_type, status, priority, description, params_json, created_at) VALUES (?, ?, 'pending', ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "a936226a81f24071ade08c53ec266267e432efc5005b9542fe381e714f20d1cb"
+}

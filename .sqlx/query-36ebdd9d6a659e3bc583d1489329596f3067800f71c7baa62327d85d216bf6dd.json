@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_manga_tracking (user_id, manga_id, status, score)\n           SELECT umt.user_id, ?, umt.status, umt.score\n           FROM user_manga_tracking umt\n           WHERE umt.manga_id = ?\n           ON CONFLICT(user_id, manga_id) DO UPDATE\n             SET status = MAX(excluded.status, status),\n                 score  = COALESCE(score, excluded.score)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "36ebdd9d6a659e3bc583d1489329596f3067800f71c7baa62327d85d216bf6dd"
+}

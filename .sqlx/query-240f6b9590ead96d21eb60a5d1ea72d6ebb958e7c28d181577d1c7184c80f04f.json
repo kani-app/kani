@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT depth, report_json, created_at FROM scrub_reports ORDER BY created_at DESC, id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "depth",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "report_json",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "240f6b9590ead96d21eb60a5d1ea72d6ebb958e7c28d181577d1c7184c80f04f"
+}

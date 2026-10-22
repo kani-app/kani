@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO duplicate_pairs (manga_a_id, manga_b_id, similarity, author_match) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "784fead3ec2870ce63a628ec0ff822a2cfbeb27bae346a1790585367ed8260a0"
+}

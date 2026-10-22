@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE manga SET local_cover_path = ?, cover_overridden = TRUE WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "72b1dee88e778551d142fab5f1038388838476e1ef01920e20f7357b201cfe46"
+}

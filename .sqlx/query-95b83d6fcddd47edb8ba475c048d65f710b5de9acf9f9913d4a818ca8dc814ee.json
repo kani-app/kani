@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET scan_concurrency = ?, per_source_download_concurrency = ? WHERE id = 'singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "95b83d6fcddd47edb8ba475c048d65f710b5de9acf9f9913d4a818ca8dc814ee"
+}

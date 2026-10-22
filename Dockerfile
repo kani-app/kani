@@ -1,60 +1,64 @@
-# ─── Stage 1: Builder ────────────────────────────────────────────────────────
-FROM rust:bookworm AS builder
-
+FROM rust:bookworm AS chef
 WORKDIR /build
+RUN cargo install cargo-chef --locked
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
     curl \
     unzip \
+    cmake \
+    perl \
+    clang \
+    libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the full workspace
+FROM chef AS planner
 COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Use SQLx offline mode — the committed .sqlx/ directory contains pre-generated
-# query metadata so the build does not need a live database.
-# Run `cargo sqlx prepare --workspace` locally to regenerate after schema changes.
+FROM chef AS builder
+COPY --from=planner /build/recipe.json recipe.json
+COPY scripts/fast-linker.sh scripts/fast-linker.sh
+
 ENV SQLX_OFFLINE=true
 
-# Build kani-cli first, then use it to fetch JS vendor files and build tools.
-# build.rs detects the PROFILE=release and automatically runs tailwind --minify
-# and esbuild to produce static/css/main.css and static/js/dist/.
+RUN cargo chef cook --release --recipe-path recipe.json
+
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
+COPY . .
+
 RUN cargo build --release -p kani-cli \
     && ./target/release/kani-cli setup
 
-# Build the release binary (triggers build.rs which bundles CSS and JS).
 RUN cargo build --release -p kani-web
 
-
-# ─── Stage 2: Runtime ────────────────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
+
+ARG INSTALL_KCC=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     ca-certificates \
     curl \
+    nodejs \
+    && if [ "$INSTALL_KCC" = "true" ]; then \
+        apt-get install -y --no-install-recommends python3 python3-pip p7zip-full \
+        && pip3 install --no-cache-dir --break-system-packages KindleComicConverter; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -r kani && useradd -r -g kani -d /app kani
+RUN groupadd -g 1000 kani && useradd -u 1000 -g kani -d /app -M kani
 
-# Copy the compiled binary and static web assets (CSS and JS already built by build.rs).
 WORKDIR /app
 COPY --from=builder --chown=kani:kani /build/target/release/kani-web ./kani-web
-COPY --from=builder --chown=kani:kani /build/static/ ./static/
 COPY --chown=kani:kani entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# /data holds the database and WASM extensions.
-# /library is a separate mount point for the manga image library — it can be
-# a bind-mounted path on a different drive/filesystem on the host.
 RUN mkdir -p /data /library && chown kani:kani /data /library
 
-USER kani
-
-# Run from /data so that relative paths in the database (./library, ./wasm_sources)
-# and the SQLite file (kani.db) all land inside the mounted volume.
 WORKDIR /data
 
 EXPOSE 8242
@@ -63,9 +67,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8242/health || exit 1
 
 ENV KANI_BIND=0.0.0.0:8242
-# Static assets are at the fixed /app/static path regardless of working directory
-ENV KANI_STATIC_DIR=/app/static
-# Library images live in their own volume so they can be on a separate drive/filesystem
 ENV KANI_LIBRARY_DIR=/library
 
 CMD ["/app/entrypoint.sh"]

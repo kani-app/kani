@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT c.upgrade_available, c.chapter_number, c.name AS chapter_name, m.id AS manga_id, COALESCE(m.local_name, m.name) AS manga_title FROM chapters c JOIN manga m ON m.id = c.manga_id WHERE c.upgrade_available IS NOT NULL AND m.deleted_at IS NULL ORDER BY manga_title, c.chapter_number",
+  "describe": {
+    "columns": [
+      {
+        "name": "upgrade_available",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "chapter_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "manga_id",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manga_title",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "1c93e3e7203f202ccd30d926b6925e81d2592e469b0121358fc32d9d69edf9d6"
+}

@@ -1,56 +1,42 @@
 // @ts-check
-// Empty state — no-results placeholder with optional action.
+import { h, render } from 'preact';
+import htm from 'htm';
+
+const html = htm.bind(h);
 
 /**
- * Creates an empty state element.
- * @param {{
- *   icon?: string,
- *   title: string,
- *   subtitle?: string,
- *   action?: { label: string, onClick: () => void } | { label: string, href: string },
- * }} props
- * @returns {HTMLElement}
+ * `compact` trades the icon and the tall padding for a single quiet line — use it
+ * inside a card sub-list or table body, where the full treatment would dwarf the
+ * panel it sits in.
  */
-export function createEmptyState({ icon, title, subtitle, action }) {
+export function EmptyState({ icon, title, subtitle, action, compact = false }) {
+  if (compact) {
+    return html`
+      <div class="flex flex-col items-center gap-1 px-4 py-6 text-center">
+        <p class="text-sm text-text-muted">${title}</p>
+        ${subtitle && html`<p class="text-xs text-text-faint">${subtitle}</p>`}
+        ${action && ('href' in action
+          ? html`<a href=${action.href} class="btn-secondary btn-sm mt-1">${action.label}</a>`
+          : html`<button type="button" class="btn-secondary btn-sm mt-1" onClick=${action.onClick}>${action.label}</button>`
+        )}
+      </div>
+    `;
+  }
+  return html`
+    <div class="flex flex-col items-center justify-center gap-4 px-4 py-12 sm:px-6 sm:py-16 text-center">
+      ${icon && html`<span class="text-text-muted icon-3xl" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: icon }} />`}
+      <p class="text-base font-medium text-text">${title}</p>
+      ${subtitle && html`<p class="text-sm text-text-muted">${subtitle}</p>`}
+      ${action && ('href' in action
+        ? html`<a href=${action.href} class="btn-primary">${action.label}</a>`
+        : html`<button type="button" class="btn-primary" onClick=${action.onClick}>${action.label}</button>`
+      )}
+    </div>
+  `;
+}
+
+export function createEmptyState(opts) {
   const el = document.createElement('div');
-  el.className = 'flex flex-col items-center justify-center gap-4 py-16 text-center';
-
-  if (icon) {
-    const iconEl = document.createElement('span');
-    iconEl.className = 'text-text-muted [&_svg]:w-12 [&_svg]:h-12';
-    iconEl.setAttribute('aria-hidden', 'true');
-    iconEl.innerHTML = icon;
-    el.appendChild(iconEl);
-  }
-
-  const titleEl = document.createElement('p');
-  titleEl.className = 'text-base font-medium text-text';
-  titleEl.textContent = title;
-  el.appendChild(titleEl);
-
-  if (subtitle) {
-    const sub = document.createElement('p');
-    sub.className = 'text-sm text-text-muted';
-    sub.textContent = subtitle;
-    el.appendChild(sub);
-  }
-
-  if (action) {
-    if ('href' in action) {
-      const link = document.createElement('a');
-      link.href = action.href;
-      link.className = 'btn-primary';
-      link.textContent = action.label;
-      el.appendChild(link);
-    } else {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn-primary';
-      btn.textContent = action.label;
-      btn.addEventListener('click', action.onClick);
-      el.appendChild(btn);
-    }
-  }
-
+  render(html`<${EmptyState} ...${opts} />`, el);
   return el;
 }

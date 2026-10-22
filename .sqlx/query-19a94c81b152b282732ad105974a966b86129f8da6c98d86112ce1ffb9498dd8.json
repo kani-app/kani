@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, job_type, priority, description, params_json FROM jobs WHERE status = 'pending' ORDER BY priority DESC, created_at ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "job_type",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "priority",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "description",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "params_json",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "19a94c81b152b282732ad105974a966b86129f8da6c98d86112ce1ffb9498dd8"
+}

@@ -1,30 +1,87 @@
 [package]
 name = "kani-app"
-version = "0.1.0"
+version = "1.0.0"
+license.workspace = true
+repository.workspace = true
 edition = "2024"
 build = "build.rs"
+
+[lints]
+workspace = true
 
 [dependencies]
 kani-core   = { path = "../kani-core" }
 kani-shared = { path = "../kani-shared", features = ["ssr"] }
+kani-yaml   = { path = "../kani-yaml" }
+kani-lease  = { path = "../kani-lease" }
+wasmtime    = { version = "46.0.1", features = ["async", "component-model"] }
 
-serde         = { version = "1.0", features = ["derive"] }
-serde_json    = "1.0"
-thiserror     = "2.0"
-urlencoding   = "2.1"
-tokio         = { version = "1", features = ["full"] }
-tokio-util    = "0.7"
-sqlx          = { version = "0.8", features = ["runtime-tokio", "sqlite", "time"], default-features = false }
-rquest        = { version = "5.1", features = ["json"] }
-tracing       = "0.1"
-futures       = "0.3"
-indexmap      = "2"
-ordered-float = "5"
-moka          = { version = "0.12", features = ["future"] }
-dashmap       = "6"
-time          = { version = "0.3", features = ["serde"] }
-base64        = "0.22"
-sha2          = "0.10"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+urlencoding.workspace = true
+tokio         = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros", "process"] }
+tokio-util.workspace = true
+stacker = "0.1.23"
+sqlx.workspace = true
+log = "0.4"
+rquest        = { package = "wreq", version = "6.0.0-rc.29", features = ["form", "json", "query"] }
+http-body-util = "0.1"
+url            = "2.5.8"
+tracing.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+ordered-float.workspace = true
+moka.workspace = true
+dashmap.workspace = true
+arc-swap.workspace = true
+time          = { workspace = true, features = ["serde", "serde-well-known", "formatting", "macros"] }
+base64.workspace = true
+sha2.workspace = true
+hmac          = "0.12"
+chacha20poly1305 = "0.10.1"
 rand          = "0.10"
 hex           = "0.4"
+secrecy       = { version = "0.8", features = ["alloc", "serde"] }
+totp-rs       = { version = "5", features = ["qr", "gen_secret"] }
+argon2        = "0.5"
+infer         = "0.16"
+zxcvbn        = "3"
+sha1          = "0.10"
 async-trait   = "0.1"
+paste         = "1.0.15"
+semver        = "1"
+uuid          = { version = "1", features = ["v4", "serde"] }
+lettre        = { version = "0.11", default-features = false, features = ["tokio1", "tokio1-rustls-tls", "smtp-transport", "builder"] }
+image         = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+zip           = "7"
+flate2        = "1"
+prost         = "0.13"
+strsim        = "0.11"
+epub-builder  = "0.7"
+quick-xml     = "0.39.2"
+which         = "6"
+tempfile      = "3"
+fs2           = "0.4"
+dunce         = "1"
+metrics = "0.24"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[features]
+test-util = ["kani-core/test-util"]
+
+[dev-dependencies]
+kani-core        = { path = "../kani-core", features = ["test-util"] }
+kani-shared      = { path = "../kani-shared", features = ["ssr"] }
+kani-shared-test = { path = "../kani-shared-test" }
+tokio-util  = { workspace = true }
+tokio = { version = "1", features = ["net"] }
+ed25519-dalek.workspace = true
+mail-parser = "0.11.5"
+
+[build-dependencies]
+prost-build = "0.14.3"
+protox = "0.9.1"
+
+[package.metadata.cargo-machete]
+ignored = ["workspace-hack"]

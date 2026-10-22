@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT c.source_chapter_id, uct.is_read, uct.last_page_read FROM user_chapter_tracking uct JOIN chapters c ON c.id = uct.chapter_id WHERE c.manga_id = ? AND uct.user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "source_chapter_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_read",
+        "ordinal": 1,
+        "type_info": "Bool"
+      },
+      {
+        "name": "last_page_read",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e6860b8fc964e382f0a33c41953b329163e40234fc2e99bddc4b4ff6eef32d99"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET auto_scan=?, scan_interval_minutes=?, scan_exclude_completed=?, upgrade_detection_enabled=?, upgrade_min_res_gain=?, upgrade_confirm_fetches=?, upgrade_axis_resolution=?, upgrade_axis_colour=?, upgrade_axis_encoder=?, upgrade_axis_bitrate=?, upgrade_show_downgrades=?, upgrade_auto_replace_reasons=?, scan_barren_page_tolerance=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 13
+    },
+    "nullable": []
+  },
+  "hash": "dbf4e43a2f4e1832b40644be77fe4bb17fb044887fe6f869f97693006a257f88"
+}

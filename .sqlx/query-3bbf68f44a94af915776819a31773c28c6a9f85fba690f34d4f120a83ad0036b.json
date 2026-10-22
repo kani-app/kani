@@ -1,0 +1,110 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT pi.id, pi.origin, pi.title, pi.source_hint AS \"source_hint?: crate::ids::SourceId\", pi.source_manga_id,\n                      pi.description, pi.cover_url, pi.authors, pi.tags, pi.status,\n                      pi.tracking, pi.chapter_progress, pi.possible_duplicate_of,\n                      m.name AS possible_duplicate_title,\n                      pi.duplicate_similarity,\n                      strftime('%Y-%m-%dT%H:%M:%SZ', pi.created_at) AS created_at\n               FROM pending_imports pi\n               LEFT JOIN manga m ON m.id = pi.possible_duplicate_of\n               WHERE pi.user_id = ? AND pi.resolved = FALSE\n               ORDER BY pi.created_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "origin",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_hint?: crate::ids::SourceId",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_manga_id",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "cover_url",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "authors",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "tags",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "tracking",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_progress",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "possible_duplicate_of",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "possible_duplicate_title",
+        "ordinal": 13,
+        "type_info": "Text"
+      },
+      {
+        "name": "duplicate_similarity",
+        "ordinal": 14,
+        "type_info": "Float"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 15,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3bbf68f44a94af915776819a31773c28c6a9f85fba690f34d4f120a83ad0036b"
+}

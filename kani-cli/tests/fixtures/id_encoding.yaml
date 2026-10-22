@@ -1,0 +1,31 @@
+id: test-id-encoding
+name: TestIdEncoding
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+get_url: "/series/$manga.hid$/$manga.slug$"
+id_encoding:
+  manga:
+    fields: [hid, slug]
+    delimiter: "|"
+    encoding: base64_url
+
+endpoints:
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id:
+        hid: 'dom("[data-hid]").attr("data-hid")'
+        slug: 'dom("[data-slug]").attr("data-slug")'
+      title: 'dom("h1").text().trim()'
+      status: 'dom(".status").text().trim().lower()'
+
+  chapter_list:
+    route: "/manga/$manga.hid$/$manga.slug$/chapters"
+    container: ".chapter-list .chapter"
+    has_next_page: false
+    fields:
+      id: 'self.attr("data-id")'
+      language: '"en"'

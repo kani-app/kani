@@ -1,0 +1,15 @@
+id: test-geturl
+name: TestGetUrl
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+get_url: "https://example.com/manga/$manga_id$"
+
+endpoints:
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id: '"$manga_id$"'
+      title: 'dom("h1").text()'
+      status: 'dom(".status").text().lower()'

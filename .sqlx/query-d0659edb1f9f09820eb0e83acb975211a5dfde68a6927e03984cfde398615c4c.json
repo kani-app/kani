@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET file_path = ?, content_hash = ?, manifest_json = ?, file_verified_at = ?, quality_long_edge = ?, quality_bytes_per_mp = ?, quality_encoder = ?, quality_colour = ?, page_count = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "d0659edb1f9f09820eb0e83acb975211a5dfde68a6927e03984cfde398615c4c"
+}

@@ -1,0 +1,31 @@
+# Endpoint tests that assert a success status and nothing else, captured
+# 2026-08-17. Each one proves the route is mounted and the guard admitted the
+# caller, and would still pass if the handler returned the wrong data.
+# The sweep drains this file; the check fails when an entry is strengthened,
+# so it cannot go stale.
+
+kani-web/tests/admin_api_tests.rs reset_source_circuit_returns_204_for_admin
+kani-web/tests/api_token_auth_tests.rs a_scoped_api_token_reaches_a_permitted_route
+kani-web/tests/chapters_api_tests.rs set_chapter_progress_returns_error_for_missing_chapter
+kani-web/tests/chapters_api_tests.rs set_read_status_returns_204_for_empty_chapter_list
+kani-web/tests/client_ip_api_tests.rs a_forged_header_cannot_lock_out_a_bystander
+kani-web/tests/csrf_api_tests.rs logging_in_is_reachable_without_a_prior_token
+kani-web/tests/export_api_tests.rs export_kcc_returns_error_for_missing_chapter
+kani-web/tests/image_proxy_tests.rs a_page_labelled_as_an_image_is_not_proxied
+kani-web/tests/library_api_tests.rs scan_manga_ids_empty_returns_200_for_authed_user
+kani-web/tests/migration_api_tests.rs an_in_flight_migration_does_not_block_a_different_series
+kani-web/tests/opds_api_tests.rs opds_catalogue_returns_200_for_empty_library
+kani-web/tests/opds_api_tests.rs opds_manga_returns_200_for_existing_manga
+kani-web/tests/opds_api_tests.rs opds_root_returns_200_with_basic_auth
+kani-web/tests/opds_api_tests.rs opds_search_returns_200_with_auth
+kani-web/tests/pagination_contract_tests.rs global_search_accepts_only_its_required_query_param
+kani-web/tests/proxy_tests.rs proxy_stats_returns_200_for_admin
+kani-web/tests/reader_prefs_api_tests.rs put_reader_prefs_returns_204
+kani-web/tests/repo_api_tests.rs delete_repo_returns_no_content
+kani-web/tests/repo_api_tests.rs list_blocked_repos_returns_200_for_admin
+kani-web/tests/saved_searches_api_tests.rs list_saved_searches_returns_200_for_authed_user
+kani-web/tests/scanlators_api_tests.rs get_chapter_scanlators_returns_200_for_existing_manga
+kani-web/tests/scanlators_api_tests.rs set_scanlator_mode_returns_200_for_whitelist
+kani-web/tests/suppressed_api_tests.rs dismiss_is_a_noop_for_an_unknown_manga
+kani-web/tests/system_api_tests.rs swagger_ui_returns_200
+kani-web/tests/trash_api_tests.rs list_trash_returns_200_for_authed_user

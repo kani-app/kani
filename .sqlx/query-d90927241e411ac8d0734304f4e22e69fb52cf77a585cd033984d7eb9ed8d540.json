@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id AS \"id!\", user_id, name, tokens_json, custom_css,\n                      is_active AS \"is_active: bool\"\n               FROM ui_themes\n               WHERE user_id = ? OR user_id IS NULL\n               ORDER BY user_id IS NULL, name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "tokens_json",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "custom_css",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_active: bool",
+        "ordinal": 5,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "d90927241e411ac8d0734304f4e22e69fb52cf77a585cd033984d7eb9ed8d540"
+}

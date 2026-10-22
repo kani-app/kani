@@ -11,8 +11,41 @@ pub enum Error {
     #[error("Path traversal blocked: {0}")]
     PathTraversal(String),
 
+    /// A URL whose scheme is not http or https; never retried.
+    #[error("{0}")]
+    UnsupportedScheme(String),
+
+    /// A page whose declared transform cannot be applied; never retried or saved.
+    #[error("{0}")]
+    Transform(String),
+
+    /// One operation used up its request, response-byte or time budget.
+    #[error("{0}")]
+    BudgetExceeded(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
+
+    /// Browser capture could not run, with the solver state preserved.
+    ///
+    /// The code is carried rather than formatted into a string so the web layer
+    /// can turn each state into its own status and hint.
+    #[error("Browser capture unavailable: {message} [{code}]")]
+    BrowserCaptureUnavailable { code: String, message: String },
+
+    /// A non-success HTTP status, with the code preserved.
+    ///
+    /// Carrying the status rather than formatting it into a string is what lets
+    /// a caller tell "try again" from "this will never work" without matching
+    /// on error text.
+    #[error("HTTP {status}: {context}")]
+    HttpStatus {
+        status: u16,
+        /// Seconds from a `Retry-After` header, when the server sent one.
+        /// Honouring the server's own number beats guessing with backoff.
+        retry_after_secs: Option<u64>,
+        context: String,
+    },
 
     #[error("WASM error: {0}")]
     Wasm(#[from] wasmtime::Error),
@@ -42,7 +75,7 @@ pub enum Error {
     IntConversion(#[from] std::num::TryFromIntError),
 
     #[error("Extension error: {0}")]
-    Extension(String),
+    Extension(kani_shared::extension::ExtensionError),
 
     #[error("{0}")]
     Other(String),
@@ -66,5 +99,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl From<Error> for String {
     fn from(value: Error) -> Self {
         value.to_string()
+    }
+}
+
+impl From<crate::transform::TransformError> for Error {
+    fn from(value: crate::transform::TransformError) -> Self {
+        Error::Other(value.to_string())
     }
 }

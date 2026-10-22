@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM jobs WHERE status IN ('completed','failed','cancelled') AND id NOT IN (SELECT id FROM jobs WHERE status IN ('completed','failed','cancelled') ORDER BY completed_at DESC LIMIT ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "082febd39eab355365afc2fa9a48741ff81ef5b8dd543e67cba4c79a5d821d21"
+}

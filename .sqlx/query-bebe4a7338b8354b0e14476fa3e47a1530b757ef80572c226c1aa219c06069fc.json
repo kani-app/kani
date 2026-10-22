@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET concurrent_page_downloads=?, max_retries=?, initial_retry_delay_ms=?, auto_download_category_ids=?, scan_concurrency=?, per_source_download_concurrency=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "bebe4a7338b8354b0e14476fa3e47a1530b757ef80572c226c1aa219c06069fc"
+}

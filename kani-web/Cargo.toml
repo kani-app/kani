@@ -1,61 +1,87 @@
 [package]
 name = "kani-web"
-version = "0.1.0"
+version = "1.0.0"
+license.workspace = true
+repository.workspace = true
 edition = "2024"
 build = "build.rs"
 
+[lints]
+workspace = true
+
+[features]
+test-util = ["kani-app/test-util"]
+
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-urlencoding = "2.1"
-time = { version = "0.3.47", features = ["serde", "formatting", "macros"] }
-paste = "1.0.15"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+time = { workspace = true, features = ["formatting", "macros", "parsing"] }
 kani-shared = { path = "../kani-shared", features = ["ssr"] }
 axum = { version = "0.8", features = ["multipart"] }
-tokio = { version = "1", features = ["full"] }
-tokio-util = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "fs", "macros", "signal"] }
+tokio-util.workspace = true
 tower-http = { version = "0.6", features = [
-  "compression-full",
+  "compression-gzip",
+  "compression-br",
   "cors",
   "fs",
   "set-header",
+  "trace",
+  "request-id",
 ] }
-sqlx = { version = "0.8", features = [
-  "runtime-tokio",
-  "sqlite",
-  "time",
-], default-features = false }
-rquest = { version = "5.1", features = ["json"] }
-rquest-util = "2.2"
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx.workspace = true
+rquest = { package = "wreq", version = "6.0.0-rc.29", features = ["json"] }
+url = "2.5.8"
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 kani-core = { path = "../kani-core" }
 kani-app  = { path = "../kani-app" }
-bytes = "1.11.1"
-futures = "0.3.32"
-indexmap = "2.13.0"
-ordered-float = "5.1.0"
-moka = { version = "0.12.14", features = ["future"] }
+bytes.workspace = true
+futures.workspace = true
+moka.workspace = true
 chacha20poly1305 = "0.10.1"
-sha2 = "0.10.9"
+sha2.workspace = true
 hmac = "0.12.1"
+secrecy = { version = "0.8", features = ["alloc", "serde"] }
 rand = "0.10.0"
-base64 = "0.22.1"
+base64.workspace = true
 hex = "0.4.3"
-dashmap = "6.1.0"
+uuid = { version = "1", features = ["v4"] }
+dashmap.workspace = true
 pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
+image           = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 ammonia = "4.1.2"
 axum-login = "0.18"
 argon2 = { version = "0.5.3", features = ["std"] }
-dirs = "6.0.0"
 tower-sessions-sqlx-store = { version = "0.15", default-features = false, features = ["sqlite"] }
 garde = { version = "0.22", features = ["derive"] }
+urlencoding.workspace = true
 tower_governor = "0.6"
+tower = { version = "0.5", features = ["util"] }
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+axum-prometheus = "0.10.0"
+metrics = "0.24"
+# interpolate-folder-path expands $OUT_DIR in the #[folder] attribute, which is
+# how the embed reads the assets build.rs stages rather than the source tree.
+rust-embed = { version = "8.12.0", features = ["mime-guess", "interpolate-folder-path"] }
+mime_guess = "2.0.5"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile = "3.27.0"
-tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+zip = "7"
+kani-app = { path = "../kani-app", features = ["test-util"] }
+kani-shared-test = { path = "../kani-shared-test" }
+kani-yaml = { path = "../kani-yaml" }
+quick-xml = "0.39.2"
+moka = { workspace = true }
+async-trait = "0.1"
+ed25519-dalek.workspace = true
+rand = "0.10"
+
+[package.metadata.cargo-machete]
+ignored = ["workspace-hack"]

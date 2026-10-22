@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "sql",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "cb5e83d939c8a7cabf243cc0137bac80c87c4468e297291b4b15663b761617d4"
+}

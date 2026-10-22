@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO storage_history (library_used_bytes, cover_used_bytes, chapter_used_bytes, data_used_bytes, free_bytes, total_manga, total_chapters) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "196b941b2382fefd4dd93d9c664f78375ba1b5b5e1c1d261cddb4855d4b6c23a"
+}

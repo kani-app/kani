@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO recurring_jobs (kind, last_run_at, next_due_at) VALUES (?, NULL, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "9ca49135e00063c53f6deb149de92a37f0c2dfff34db51b962172e25e3b1400c"
+}

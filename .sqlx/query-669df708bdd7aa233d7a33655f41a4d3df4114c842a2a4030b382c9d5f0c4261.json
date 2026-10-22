@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id: i64\", scanlator, volume as \"volume: i64\"\n               FROM chapters\n               WHERE manga_id = ? AND chapter_number = ? AND id != ? AND download_status = 2\n               ORDER BY scanlator, volume",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scanlator",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "volume: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "669df708bdd7aa233d7a33655f41a4d3df4114c842a2a4030b382c9d5f0c4261"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM captcha_challenges WHERE id = ? AND expires_at > ? RETURNING answer",
+  "describe": {
+    "columns": [
+      {
+        "name": "answer",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "959ec356d34aeedb8d55b9cce7014a76a8e2677f83c1d2243ea237682ffe481b"
+}

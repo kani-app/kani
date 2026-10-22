@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    DATE(uct.last_read_at)         AS \"date!: String\",\n                    COALESCE(SUM(c.page_count), 0)  AS \"pages!: i64\"\n                FROM user_chapter_tracking uct\n                JOIN chapters c ON c.id = uct.chapter_id\n                WHERE uct.is_read = TRUE AND uct.user_id = ? AND uct.last_read_at >= ?\n                  AND c.page_count IS NOT NULL\n                GROUP BY DATE(uct.last_read_at)\n                ORDER BY 1 ASC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "date!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "pages!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "117561d31acfa079cc6aeb4ebe631f2e206524e2f0a048824c4962cdba2a7095"
+}

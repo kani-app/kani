@@ -1,0 +1,92 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, source_chapter_id, chapter_number, scanlator, page_count, source_page_count, download_status, manifest_json, upgrade_available, quality_long_edge, quality_bytes_per_mp, quality_encoder, quality_colour FROM chapters WHERE manga_id = ? ORDER BY chapter_number",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_chapter_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "scanlator",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "page_count",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_page_count",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "download_status",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manifest_json",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "upgrade_available",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "quality_long_edge",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "quality_bytes_per_mp",
+        "ordinal": 10,
+        "type_info": "Float"
+      },
+      {
+        "name": "quality_encoder",
+        "ordinal": 11,
+        "type_info": "Integer"
+      },
+      {
+        "name": "quality_colour",
+        "ordinal": 12,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7ee82782411a48e9a324c3efbcedf9f1a5dc261586004f12b7245b97dc978afb"
+}

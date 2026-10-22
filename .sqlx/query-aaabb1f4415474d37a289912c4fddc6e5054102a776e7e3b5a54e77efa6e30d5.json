@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR REPLACE INTO manga_import_progress (manga_id, user_id, source_chapter_id, chapter_number, is_read, last_page_read) VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "aaabb1f4415474d37a289912c4fddc6e5054102a776e7e3b5a54e77efa6e30d5"
+}

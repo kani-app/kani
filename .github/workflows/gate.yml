@@ -1,0 +1,27 @@
+# A guard that branch protection cannot express on its own. `Source branch` exists because
+# neither branch protection nor rulesets can restrict which branch a pull request comes *from*.
+# Enforcing "only develop may merge into main" therefore has to be a status check.
+name: Gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: Source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only develop may open a pull request into main
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "develop" ]; then
+            echo "::error::main only accepts pull requests from develop; this one is from '$HEAD'."
+            echo "Merge into develop first, then open develop -> main."
+            exit 1
+          fi
+          echo "base=$BASE head=$HEAD — allowed"

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT c.id as \"id: i64\", c.chapter_number as \"chapter_number: f64\",\n                   uct.last_page_read as \"last_page_read: i64\",\n                   COALESCE(c.page_count, 0) as \"page_count!: i64\"\n            FROM chapters c\n            JOIN manga m ON m.id = c.manga_id\n            JOIN user_chapter_tracking uct ON uct.chapter_id = c.id\n            LEFT JOIN scanlator_preferences sp\n                ON sp.id = (SELECT sp2.id FROM scanlator_preferences sp2\n                            WHERE (sp2.manga_id = c.manga_id OR sp2.manga_id IS NULL)\n                              AND sp2.scanlator = c.scanlator\n                            ORDER BY sp2.manga_id IS NULL LIMIT 1)\n            WHERE c.manga_id = ? AND uct.user_id = ?\n              AND uct.is_read = false AND uct.last_page_read > 0\n              AND c.download_status = 2\n              AND (\n                  (m.scanlator_mode = 'priority' AND (sp.blocked IS NULL OR sp.blocked = 0)) OR\n                  (m.scanlator_mode = 'whitelist' AND sp.id IS NOT NULL)\n              )\n            ORDER BY c.chapter_number ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "chapter_number: f64",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "last_page_read: i64",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "page_count!: i64",
+        "ordinal": 3,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8362a42b3c4533a13c5aab3e67668e2873bdda95f66f69369f2c57a374bb4784"
+}

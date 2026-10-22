@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO manga_local_authors (manga_id, name, role) VALUES (?, ?, 'artist')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a881ada8f0116bab3558f6c24957277bb362897d45bda62f766ace8ec05d2803"
+}

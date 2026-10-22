@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT base_url FROM sources WHERE id = ? AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "base_url",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e6b4e824935a7003409f2d63335c340262994252bea80fe0dabaae83991d7e18"
+}

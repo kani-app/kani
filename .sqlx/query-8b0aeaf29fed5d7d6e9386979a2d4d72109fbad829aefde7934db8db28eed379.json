@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM chapters WHERE is_orphaned = true AND download_status != 2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "8b0aeaf29fed5d7d6e9386979a2d4d72109fbad829aefde7934db8db28eed379"
+}

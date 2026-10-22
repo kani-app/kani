@@ -1,11 +1,11 @@
 // @ts-check
-// Filter panel component — renders extension-defined filters inside a modal.
-// Exported: mountFilterModal(triggerBtn, modalRoot, props)
 
 import { h, render } from 'preact';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 import { Combobox } from './combobox.js';
-import { escapeHtml } from '../utils.js';
+import { Modal } from './modal.js';
+import { t } from '../i18n.js';
 const html = htm.bind(h);
 
 /**
@@ -31,8 +31,8 @@ const html = htm.bind(h);
  * Mounts a Filters button that opens a modal with an explicit Apply action.
  * Returns a destroy function.
  *
- * @param {HTMLElement} triggerBtn  - The button element to use as the trigger (caller creates it)
- * @param {HTMLElement} modalRoot   - Where to insert the modal overlay (usually document.body)
+ * @param {HTMLElement} triggerBtn
+ * @param {HTMLElement} modalRoot
  * @param {{
  * filterDefs: FilterDef[],
  * activeFilters: Record<string, FilterState>,
@@ -41,22 +41,19 @@ const html = htm.bind(h);
  * @returns {() => void} destroy function
  */
 export function mountFilterModal(triggerBtn, modalRoot, { filterDefs, activeFilters, onChange }) {
-  // Committed = what has been applied; draft = what's in the open modal
-  /** @type {Record<string, FilterState>} */
   let committed = { ...activeFilters };
-  /** @type {Record<string, FilterState>} */
-  let draft = {};
-
-  /** @type {HTMLElement|null} */
-  let overlayEl = null;
+  /** @type {HTMLDivElement | null} */
+  let _mount = null;
+  /** @type {Element | null} */
+  let _prevFocus = null;
 
   function _updateBadge() {
     const count = Object.keys(committed).length;
-    let badge = /** @type {HTMLElement|null} */ (triggerBtn.querySelector('.js-filter-badge'));
+    let badge = /** @type {HTMLElement | null} */ (triggerBtn.querySelector('.js-filter-badge'));
     if (count > 0) {
       if (!badge) {
         badge = document.createElement('span');
-        badge.className = 'js-filter-badge inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full bg-accent text-white ml-1.5';
+        badge.className = 'js-filter-badge inline-flex items-center justify-center w-4 h-4 text-2xs font-bold rounded-full bg-accent text-on-accent ml-1.5';
         triggerBtn.appendChild(badge);
       }
       badge.textContent = String(count);
@@ -65,112 +62,239 @@ export function mountFilterModal(triggerBtn, modalRoot, { filterDefs, activeFilt
     }
   }
 
-  function _openModal() {
-    // Snapshot committed → draft for this session
-    draft = { ...committed };
-
-    const overlay = document.createElement('div');
-    overlay.className = 'fixed inset-0 bg-black/50 z-[9000] flex items-end sm:items-center justify-center p-0 sm:p-4';
-    overlayEl = overlay;
-
-    const dialog = document.createElement('div');
-    dialog.className = 'bg-surface rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg max-h-[85vh] flex flex-col shadow-xl overflow-hidden';
-    dialog.setAttribute('role', 'dialog');
-    dialog.setAttribute('aria-modal', 'true');
-    dialog.setAttribute('aria-label', 'Filters');
-
-    // Header
-    const header = document.createElement('div');
-    header.className = 'flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0';
-    header.innerHTML = `
-      <h2 class="text-sm font-semibold text-text">Filters</h2>
-      <button type="button" class="js-close btn-ghost btn-sm px-2! text-text-muted" aria-label="Close">✕</button>
-    `;
-    dialog.appendChild(header);
-
-    // Body — scrollable filter controls
-    const body = document.createElement('div');
-    body.className = 'flex-1 overflow-y-auto p-4';
-    dialog.appendChild(body);
-
-    /** Rebuild the body controls using the current draft */
-    function _rebuildBody() {
-      body.innerHTML = '';
-      _renderFilterControls(body, filterDefs, draft, (id, stateObj) => {
-        if (!stateObj) {
-          delete draft[id];
-        } else {
-          draft[id] = stateObj;
-        }
-      });
+  function _close() {
+    if (_mount) {
+      render(null, _mount);
+      _mount.remove();
+      _mount = null;
     }
-    _rebuildBody();
+    /** @type {HTMLElement | null} */ (_prevFocus)?.focus();
+  }
 
-    // Footer — Reset + Apply
-    const footer = document.createElement('div');
-    footer.className = 'flex items-center justify-between gap-2 px-4 py-3 border-t border-border-subtle shrink-0';
-    footer.innerHTML = `
-      <button type="button" class="js-reset btn-ghost btn-sm text-sm">Reset</button>
-      <button type="button" class="js-apply btn-primary btn-sm">Apply</button>
-    `;
-    dialog.appendChild(footer);
-
-    overlay.appendChild(dialog);
-    modalRoot.appendChild(overlay);
-
-    const close = () => {
-      overlay.remove();
-      overlayEl = null;
-    };
-
-    header.querySelector('.js-close')?.addEventListener('click', close);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-
-    footer.querySelector('.js-reset')?.addEventListener('click', () => {
-      // Reset draft to defaults and rebuild
-      draft = _buildDefaultFilters(filterDefs);
-      _rebuildBody();
-    });
-
-    footer.querySelector('.js-apply')?.addEventListener('click', () => {
-      committed = { ...draft };
-      _updateBadge();
-      onChange({ ...committed });
-      close();
-    });
-
-    // Focus Apply on open
-    setTimeout(() => /** @type {HTMLElement|null} */ (footer.querySelector('.js-apply'))?.focus(), 50);
+  function _openModal() {
+    if (_mount) return;
+    _prevFocus = document.activeElement;
+    _mount = document.createElement('div');
+    modalRoot.appendChild(_mount);
+    render(html`<${FilterModal}
+      filterDefs=${filterDefs}
+      committed=${committed}
+      onApply=${(/** @type {Record<string, FilterState>} */ newFilters) => {
+        committed = newFilters;
+        _updateBadge();
+        onChange({ ...committed });
+        _close();
+      }}
+      onClose=${_close}
+    />`, _mount);
   }
 
   triggerBtn.addEventListener('click', () => {
-    if (overlayEl) return; // already open
+    if (_mount) return;
     _openModal();
   });
 
   _updateBadge();
 
   return () => {
-    overlayEl?.remove();
-    overlayEl = null;
+    if (_mount) { render(null, _mount); _mount.remove(); _mount = null; }
   };
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+
+/**
+ * @param {{
+ *   filterDefs: FilterDef[],
+ *   committed: Record<string, FilterState>,
+ *   onApply: (filters: Record<string, FilterState>) => void,
+ *   onClose: () => void,
+ * }} props
+ */
+function FilterModal({ filterDefs, committed, onApply, onClose }) {
+  const [draft, setDraft] = useState(() => ({ ...committed }));
+  const applyRef = useRef(/** @type {HTMLButtonElement | null} */ (null));
+
+  useEffect(() => {
+    const id = setTimeout(() => applyRef.current?.focus(), 50);
+    return () => clearTimeout(id);
+  }, []);
+
+  /** @param {string} id @param {FilterState | null} stateObj */
+  function handleChange(id, stateObj) {
+    setDraft(prev => {
+      const next = { ...prev };
+      if (!stateObj) delete next[id];
+      else next[id] = stateObj;
+      return next;
+    });
+  }
+
+  function handleReset() {
+    setDraft(_buildDefaultFilters(filterDefs));
+  }
+
+  function handleApply() {
+    onApply({ ...draft });
+  }
+
+  return html`
+    <${Modal}
+      open=${true}
+      title=${t('filter.panel.title')}
+      onClose=${onClose}
+      footer=${html`
+        <div class="w-full flex items-center justify-between gap-2">
+          <button type="button" class="btn-ghost btn-sm" onClick=${handleReset}>${t('filter.reset')}</button>
+          <button type="button" class="btn-primary btn-sm" ref=${applyRef} onClick=${handleApply}>${t('filter.apply')}</button>
+        </div>
+      `}
+    >
+      <${FilterControls} filterDefs=${filterDefs} draft=${draft} onChange=${handleChange} />
+    </${Modal}>
+  `;
+}
+
+/**
+ * @param {{
+ *   filterDefs: FilterDef[],
+ *   draft: Record<string, FilterState>,
+ *   onChange: (id: string, stateObj: FilterState | null) => void,
+ * }} props
+ */
+function FilterControls({ filterDefs, draft, onChange }) {
+  return html`
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      ${filterDefs.map(filter => html`<${FilterControl}
+        key=${filter.id}
+        filter=${filter}
+        value=${draft[filter.id]}
+        onChange=${onChange}
+      />`)}
+    </div>
+  `;
+}
+
+/**
+ * @param {{
+ *   filter: FilterDef,
+ *   value: FilterState | undefined,
+ *   onChange: (id: string, stateObj: FilterState | null) => void,
+ * }} props
+ */
+function FilterControl({ filter, value: curState, onChange }) {
+  const tag = _filterTag(filter);
+  const isCheckbox = tag === 'checkbox';
+  const isMultiselect = tag === 'multiselect';
+  const displayState = curState ?? _normalizeFilterState(filter.default_value ?? null);
+
+  const wrapClass = isCheckbox
+    ? 'flex items-center justify-between gap-3 py-1'
+    : isMultiselect
+      ? 'flex flex-col gap-1 col-span-2'
+      : 'flex flex-col gap-1';
+
+  const labelEl = isCheckbox
+    ? html`<span class="text-xs font-medium text-text-muted uppercase tracking-wider">${filter.name}</span>`
+    : html`<span class="text-xs font-medium text-text-muted uppercase tracking-wider">${filter.name}</span>`;
+
+  let controlEl;
+
+  if (tag === 'select') {
+    const curVal = displayState?.kind === 'Selection' ? displayState.data.value : '';
+    const hasDefault = !!filter.default_value;
+    controlEl = html`
+      <select class="input text-sm" value=${curVal} onChange=${(/** @type {Event} */ e) => {
+        const val = /** @type {HTMLSelectElement} */ (e.target).value;
+        if (!val) { onChange(filter.id, null); return; }
+        const opt = filter.options.find(o => o.value === val);
+        if (opt) onChange(filter.id, { kind: 'Selection', data: { name: opt.name, value: opt.value } });
+      }}>
+        ${!hasDefault && html`<option value="">${t('filter.any_option')}</option>`}
+        ${filter.options.map(o => html`<option key=${o.value} value=${o.value}>${o.name}</option>`)}
+      </select>
+    `;
+
+  } else if (tag === 'checkbox') {
+    const checked = displayState?.kind === 'Checkbox' ? displayState.data : false;
+    controlEl = html`
+      <label class="kani-toggle shrink-0 cursor-pointer">
+        <input type="checkbox" class="kani-toggle__input" checked=${checked} onChange=${(/** @type {Event} */ e) => {
+          onChange(filter.id, /** @type {HTMLInputElement} */ (e.target).checked ? { kind: 'Checkbox', data: true } : null);
+        }} />
+        <span class="kani-toggle__track"></span>
+      </label>
+    `;
+
+  } else if (tag === 'text-input') {
+    const textVal = curState?.kind === 'TextInput' ? curState.data : '';
+    controlEl = html`
+      <input
+        type="text"
+        class="input text-sm"
+        value=${textVal}
+        placeholder=${filter.name}
+        onInput=${(/** @type {Event} */ e) => {
+          const trimmed = /** @type {HTMLInputElement} */ (e.target).value.trim();
+          onChange(filter.id, trimmed ? { kind: 'TextInput', data: trimmed } : null);
+        }}
+      />
+    `;
+
+  } else if (tag === 'sort') {
+    const curVal = displayState?.kind === 'Selection' ? displayState.data.value : '';
+    const hasDefault = !!filter.default_value;
+    controlEl = html`
+      <select class="input text-sm" value=${curVal} onChange=${(/** @type {Event} */ e) => {
+        const val = /** @type {HTMLSelectElement} */ (e.target).value;
+        if (!val) { onChange(filter.id, null); return; }
+        const [baseVal, dir] = val.split(':');
+        const opt = filter.options.find(o => o.value === baseVal);
+        if (opt) onChange(filter.id, {
+          kind: 'Selection',
+          data: { name: opt.name + ' ' + (dir === 'asc' ? '↑' : '↓'), value: val }
+        });
+      }}>
+        ${!hasDefault && html`<option value="">${t('filter.default_option')}</option>`}
+        ${filter.options.map(o => html`
+          <option key=${o.value + ':asc'} value=${o.value + ':asc'}>${o.name} ↑</option>
+          <option key=${o.value + ':desc'} value=${o.value + ':desc'}>${o.name} ↓</option>
+        `)}
+      </select>
+    `;
+
+  } else if (tag === 'multiselect') {
+    const comboOptions = filter.options.map((o, i) => ({ id: i, name: o.name }));
+    const optionValues = filter.options.map(o => o.value || o.name);
+    const selectedVals = curState?.kind === 'Multiselect' ? curState.data : [];
+    const selectedIds = selectedVals.map(v => optionValues.indexOf(v)).filter(i => i !== -1);
+
+    controlEl = html`
+      <${Combobox}
+        multiple=${true}
+        options=${comboOptions}
+        value=${selectedIds}
+        placeholder=${'Select ' + filter.name.toLowerCase() + '…'}
+        onChange=${(/** @type {number[]} */ newIds) => {
+          const newVals = newIds.map(i => optionValues[i]).filter(v => v != null);
+          onChange(filter.id, newVals.length > 0 ? { kind: 'Multiselect', data: newVals } : null);
+        }}
+      />
+    `;
+  }
+
+  return html`<div class=${wrapClass}>${labelEl}${controlEl}</div>`;
+}
+
 
 /**
  * Normalize a filter state value from either adjacently-tagged ({kind, data}) or
- * externally-tagged ({Selection: data}) serde format to the adjacently-tagged form:
- * { kind: 'Selection'|'Checkbox'|'TextInput', data: ... }.
+ * externally-tagged ({Selection: data}) serde format.
  * @param {any} raw
  * @returns {FilterState|null}
  */
 function _normalizeFilterState(raw) {
   if (!raw || typeof raw !== 'object') return /** @type {any} */ (raw);
   if (typeof raw.kind === 'string') return /** @type {FilterState} */ (raw);
-  // Externally-tagged: { Selection: {...} } → { kind: 'Selection', data: {...} }
   const entries = Object.entries(raw);
   if (entries.length === 1) return /** @type {FilterState} */ ({ kind: entries[0][0], data: entries[0][1] });
   return null;
@@ -206,164 +330,4 @@ function _filterTag(filter) {
     : rawType === 'Sort'            ? 'sort'
     : rawType === 'Multiselect'     ? 'multiselect'
     : rawType.toLowerCase();
-}
-
-/**
- * Render filter controls into a container element.
- * @param {HTMLElement} container
- * @param {FilterDef[]} filterDefs
- * @param {Record<string, FilterState>} current  — read for initial state; mutations via onFilterChange
- * @param {(id: string, stateObj: FilterState | null) => void} onFilterChange
- */
-function _renderFilterControls(container, filterDefs, current, onFilterChange) {
-  const grid = document.createElement('div');
-  grid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-3';
-  container.appendChild(grid);
-
-  for (const filter of filterDefs) {
-    const tag = _filterTag(filter);
-    const isCheckbox = tag === 'checkbox';
-    const isMultiselect = tag === 'multiselect';
-
-    const wrap = document.createElement('div');
-    // Checkbox uses a horizontal row layout (label left, toggle right)
-    // Multiselect spans full width
-    wrap.className = isCheckbox
-      ? 'flex items-center justify-between gap-3 py-1'
-      : isMultiselect
-        ? 'flex flex-col gap-1 col-span-2'
-        : 'flex flex-col gap-1';
-
-    const label = document.createElement(isCheckbox ? 'span' : 'label');
-    label.className = 'text-xs font-medium text-text-muted uppercase tracking-wider';
-    label.textContent = filter.name; // UI still uses the pretty name
-    wrap.appendChild(label);
-
-    // Read state using the safe backend ID
-    const curState = current[filter.id] ?? filter.default_value;
-
-    if (tag === 'select') {
-      const curVal = curState?.kind === 'Selection' ? curState.data.value : '';
-      const hasDefault = !!filter.default_value;
-      const select = document.createElement('select');
-      select.className = 'input text-sm';
-      // Only show "Any" if no default is provided (default already implies a selection)
-      if (!hasDefault) {
-        select.innerHTML = `<option value="">— Any —</option>`;
-      }
-      select.innerHTML += filter.options.map(o =>
-          `<option value="${escapeHtml(o.value)}"${curVal === o.value ? ' selected' : ''}>${escapeHtml(o.name)}</option>`
-        ).join('');
-        
-      select.addEventListener('change', () => {
-        if (!select.value) {
-          onFilterChange(filter.id, null);
-        } else {
-          const opt = filter.options.find(o => o.value === select.value);
-          // @ts-ignore
-          onFilterChange(filter.id, { kind: 'Selection', data: { name: opt.name, value: opt.value } });
-        }
-      });
-      wrap.appendChild(select);
-
-    } else if (tag === 'checkbox') {
-      const checked = curState?.kind === 'Checkbox' ? curState.data : false;
-      const toggleLabel = document.createElement('label');
-      toggleLabel.className = 'kani-toggle shrink-0 cursor-pointer';
-      toggleLabel.innerHTML = `
-        <input type="checkbox" class="kani-toggle__input"${checked ? ' checked' : ''} />
-        <span class="kani-toggle__track"></span>
-      `;
-      const input = /** @type {HTMLInputElement} */ (toggleLabel.querySelector('input'));
-      input.addEventListener('change', () => {
-        onFilterChange(filter.id, input.checked ? { kind: 'Checkbox', data: true } : null);
-      });
-      wrap.appendChild(toggleLabel);
-
-    } else if (tag === 'text-input') {
-      const textVal = curState?.kind === 'TextInput' ? curState.data : '';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'input text-sm';
-      input.value = textVal;
-      input.placeholder = filter.name;
-      input.addEventListener('input', () => {
-        const trimmed = input.value.trim();
-        onFilterChange(filter.id, trimmed ? { kind: 'TextInput', data: trimmed } : null);
-      });
-      wrap.appendChild(input);
-
-    } else if (tag === 'sort') {
-      const curVal = curState?.kind === 'Selection' ? curState.data.value : '';
-      const hasDefault = !!filter.default_value;
-      const select = document.createElement('select');
-      select.className = 'input text-sm';
-
-      if (!hasDefault) {
-        select.innerHTML += `<option value="">— Default —</option>`;
-      }
-
-      for (const opt of filter.options) {
-        const ascVal = `${opt.value}:asc`;
-        const descVal = `${opt.value}:desc`;
-        select.innerHTML += `
-          <option value="${escapeHtml(ascVal)}"${curVal === ascVal ? ' selected' : ''}>${escapeHtml(opt.name)} ↑</option>
-          <option value="${escapeHtml(descVal)}"${curVal === descVal ? ' selected' : ''}>${escapeHtml(opt.name)} ↓</option>
-        `;
-      }
-
-      if (hasDefault && !curVal) {
-        const defaultVal = curState?.kind === 'Selection' ? curState.data.value : '';
-        const defaultOpt = select.querySelector(`option[value="${CSS.escape(defaultVal)}"]`);
-        if (defaultOpt) /** @type {HTMLOptionElement} */ (defaultOpt).selected = true;
-      }
-
-      select.addEventListener('change', () => {
-        if (!select.value) {
-          onFilterChange(filter.id, null);
-        } else {
-          const [baseVal, dir] = select.value.split(':');
-          const opt = filter.options.find(o => o.value === baseVal);
-          const dirLabel = dir === 'asc' ? '↑' : '↓';
-          // @ts-ignore
-          onFilterChange(filter.id, {
-            kind: 'Selection',
-            data: { name: `${opt.name} ${dirLabel}`, value: select.value }
-          });
-        }
-      });
-      wrap.appendChild(select);
-
-    } else if (tag === 'multiselect') {
-      // Map filter options to Combobox-compatible {id, name} using index as id
-      const comboOptions = filter.options.map((o, i) => ({ id: i, name: o.name }));
-      const optionValues = filter.options.map(o => o.value || o.name);
-
-      // Convert current selected values → numeric ids
-      const selectedVals = curState?.kind === 'Multiselect' ? curState.data : [];
-      const selectedIds = selectedVals
-        .map(v => optionValues.indexOf(v))
-        .filter(i => i !== -1);
-
-      const mountPoint = document.createElement('div');
-      wrap.appendChild(mountPoint);
-
-      const _renderCombo = (/** @type {number[]} */ ids) => {
-        render(html`<${Combobox}
-          multiple=${true}
-          options=${comboOptions}
-          value=${ids}
-          placeholder=${'Select ' + filter.name.toLowerCase() + '…'}
-          onChange=${(/** @type {number[]} */ newIds) => {
-            const newVals = newIds.map(i => optionValues[i]).filter(v => v != null);
-            onFilterChange(filter.id, newVals.length > 0 ? { kind: 'Multiselect', data: newVals } : null);
-            _renderCombo(newIds);
-          }}
-        />`, mountPoint);
-      };
-      _renderCombo(selectedIds);
-    }
-
-    grid.appendChild(wrap);
-  }
 }

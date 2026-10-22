@@ -7,7 +7,7 @@ use crate::execute_wasm;
 use crate::wasm::{AllowedHost, HostState, KaniExtensionPre};
 
 /// Manages concurrent access to WASM source extensions via InstancePre.
-pub struct SourceManager {
+pub(crate) struct SourceManager {
     engine: wasmtime::Engine,
     instance_pre: KaniExtensionPre<HostState>,
     semaphore: Arc<Semaphore>,
@@ -15,9 +15,16 @@ pub struct SourceManager {
     base_url: Option<String>,
     unrestricted_http: bool,
     preferences: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
+    v8_process: crate::v8_process::V8ProcessHandle,
+    ext_cache: Arc<dyn crate::cache::CacheBackend>,
+    ext_cache_namespace: String,
+    pure_fn_registry: Option<Arc<crate::scripting::PureFunctionRegistry>>,
+    hook_registry: Option<Arc<crate::scripting::HookRegistry>>,
+    limits: crate::budget::SourceLimits,
 }
 
 impl SourceManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         engine: wasmtime::Engine,
         instance_pre: KaniExtensionPre<HostState>,
@@ -26,6 +33,11 @@ impl SourceManager {
         unrestricted_http: bool,
         max_concurrent: usize,
         preferences: std::collections::HashMap<String, String>,
+        ext_cache: Arc<dyn crate::cache::CacheBackend>,
+        ext_cache_namespace: String,
+        pure_fn_registry: Option<Arc<crate::scripting::PureFunctionRegistry>>,
+        hook_registry: Option<Arc<crate::scripting::HookRegistry>>,
+        limits: impl Into<crate::budget::SourceLimits>,
     ) -> Self {
         Self {
             engine,
@@ -35,6 +47,12 @@ impl SourceManager {
             base_url,
             unrestricted_http,
             preferences: Arc::new(std::sync::RwLock::new(preferences)),
+            v8_process: crate::v8_process::new_handle(),
+            ext_cache,
+            ext_cache_namespace,
+            pure_fn_registry,
+            hook_registry,
+            limits: limits.into(),
         }
     }
 
@@ -58,10 +76,18 @@ impl SourceManager {
             (None, false) => AllowedHost::MetadataOnly,
         };
 
-        let mut store = Store::new(
-            &self.engine,
-            HostState::new(self.smart_client.clone(), allowed_host)?,
-        );
+        let mut host_state = HostState::new(
+            self.smart_client.clone(),
+            allowed_host,
+            Arc::clone(&self.ext_cache),
+            self.ext_cache_namespace.clone(),
+            Arc::clone(&self.v8_process),
+        )?;
+        host_state.pure_fn_registry = self.pure_fn_registry.clone();
+        host_state.hook_registry = self.hook_registry.clone();
+        host_state.max_hook_requests = self.limits.max_hook_requests;
+        host_state.operation_limits = self.limits.operation;
+        let mut store = Store::try_new(&self.engine, host_state)?;
 
         store.set_epoch_deadline(crate::sources::EPOCH_DEADLINE_TICKS);
         store.epoch_deadline_callback(|ctx| {
@@ -128,7 +154,14 @@ impl OwnedSourceInstance {
         filters: &[kani_shared::types::ActiveFilter],
     ) -> Result<crate::wasm::kani::extension::types::MangaList> {
         let wit_filters = crate::wasm::filter_conversions::to_wit_active_filters(filters);
-        execute_wasm!(self, call_search_manga, query, page, page_size, &wit_filters)
+        execute_wasm!(
+            self,
+            call_search_manga,
+            query,
+            page,
+            page_size,
+            &wit_filters
+        )
     }
 
     /// Calls the `get_manga_details` function in the WASM module.
@@ -147,13 +180,20 @@ impl OwnedSourceInstance {
         page_size: Option<i32>,
         sort: Option<String>,
     ) -> Result<crate::wasm::kani::extension::types::ChapterList> {
-        execute_wasm!(self, call_get_chapter_list, manga_id, page, page_size, sort.as_deref())
+        execute_wasm!(
+            self,
+            call_get_chapter_list,
+            manga_id,
+            page,
+            page_size,
+            sort.as_deref()
+        )
     }
 
     /// Calls the `get_chapter_sort_list` function in the WASM module.
     pub async fn get_chapter_sort_list(
         &mut self,
-    ) -> Result<Vec<crate::wasm::kani::extension::types::ChapterSortOption>> {
+    ) -> Result<Vec<crate::wasm::kani::extension::types::SortOption>> {
         execute_wasm!(self, call_get_chapter_sort_list)
     }
 
@@ -166,10 +206,15 @@ impl OwnedSourceInstance {
         execute_wasm!(self, call_get_pages, manga_id, chapter_id)
     }
 
-    /// Calls the `get_metadata` function in the WASM module.
-    pub async fn get_metadata(
-        &mut self,
-    ) -> Result<crate::wasm::kani::extension::types::ExtensionMetadata> {
+    /// Calls `get_fetched_option_sets`. Returns a JSON-encoded list of
+    /// `kani_shared::FilterFetchDef`.
+    pub async fn get_fetched_option_sets(&mut self) -> Result<String> {
+        execute_wasm!(self, call_get_fetched_option_sets)
+    }
+
+    /// Calls the `get_metadata` function in the WASM module. Returns the
+    /// JSON-encoded `kani_shared::ExtensionMetadata` string.
+    pub async fn get_metadata(&mut self) -> Result<String> {
         execute_wasm!(self, call_get_metadata)
     }
 
@@ -185,5 +230,10 @@ impl OwnedSourceInstance {
         &mut self,
     ) -> Result<Vec<crate::wasm::kani::extension::types::PreferenceSpec>> {
         execute_wasm!(self, call_get_preferences)
+    }
+
+    /// Calls the `get_url` function in the WASM module.
+    pub async fn get_url(&mut self, manga_id: &str) -> Result<String> {
+        execute_wasm!(self, call_get_url, manga_id)
     }
 }

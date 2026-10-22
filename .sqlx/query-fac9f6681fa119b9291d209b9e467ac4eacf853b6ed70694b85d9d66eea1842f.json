@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE recurring_jobs SET last_run_at = ?, next_due_at = ? WHERE kind = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "fac9f6681fa119b9291d209b9e467ac4eacf853b6ed70694b85d9d66eea1842f"
+}

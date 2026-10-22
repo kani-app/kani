@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kani">
+  <rect x="32" y="32" width="448" height="448" rx="88" fill="#b93a24"/>
+  <g fill="#f5f4f0" stroke="#f5f4f0" stroke-linecap="round" stroke-linejoin="round">
+    <g fill="none" stroke-width="28">
+      <path d="M198 268 L156 214"/>
+      <path d="M314 268 L356 214"/>
+      <path d="M150 316 L94 292"/>
+      <path d="M146 352 L88 352"/>
+      <path d="M162 386 L114 420"/>
+      <path d="M362 316 L418 292"/>
+      <path d="M366 352 L424 352"/>
+      <path d="M350 386 L398 420"/>
+    </g>
+    <ellipse cx="256" cy="330" rx="120" ry="80"/>
+    <circle cx="140" cy="178" r="52"/>
+    <circle cx="372" cy="178" r="52"/>
+  </g>
+  <g fill="#b93a24">
+    <path d="M140 184 L64 158 L74 100 Z"/>
+    <path d="M372 184 L448 158 L438 100 Z"/>
+    <circle cx="208" cy="298" r="17"/>
+    <circle cx="304" cy="298" r="17"/>
+  </g>
+</svg>

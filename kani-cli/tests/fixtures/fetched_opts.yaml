@@ -1,0 +1,34 @@
+id: fetched-opts-source
+name: FetchedOptsSource
+version: "0.1.0"
+base_url: "https://example.com"
+
+option_sets:
+  genres:
+    options_fetched_by:
+      route: "https://example.com/api/genres"
+      type: json
+      container: /items
+      fields:
+        name: /label
+        value: /slug
+        nsfw: /adult
+      nsfw_field: nsfw
+      cache:
+        ttl: 600
+        key: genres-v1
+
+filters:
+  - id: genre
+    name: Genre
+    type: multiselect
+    options_ref: genres
+
+endpoints:
+  search:
+    route: "https://example.com/search"
+    fields:
+      id:
+        expr: "dom(\".id\").text()"
+      title:
+        expr: "dom(\".title\").text()"

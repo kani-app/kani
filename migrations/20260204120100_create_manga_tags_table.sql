@@ -1,5 +1,0 @@
-CREATE TABLE IF NOT EXISTS manga_tags (
-    manga_id INTEGER NOT NULL REFERENCES manga(id) ON DELETE CASCADE,
-    tag_id   INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (manga_id, tag_id)
-);

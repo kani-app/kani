@@ -1,0 +1,98 @@
+site_name: Kani
+site_description: Self-hosted manga and comics server
+site_author: Arlo Burke
+repo_url: https://github.com/kani-app/kani
+repo_name: kani-app/kani
+edit_uri: edit/develop/docs/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quickstart: getting-started/quickstart.md
+    - Install with Docker: getting-started/install-docker.md
+    - Install from binary: getting-started/install-binary.md
+    - Reverse proxy: getting-started/reverse-proxy.md
+  - User Guide:
+    - Library & discovery: user/library.md
+    - Manga & chapters: user/manga-chapters.md
+    - Reading & offline use: user/reading-offline.md
+    - Downloads & exports: user/downloads-exports.md
+    - Importing & migration: user/import-migration.md
+    - Settings guide: user/settings.md
+  - Admin Guide:
+    - Configuration: admin/configuration.md
+    - Backup & restore: admin/backup-restore.md
+    - Users & roles: admin/users-roles.md
+    - Security hardening: admin/security-hardening.md
+    - Observability: admin/observability.md
+    - Support bundle: admin/support-bundle.md
+    - Jobs & maintenance: admin/jobs-maintenance.md
+    - Storage: admin/storage.md
+    - Upgrades: admin/upgrade.md
+    - Migration policy: admin/migration-policy.md
+    - Sources: admin/sources.md
+    - Extension Repositories: admin/extension-repositories.md
+    - Trackers: admin/trackers.md
+    - Email / SMTP: admin/email-smtp.md
+    - Webhooks: admin/webhooks.md
+  - Extension Authoring:
+    - Quickstart: extension-authoring/quickstart.md
+    - YAML schema: extension-authoring/yaml-schema.md
+    - DSL grammar: extension-authoring/dsl-grammar.md
+    - Rhai hooks: extension-authoring/rhai-hooks.md
+    - Rust extensions: extension-authoring/rust-extensions.md
+    - Publishing & Distribution: extension-authoring/publishing.md
+    - ABI stability: extension-authoring/stability.md
+  - Developer Guide:
+    - Architecture: developer/architecture.md
+    - Crate map: developer/crate-map.md
+    - Request flow: developer/request-flow.md
+    - Local development: developer/local-dev.md
+    - Migrations: developer/migrations.md
+    - Test conventions: developer/test-conventions.md
+    - API stability: developer/api-stability.md
+    - Engineering constraints: developer/engineering-constraints.md
+    - Design system: developer/design-system.md
+    - Release process: developer/release-process.md
+  - API:
+    - Overview: api/overview.md
+    - Authentication: api/auth.md
+    - Webhooks: api/webhooks.md
+  - Troubleshooting: troubleshooting.md

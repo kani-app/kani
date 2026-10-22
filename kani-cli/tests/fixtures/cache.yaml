@@ -1,0 +1,20 @@
+id: test-cache
+name: TestCache
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+cache:
+  search_results:
+    ttl: 1800
+    max_entries: 200
+  auth: {}
+
+endpoints:
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id: '"$manga_id$"'
+      title: 'dom("h1").text()'
+      status: 'dom(".status").text().lower()'

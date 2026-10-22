@@ -1,0 +1,369 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# rust-cache keys on CARGO_*/RUST* env, so this block must stay identical to cache-warmer.yml's
+# and must not be overridden per job, or each job resolves a cache the warmer never wrote.
+env:
+  SQLX_OFFLINE: "true"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_BUILD_JOBS: "4"
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      js: ${{ steps.filter.outputs.js }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - '**/*.rs'
+              - '**/Cargo.toml'
+              - 'Cargo.lock'
+              - '.cargo/**'
+              - '.config/hakari.toml'
+              - 'kani-core/wit/**'
+              - '.github/workflows/ci.yml'
+            js:
+              - 'static/js/**'
+              - '!static/js/dist/**'
+              - '!static/js/vendor/**'
+              - '.github/workflows/ci.yml'
+            docs:
+              - 'docs/**'
+              - '**/*.md'
+              - 'static/js/**'
+              - '!static/js/dist/**'
+              - '!static/js/vendor/**'
+              - '.github/workflows/ci.yml'
+
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune --all --force
+          df -h
+
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+
+      # Kept identical to the test job and cache-warmer.yml so all three resolve one cache key.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci"
+          cache-on-failure: true
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --no-deps -- -D warnings
+
+      # Reads test sources only, so it belongs with the Rust checks but needs no build.
+      - name: Endpoint tests assert more than a status code
+        run: node scripts/check-test-assertions.mjs
+
+      - name: Unused dependencies
+        uses: bnjbvr/cargo-machete@main
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari
+
+      - name: Workspace-hack is current
+        run: |
+          cargo hakari generate --diff
+          cargo hakari manage-deps --dry-run
+
+      - name: Restore asset toolchain
+        uses: actions/cache/restore@v6
+        id: tools-cache
+        with:
+          # esbuild and the Tailwind CLI, plus the vendored JS and fonts they
+          # bundle. All four are gitignored, so a fresh checkout has none of
+          # them and build.rs cannot resolve its `preact` alias without them.
+          path: |
+            tools
+            static/js/vendor
+            static/fonts
+          key: kani-tools-${{ runner.os }}-${{ hashFiles('kani-cli/src/commands/setup.rs') }}
+
+      - name: Restore kani-cli binary
+        uses: actions/cache/restore@v6
+        id: lint-kani-cli-cache
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        with:
+          path: target/release/kani-cli
+          key: kani-cli-${{ runner.os }}-${{ hashFiles('kani-cli/**', 'kani-shared/**', 'Cargo.lock') }}
+
+      - name: Download the asset toolchain
+        if: steps.tools-cache.outputs.cache-hit != 'true'
+        run: |
+          if [ ! -x target/release/kani-cli ]; then
+            cargo build --release -p kani-cli
+          fi
+          # --vendors is not optional: build.rs aliases `preact` and friends to static/js/vendor,
+          # so esbuild resolves nothing without it. Naming all three flags also skips the icon
+          # and git-hook steps a bare `setup` would run, which CI has no use for.
+          ./target/release/kani-cli setup --vendors --esbuild --tailwind
+        env:
+          SQLX_OFFLINE: "true"
+
+      # Never cache a partially populated tool directory after a failed setup.
+      - name: Save asset toolchain
+        uses: actions/cache/save@v6
+        if: success() && steps.tools-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            tools
+            static/js/vendor
+            static/fonts
+          key: kani-tools-${{ runner.os }}-${{ hashFiles('kani-cli/src/commands/setup.rs') }}
+
+      # No --workspace: kani-extensions/* are WASM-only and cannot compile natively.
+      - name: Check benchmarks compile
+        run: cargo check --locked --benches
+        env:
+          SQLX_OFFLINE: "true"
+
+      # The release workflow is generated from dist-workspace.toml. Regenerate it
+      # (`dist generate`) whenever that config changes, or releases silently drift.
+      - name: Check release workflow is in sync with dist config
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/axodotdev/cargo-dist/releases/download/v0.32.0/cargo-dist-installer.sh | sh
+          dist generate --check
+
+  test:
+    name: Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune --all --force
+          df -h
+
+      - name: Install mold linker
+        run: sudo apt-get install -y mold
+
+      # Kept identical to the lint job and cache-warmer.yml so all three resolve one cache key.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci"
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools, wasm-opt, nextest, cargo-binstall
+
+      - name: Install sqlx-cli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: test -f "$HOME/.cargo/bin/cargo-sqlx" || cargo binstall sqlx-cli --no-confirm --no-symlinks --force
+
+      - name: Restore kani-cli binary
+        uses: actions/cache/restore@v6
+        id: kani-cli-cache
+        with:
+          path: target/release/kani-cli
+          key: kani-cli-${{ runner.os }}-${{ hashFiles('kani-cli/**', 'kani-shared/**', 'Cargo.lock') }}
+
+      - name: Build kani-cli
+        if: steps.kani-cli-cache.outputs.cache-hit != 'true'
+        run: cargo build --release -p kani-cli
+
+      - name: Save kani-cli binary
+        uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: target/release/kani-cli
+          key: kani-cli-${{ runner.os }}-${{ hashFiles('kani-cli/**', 'kani-shared/**', 'Cargo.lock') }}
+
+      - name: Restore WASM extensions
+        uses: actions/cache/restore@v6
+        id: wasm-cache
+        with:
+          path: wasm_sources/
+          key: wasm-${{ runner.os }}-${{ hashFiles('kani-extensions/**', 'kani-shared/**', 'kani-core/wit/**', 'kani-cli/**', 'Cargo.lock') }}
+
+      - name: Build dev/test WASM extensions
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: ./target/release/kani-cli build --dev
+
+      - name: Save WASM extensions
+        uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: wasm_sources/
+          key: wasm-${{ runner.os }}-${{ hashFiles('kani-extensions/**', 'kani-shared/**', 'kani-core/wit/**', 'kani-cli/**', 'Cargo.lock') }}
+
+      - name: Test
+        run: cargo nextest run --locked --profile ci
+
+      - name: Check sqlx offline data
+        env:
+          DATABASE_URL: sqlite:///tmp/kani-ci-check.db?mode=rwc
+          SQLX_OFFLINE: "false"
+        run: |
+          cargo sqlx migrate run
+          cargo sqlx prepare --check --workspace -- --all-targets --tests
+
+  js:
+    name: JS
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Bundling parses as ESM and resolves every specifier, neither of which
+      # `node --check` does — it reads these as CommonJS. Vendors are external, so
+      # this needs no asset toolchain.
+      - name: Check JS parses as modules and every import resolves
+        run: |
+          npx --yes esbuild@0.28.1 static/js/app.js static/js/dev-debug.js \
+            --bundle --format=esm --define:__KANI_DEV__=false \
+            --external:preact --external:preact/hooks --external:htm \
+            --external:@preact/signals --external:@preact/signals-core \
+            --external:preact/compat \
+            --outdir="$(mktemp -d)"
+
+      - name: Unit tests (pure JS modules)
+        run: node --test "static/js/**/*.test.js"
+
+      - name: Audit hard-coded colour tokens
+        run: node scripts/audit-tokens.mjs --check --max 0
+
+      - name: Test the audit scanner itself
+        run: node --test scripts/audit-tokens.test.mjs
+
+      - name: Dead module and export check
+        run: node scripts/check-dead-js.mjs
+
+      - name: Frontend shell parity
+        run: node scripts/check-shell-parity.mjs
+
+      - name: Test the shell parity scanner itself
+        run: node --test scripts/check-shell-parity.test.mjs
+
+      - name: Showcase manifest is current
+        run: node scripts/generate-showcase-manifest.mjs --check
+
+      - name: Unreferenced CSS selector check
+        run: node scripts/audit-tokens.mjs --unused-css
+
+      # Reports only: the tracer cannot see SELECT *, out-of-window select
+      # lists, or filter-only columns, so its leads are reviewed by hand.
+      - name: Signal-chain leads
+        continue-on-error: true
+        run: node scripts/audit-signal-chain.mjs
+
+  docs:
+    name: Docs & i18n
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # pip resolves and downloads mkdocs-material and its dependency tree on
+      # every run otherwise. There is no requirements file for setup-python's
+      # own cache to key on, so cache the wheel directory directly.
+      - name: Cache pip downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-mkdocs-material
+
+      - name: Install mkdocs-material
+        run: pip install mkdocs-material
+
+      - name: Build docs (strict)
+        run: cd docs && mkdocs build --strict
+
+      - name: Markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v24
+        with:
+          globs: |
+            **/*.md
+            !SPECIFICATION.md
+          config: ".markdownlint.yml"
+
+      - name: i18n key check
+        run: node scripts/check-i18n-keys.js
+
+      - name: Untranslated string check
+        run: node scripts/check-untranslated-strings.js
+
+      # The theme editor previews what the server will store. If the client
+      # mirror drifts from the Rust sanitiser it misreports what gets saved.
+      - name: CSS sanitiser parity check
+        run: node scripts/check-sanitize-css-parity.mjs
+
+  ci:
+    name: CI
+    needs: [changes, lint, test, js, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed or was cancelled
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              failure|cancelled)
+                echo "::error::a required job reported '$r'"
+                exit 1
+                ;;
+            esac
+          done
+          echo "all jobs succeeded or were skipped"

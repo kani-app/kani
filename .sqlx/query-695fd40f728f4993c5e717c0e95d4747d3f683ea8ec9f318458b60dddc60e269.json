@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO manga (source_id, source_manga_id, name, status, auto_download, auto_scan, scanlator_mode) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "695fd40f728f4993c5e717c0e95d4747d3f683ea8ec9f318458b60dddc60e269"
+}

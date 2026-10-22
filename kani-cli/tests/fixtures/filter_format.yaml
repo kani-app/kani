@@ -1,0 +1,48 @@
+id: test-filter-format
+name: TestFilterFormat
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+option_sets:
+  genres:
+    - name: Action
+      value: action
+    - name: Romance
+      value: romance
+
+filters:
+  - id: genres
+    name: Genres
+    type: multiselect
+    options_ref: genres
+  - id: nsfw
+    name: Show NSFW
+    type: checkbox
+  - id: year_range
+    name: Year range
+    type: date_range
+    min: 1900
+    max: 2100
+
+endpoints:
+  search:
+    route: "/search"
+    queries:
+      q: $query$
+    filter_mapping:
+      genres: genre
+      nsfw: nsfw
+      year_range:
+        kind: tuple_split
+        from_param: year_from
+        to_param: year_to
+    filter_format:
+      multiselect: bracket
+      omit_empty: false
+      bool_format: one_zero
+      array_separator: "|"
+    container: ".results .item"
+    fields:
+      id: 'self.first("a").attr("href").split("/").at(-1)'
+      title: 'self.first(".title").text().trim()'

@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.id, m.name, m.description, m.status, m.cover_url, m.local_cover_path, m.source_manga_id, s.name AS source_name FROM manga m JOIN sources s ON s.id = m.source_id WHERE m.deleted_at IS NULL ORDER BY m.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cover_url",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_cover_path",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_manga_id",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "cc5ae59ddedc453cf821a6ed6fb468497fb2e53dcbfcc81d98c626b95e858079"
+}

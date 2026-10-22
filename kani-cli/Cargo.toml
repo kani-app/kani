@@ -1,11 +1,24 @@
 [package]
 name = "kani-cli"
-version = "0.1.0"
+version = "1.0.0"
+license.workspace = true
+repository.workspace = true
 edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+name = "kani_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "kani-cli"
 path = "src/main.rs"
+
+[dev-dependencies]
+insta = { version = "1", features = ["yaml"] }
+tempfile = "3"
 
 [dependencies]
 clap        = { version = "4", features = ["derive"] }
@@ -13,8 +26,25 @@ thiserror   = "2.0"
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 serde_yaml  = "0.9"
+postcard    = { version = "1", features = ["alloc"] }
 tar         = "0.4"
 flate2      = "1"
-chumsky     = "0.9"
 kani-shared = { path = "../kani-shared", features = ["builder"] }
-reqwest = { version = "0.13.2", default-features = false, features = ["blocking", "json", "rustls"] }
+kani-yaml   = { path = "../kani-yaml" }
+kani-core   = { path = "../kani-core" }
+tokio       = { version = "1.49.0", features = ["rt-multi-thread"] }
+reqwest   = { version = "0.13.2", default-features = false, features = ["blocking", "json", "rustls"] }
+sha2.workspace = true
+ed25519-dalek.workspace = true
+base64    = "0.22"
+getrandom = "0.2"
+semver    = "1"
+ariadne   = "0.6.0"
+regex     = "1"
+resvg     = "0.44"
+tiny-skia = "0.11"
+zip = "7"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["workspace-hack"]

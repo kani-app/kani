@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    COUNT(*) as \"chapters_read!: i64\",\n                    COUNT(DISTINCT c.manga_id) as \"manga_read!: i64\"\n                FROM user_chapter_tracking uct\n                JOIN chapters c ON c.id = uct.chapter_id\n                WHERE uct.is_read = TRUE AND uct.user_id = ?\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "chapters_read!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manga_read!: i64",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "88991d6988877a981820f998b912a69e5a3adf59d45260afe21291dd676b03d0"
+}

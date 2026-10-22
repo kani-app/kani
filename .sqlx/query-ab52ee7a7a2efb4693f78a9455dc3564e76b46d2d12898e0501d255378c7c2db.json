@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE user_tracker_credentials SET needs_reauth = TRUE WHERE user_id = ? AND tracker_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "ab52ee7a7a2efb4693f78a9455dc3564e76b46d2d12898e0501d255378c7c2db"
+}

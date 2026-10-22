@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id: MangaId\" FROM manga WHERE status = ? AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: MangaId",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f8c7fa3f01b17f3e932b92b522fccce5233b4cd900be2ec657e20df5af632648"
+}

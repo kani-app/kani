@@ -1,0 +1,4 @@
+# Bespoke selectors in app.css nothing references. Drained to empty by the
+# waste sweep's frontend phase; the audit keeps it that way.
+
+truncate-crumb

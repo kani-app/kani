@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO api_tokens (user_id, name, token_hash, kind, scopes, expires_at)\n            VALUES (?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE unixepoch() + ? * 86400 END)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "7d0855133d616ae19d9c666c858181590dba797e374bdaafa141733c255ee3f0"
+}

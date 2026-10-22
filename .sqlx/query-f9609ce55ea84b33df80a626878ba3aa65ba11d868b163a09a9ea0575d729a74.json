@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM manga_local_authors WHERE manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f9609ce55ea84b33df80a626878ba3aa65ba11d868b163a09a9ea0575d729a74"
+}

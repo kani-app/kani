@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT manga_id FROM user_manga_tracking WHERE user_id = ? AND notify_new_chapters = FALSE",
+  "describe": {
+    "columns": [
+      {
+        "name": "manga_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5628aabb3439ae8c07b075ce3f47e8c6f67f8b41b232bd7f0775c9bb6fdc6aff"
+}

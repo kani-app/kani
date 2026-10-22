@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE volumes SET name = ?, volume_num = ? WHERE id = ? AND manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "5c8a965e35bfc7791b912862b1978538162006bb0cea64388c69623b287cc6ba"
+}

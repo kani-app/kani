@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.id, m.name, m.cover_url, m.local_cover_path,\n                      COALESCE(s.name, 'Unknown') AS \"source_name!: String\"\n               FROM manga m\n               LEFT JOIN sources s ON s.id = m.source_id\n               WHERE m.is_orphaned = TRUE\n               ORDER BY m.name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "cover_url",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_cover_path",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name!: String",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "25820e0621f69ce126971e8496acb2c4f412fb1cc2a0e5d54599f75e1c283145"
+}

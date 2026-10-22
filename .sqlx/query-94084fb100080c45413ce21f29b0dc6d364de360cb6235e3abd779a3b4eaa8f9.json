@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET download_status = 0, file_path = NULL, content_hash = NULL, manifest_json = NULL, file_verified_at = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "94084fb100080c45413ce21f29b0dc6d364de360cb6235e3abd779a3b4eaa8f9"
+}

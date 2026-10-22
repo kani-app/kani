@@ -6,7 +6,7 @@ impl AppService {
             kani_shared::types::NamedItem,
             "SELECT id, name FROM tags ORDER BY name"
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
     }
@@ -18,7 +18,7 @@ impl AppService {
              JOIN manga_people mp ON mp.person_id = p.id \
              WHERE mp.role = 'author' ORDER BY p.name"
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
     }
@@ -30,7 +30,7 @@ impl AppService {
              JOIN manga_people mp ON mp.person_id = p.id \
              WHERE mp.role = 'artist' ORDER BY p.name"
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
     }

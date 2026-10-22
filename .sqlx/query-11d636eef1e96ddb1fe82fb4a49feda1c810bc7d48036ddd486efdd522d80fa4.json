@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT user_id, source_chapter_id, chapter_number, is_read, last_page_read FROM manga_import_progress WHERE manga_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_chapter_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "is_read",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "last_page_read",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "11d636eef1e96ddb1fe82fb4a49feda1c810bc7d48036ddd486efdd522d80fa4"
+}

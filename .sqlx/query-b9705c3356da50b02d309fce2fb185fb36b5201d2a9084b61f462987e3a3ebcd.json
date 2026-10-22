@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET delete_status = 'pending_delete' WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b9705c3356da50b02d309fce2fb185fb36b5201d2a9084b61f462987e3a3ebcd"
+}

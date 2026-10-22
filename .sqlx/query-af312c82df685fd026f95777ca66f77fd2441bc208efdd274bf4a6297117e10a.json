@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, name, version, base_url, enabled, favourited, unrestricted_http, browser_enabled, download_concurrency, icon, description, languages, schema_version, CAST(NULL AS TEXT) as circuit_state FROM sources WHERE enabled = 1 AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "version",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "base_url",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "enabled",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "favourited",
+        "ordinal": 5,
+        "type_info": "Bool"
+      },
+      {
+        "name": "unrestricted_http",
+        "ordinal": 6,
+        "type_info": "Bool"
+      },
+      {
+        "name": "browser_enabled",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "download_concurrency",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "icon",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "languages",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "schema_version",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "circuit_state",
+        "ordinal": 13,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "af312c82df685fd026f95777ca66f77fd2441bc208efdd274bf4a6297117e10a"
+}

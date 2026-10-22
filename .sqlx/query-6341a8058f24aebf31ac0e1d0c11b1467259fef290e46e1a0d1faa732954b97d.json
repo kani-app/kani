@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE smart_collections SET name = ?, rule_json = ?, sort_order = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "6341a8058f24aebf31ac0e1d0c11b1467259fef290e46e1a0d1faa732954b97d"
+}

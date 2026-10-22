@@ -1,11 +1,17 @@
 [package]
 name = "kani-example"
 version = "0.1.0"
+license.workspace = true
 edition = "2024"
+
+[lints]
+workspace = true
+
+[package.metadata]
+id = "example"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-kani-shared = { path = "../../kani-shared" }
-talc = { version = "4.4.3", default-features = false, features = ["lock_api"] }
+kani-shared = { path = "../../kani-shared", features = ["meta"] }

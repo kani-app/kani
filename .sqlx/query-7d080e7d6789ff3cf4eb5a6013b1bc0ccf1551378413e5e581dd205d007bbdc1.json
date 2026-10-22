@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_chapter_tracking (user_id, chapter_id, is_read, last_page_read) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, chapter_id) DO UPDATE SET is_read = excluded.is_read, last_page_read = excluded.last_page_read",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "7d080e7d6789ff3cf4eb5a6013b1bc0ccf1551378413e5e581dd205d007bbdc1"
+}

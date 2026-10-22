@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO pending_imports (user_id, origin, title, source_hint, source_manga_id, tracking, chapter_progress, possible_duplicate_of, duplicate_similarity) VALUES (?, 'tachiyomi', ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "2a6ce4fab734f768a68eb6f9d0b3d071dfb5b031ec5fc78784ce9d91b180b063"
+}

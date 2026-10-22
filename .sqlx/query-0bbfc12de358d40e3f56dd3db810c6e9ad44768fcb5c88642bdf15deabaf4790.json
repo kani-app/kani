@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM manga_import_progress WHERE manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "0bbfc12de358d40e3f56dd3db810c6e9ad44768fcb5c88642bdf15deabaf4790"
+}

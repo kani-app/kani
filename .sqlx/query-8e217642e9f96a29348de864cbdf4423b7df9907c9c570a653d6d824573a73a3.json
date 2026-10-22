@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT url, name, maintainer_key, trusted_level, index_cache FROM repo_trust ORDER BY url",
+  "describe": {
+    "columns": [
+      {
+        "name": "url",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "maintainer_key",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "trusted_level",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "index_cache",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8e217642e9f96a29348de864cbdf4423b7df9907c9c570a653d6d824573a73a3"
+}

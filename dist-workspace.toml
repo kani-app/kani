@@ -1,0 +1,26 @@
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+# Archives + checksums only. Kani is a server: a shell installer that drops a
+# binary into CARGO_HOME is the wrong shape for it.
+installers = []
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+# Build with `-p kani-web -p kani-cli` rather than `--workspace`. The kani-extensions/* crates
+# are WASM-only (gated behind target_family = "wasm") and fail to compile natively, which is why
+# default-members excludes them; a --workspace build drags them in and breaks the release.
+precise-builds = true
+pr-run-mode = "upload"
+hosting = "github"
+install-updater = false
+github-build-setup = "fragments/build-setup.yml"
+# Multi-arch image build + keyless cosign signing, as a reusable workflow.
+publish-jobs = ["./docker"]
+allow-dirty = ["ci"]
+publish-prereleases = true

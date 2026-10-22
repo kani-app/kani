@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT p.name FROM manga_people mp JOIN people p ON mp.person_id = p.id WHERE mp.manga_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1bc9315ed7f7634000cb666d54dd64b371deee9248530aacb8c3520d57cf614d"
+}

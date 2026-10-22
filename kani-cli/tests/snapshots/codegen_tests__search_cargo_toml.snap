@@ -1,0 +1,18 @@
+---
+source: kani-cli/tests/codegen_tests.rs
+assertion_line: 27
+expression: generated.cargo_toml
+---
+[package]
+name = "kani-test-search"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kani-shared = { path = "../../kani-shared", features = ["builder"] }
+
+[package.metadata]
+id = "test-search"

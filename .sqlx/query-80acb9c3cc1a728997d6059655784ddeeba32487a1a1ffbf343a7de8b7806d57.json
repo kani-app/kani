@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id FROM jobs WHERE job_type = 'import_resolve' AND status IN ('pending', 'running') AND (?1 IS NULL OR json_extract(params_json, '$.source_id') IS NULL OR json_extract(params_json, '$.source_id') = ?1) LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80acb9c3cc1a728997d6059655784ddeeba32487a1a1ffbf343a7de8b7806d57"
+}

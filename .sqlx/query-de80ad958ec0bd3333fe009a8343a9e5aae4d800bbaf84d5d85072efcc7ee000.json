@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET trash_retention_days=?, audit_retention_days=?, audit_security_retention_days=?, disk_warn_threshold=?, thumbnail_formats=?, integrity_quick_scrub_interval_hours=?, integrity_deep_scrub_interval_hours=?, scrub_on_startup=?, integrity_revalidate_after_days=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "de80ad958ec0bd3333fe009a8343a9e5aae4d800bbaf84d5d85072efcc7ee000"
+}

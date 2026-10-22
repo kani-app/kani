@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO blocked_repos (url, reason) VALUES (?, ?) ON CONFLICT(url) DO UPDATE SET reason = excluded.reason",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "9909f2c906122dfe7eb14c1a424b60ceaf210f38d462aade296203b35c602a21"
+}

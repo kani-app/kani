@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE manga SET is_orphaned = FALSE WHERE source_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4bd9033112b3076984ccdeb154c6dbfab868c249068659f05f9c2ec4db9d6403"
+}

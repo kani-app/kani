@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR REPLACE INTO manga_import_links (manga_id, status) VALUES (?, 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "df037d6e266ffb8f5a554a3af5b95ee76adec530d13d28faf15ec27f7887b2e7"
+}

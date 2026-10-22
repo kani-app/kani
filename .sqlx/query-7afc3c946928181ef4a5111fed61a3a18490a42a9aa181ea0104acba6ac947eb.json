@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT download_status FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "download_status",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7afc3c946928181ef4a5111fed61a3a18490a42a9aa181ea0104acba6ac947eb"
+}

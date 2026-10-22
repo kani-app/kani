@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kani archive</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        -- ink: #1b1b1b; paper: #faf8f5; muted: #6b6b6b; line: #e0dcd6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          -- ink: #e8e4de; paper: #161513; muted: #9a958d; line: #2e2c29;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 1rem;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      h1 { font-size: 1.1rem; margin: 0; letter-spacing: 0.01em; }
+      .meta { color: var(--muted); font-size: 0.8rem; }
+      main { padding: 1.5rem; max-width: 60rem; margin: 0 auto; }
+      .series { border-bottom: 1px solid var(--line); padding: 0.9rem 0; }
+      .series h2 { font-size: 0.95rem; margin: 0 0 0.4rem; font-weight: 600; }
+      .chapters { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+      button {
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.25rem 0.6rem;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--muted); }
+      #reader {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        display: none;
+        flex-direction: column;
+      }
+      #reader.open { display: flex; }
+      #bar {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        padding: 0.5rem 0.9rem;
+        color: #ddd;
+        font-size: 0.8rem;
+        background: #111;
+      }
+      #bar button { border-color: #444; color: #ddd; }
+      #pages { flex: 1; overflow: auto; text-align: center; }
+      #pages img { max-width: 100%; display: block; margin: 0 auto 0.5rem; }
+      .err { color: #c0392b; padding: 1rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Kani archive</h1>
+      <span class="meta" id="summary">Loading…</span>
+    </header>
+    <main id="app"><p class="meta">Reading ARCHIVE.json…</p></main>
+
+    <div id="reader">
+      <div id="bar">
+        <button id="close">Close</button>
+        <span id="title"></span>
+        <span class="meta" id="count"></span>
+      </div>
+      <div id="pages"></div>
+    </div>
+
+    <script>
+      const EOCD = 0x06054b50;
+      const CEN = 0x02014b50;
+
+      async function listZip(buf) {
+        const dv = new DataView(buf);
+        let eocd = -1;
+        for (let i = buf.byteLength - 22; i >= 0 && i > buf.byteLength - 66000; i--) {
+          if (dv.getUint32(i, true) === EOCD) { eocd = i; break; }
+        }
+        if (eocd < 0) throw new Error('not a zip');
+        const count = dv.getUint16(eocd + 10, true);
+        let p = dv.getUint32(eocd + 16, true);
+        const entries = [];
+        for (let i = 0; i < count; i++) {
+          if (dv.getUint32(p, true) !== CEN) break;
+          const method = dv.getUint16(p + 10, true);
+          const csize = dv.getUint32(p + 20, true);
+          const nameLen = dv.getUint16(p + 28, true);
+          const extraLen = dv.getUint16(p + 30, true);
+          const commentLen = dv.getUint16(p + 32, true);
+          const offset = dv.getUint32(p + 42, true);
+          const name = new TextDecoder().decode(new Uint8Array(buf, p + 46, nameLen));
+          entries.push({ name, method, csize, offset });
+          p += 46 + nameLen + extraLen + commentLen;
+        }
+        return entries;
+      }
+
+      async function readEntry(buf, e) {
+        const dv = new DataView(buf);
+        const nameLen = dv.getUint16(e.offset + 26, true);
+        const extraLen = dv.getUint16(e.offset + 28, true);
+        const start = e.offset + 30 + nameLen + extraLen;
+        const raw = buf.slice(start, start + e.csize);
+        if (e.method === 0) return raw;
+        if (typeof DecompressionStream === 'undefined') {
+          throw new Error('this browser cannot inflate; re-export with stored entries');
+        }
+        const ds = new DecompressionStream('deflate-raw');
+        const stream = new Blob([raw]).stream().pipeThrough(ds);
+        return await new Response(stream).arrayBuffer();
+      }
+
+      const IMG = /\.(jpe?g|png|gif|webp|avif|bmp)$/i;
+
+      async function openChapter(cbzPath, label) {
+        const pages = document.getElementById('pages');
+        const reader = document.getElementById('reader');
+        pages.innerHTML = '';
+        document.getElementById('title').textContent = label;
+        document.getElementById('count').textContent = '';
+        reader.classList.add('open');
+        try {
+          const buf = await (await fetch(cbzPath)).arrayBuffer();
+          const entries = (await listZip(buf))
+            .filter((e) => IMG.test(e.name))
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          document.getElementById('count').textContent = entries.length + ' pages';
+          for (const e of entries) {
+            const bytes = await readEntry(buf, e);
+            const img = new Image();
+            img.src = URL.createObjectURL(new Blob([bytes]));
+            img.loading = 'lazy';
+            pages.appendChild(img);
+          }
+        } catch (err) {
+          pages.innerHTML = '<p class="err">' + err.message + '</p>';
+        }
+      }
+
+      document.getElementById('close').onclick = () => {
+        document.getElementById('reader').classList.remove('open');
+        document.getElementById('pages').innerHTML = '';
+      };
+      addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') document.getElementById('close').click();
+      });
+
+      (async () => {
+        const app = document.getElementById('app');
+        let index;
+        try {
+          index = await (await fetch('ARCHIVE.json')).json();
+        } catch {
+          app.innerHTML =
+            '<p class="err">Could not read ARCHIVE.json. Open this page from the archive ' +
+            'directory over a local web server rather than from a file:// URL.</p>';
+          return;
+        }
+        document.getElementById('summary').textContent =
+          index.series_count + ' series · ' + index.chapter_count + ' chapters · schema ' + index.schema;
+
+        app.innerHTML = '';
+        for (const s of index.series) {
+          let title = s.slug;
+          try {
+            const meta = await (await fetch('series/' + s.slug + '/series.json')).json();
+            if (meta && meta.title) title = meta.title;
+          } catch {
+            /* metadata is optional for browsing */
+          }
+          const el = document.createElement('section');
+          el.className = 'series';
+          const h = document.createElement('h2');
+          h.textContent = title;
+          el.appendChild(h);
+          const row = document.createElement('div');
+          row.className = 'chapters';
+          for (const c of s.chapters) {
+            const b = document.createElement('button');
+            b.textContent = c.slug;
+            b.onclick = () => openChapter(c.cbz, title + ' — ' + c.slug);
+            row.appendChild(b);
+          }
+          el.appendChild(row);
+          app.appendChild(el);
+        }
+      })();
+    </script>
+  </body>
+</html>

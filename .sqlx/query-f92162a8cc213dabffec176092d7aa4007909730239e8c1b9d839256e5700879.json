@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO user_chapter_tracking (user_id, chapter_id, is_read, last_page_read, last_read_at)\n           SELECT uct.user_id,\n                  (SELECT c_keep.id FROM chapters c_keep\n                   WHERE c_keep.manga_id = ? AND c_keep.chapter_number = c_disc.chapter_number\n                   LIMIT 1) AS target_chapter_id,\n                  uct.is_read,\n                  uct.last_page_read,\n                  uct.last_read_at\n           FROM user_chapter_tracking uct\n           JOIN chapters c_disc ON c_disc.id = uct.chapter_id\n           WHERE c_disc.manga_id = ?\n             AND (SELECT c_keep.id FROM chapters c_keep\n                  WHERE c_keep.manga_id = ? AND c_keep.chapter_number = c_disc.chapter_number\n                  LIMIT 1) IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "f92162a8cc213dabffec176092d7aa4007909730239e8c1b9d839256e5700879"
+}

@@ -1,0 +1,4 @@
+# Frontend modules and exports nothing reaches. Drained to empty by the
+# waste sweep's frontend phase; check-dead-js.mjs keeps it that way.
+
+

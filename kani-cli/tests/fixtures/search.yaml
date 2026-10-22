@@ -1,0 +1,18 @@
+id: test-search
+name: TestSearch
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+endpoints:
+  search:
+    route: "/search"
+    queries:
+      q: $query$
+    container: ".results .item"
+    fields:
+      id: 'self.first("a").attr("href").split("/").at(-1)'
+      title: 'self.first(".title").text().trim()'
+      cover_url:
+        expr: 'self.first("img").attr("src")'
+        optional: true

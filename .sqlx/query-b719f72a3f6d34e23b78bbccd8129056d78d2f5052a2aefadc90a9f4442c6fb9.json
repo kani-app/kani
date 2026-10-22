@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE duplicate_pairs SET dismissed = TRUE WHERE manga_a_id = ? AND manga_b_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b719f72a3f6d34e23b78bbccd8129056d78d2f5052a2aefadc90a9f4442c6fb9"
+}

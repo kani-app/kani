@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT upgrade_auto_replace FROM manga WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "upgrade_auto_replace",
+        "ordinal": 0,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ff0a68b0e74563469f2ba12c4744706592c2e19458ca8c4dffb297e379d5e4dd"
+}

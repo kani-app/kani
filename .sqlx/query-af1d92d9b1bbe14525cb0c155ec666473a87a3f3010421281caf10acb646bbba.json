@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, status, completed_at, progress_json, result_json, error_json FROM jobs WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "completed_at",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "progress_json",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "result_json",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_json",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "af1d92d9b1bbe14525cb0c155ec666473a87a3f3010421281caf10acb646bbba"
+}

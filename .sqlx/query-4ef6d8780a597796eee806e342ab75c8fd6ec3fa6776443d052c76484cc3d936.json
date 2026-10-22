@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET library_path = ? WHERE id = 'singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "4ef6d8780a597796eee806e342ab75c8fd6ec3fa6776443d052c76484cc3d936"
+}

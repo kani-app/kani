@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET max_concurrent_jobs=?, db_maintenance_interval_hours=?, db_vacuum_interval_hours=?, audit_prune_interval_hours=?, trash_purge_interval_hours=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "84bf4189fc3e01ab0ba3f0900b96f448e4f552e829e60c9157d0b45e66cc6c2d"
+}

@@ -1,20 +1,30 @@
 [package]
 name = "kani-shared"
 description = "Shared types and traits for Kani."
-version = "0.1.0"
+version = "1.0.0"
+license.workspace = true
+repository.workspace = true
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
-wit-bindgen = "0.53.1"
+wit-bindgen = { version = "0.58.0", features = ["async-spawn"] }
+talc = { workspace = true }
 base64 = "0.22.1"
-serde = { version = "1.0", features = ["derive"], optional = true }
+hex = "0.4"
+urlencoding = "2.1"
+serde = { version = "1.0", features = ["derive", "rc"], optional = true }
 serde_json = { version = "1.0", optional = true }
 postcard = { version = "1", features = ["alloc"], optional = true }
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"], optional = true }
 time = { version = "0.3", features = ["serde", "formatting", "macros", "parsing"], optional = true }
-ts-rs = { version = "10", features = ["serde-compat"], optional = true }
 
 [features]
-host    = ["dep:serde", "dep:serde_json", "dep:time", "dep:ts-rs"]
+host    = ["dep:serde", "dep:serde_json", "dep:time"]
 ssr     = ["dep:sqlx", "host"]
-builder = ["dep:serde", "dep:postcard"]
+builder = ["dep:serde", "dep:serde_json", "dep:postcard"]
+# Lightweight guest-side feature: just enough serde to serialize ExtensionMetadata
+# to JSON across the WIT boundary, without builder's postcard/Blueprint machinery.
+meta    = ["dep:serde", "dep:serde_json"]

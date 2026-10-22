@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT status, score,\n                   tracking_enabled as \"tracking_enabled: bool\",\n                   COALESCE(notify_new_chapters, TRUE) as \"notify_new_chapters: bool\",\n                   COALESCE(reading_direction, 'rtl') as \"reading_direction: String\",\n                   reader_prefs\n            FROM user_manga_tracking\n            WHERE user_id = ? AND manga_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "score",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "tracking_enabled: bool",
+        "ordinal": 2,
+        "type_info": "Bool"
+      },
+      {
+        "name": "notify_new_chapters: bool",
+        "ordinal": 3,
+        "type_info": "Null"
+      },
+      {
+        "name": "reading_direction: String",
+        "ordinal": 4,
+        "type_info": "Null"
+      },
+      {
+        "name": "reader_prefs",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "c4a815a91d11f5b6fd4aaaca57593640b1f468fbaccf83d43f5e2fae4b3da9b8"
+}

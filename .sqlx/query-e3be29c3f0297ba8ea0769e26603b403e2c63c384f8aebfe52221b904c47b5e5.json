@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT manga_id as \"manga_id: MangaId\"\n                       FROM chapters\n                       GROUP BY manga_id HAVING COUNT(*) < ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "manga_id: MangaId",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e3be29c3f0297ba8ea0769e26603b403e2c63c384f8aebfe52221b904c47b5e5"
+}

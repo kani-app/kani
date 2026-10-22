@@ -1,22 +1,18 @@
-//! Shared data types for manga information.
+//! Serializable domain models exchanged by the web, application, host-runtime, and extension
+//! layers. WIT-owned boundary types remain authoritative in [`crate::wit_types`].
 
 use crate::bindings::kani::extension::types as wit_types;
 
-// ── Host-only imports ───────────────────────────────────────────────────────
-
-#[cfg(feature = "host")]
-use serde::{Deserialize, Deserializer, Serialize};
 #[cfg(feature = "host")]
 use serde::de::{self, SeqAccess, Visitor};
 #[cfg(feature = "host")]
+use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(feature = "host")]
 use std::fmt;
-
-// ── Always-available types (WASM-safe, no serde/ts-rs dependency) ──────────
 
 /// Manga publication status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "host", derive(Serialize, Deserialize, ts_rs::TS))]
-#[cfg_attr(feature = "host", ts(export, export_to = "bindings/"))]
+#[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "host", serde(rename_all = "lowercase"))]
 pub enum MangaStatus {
     Ongoing,
@@ -71,8 +67,7 @@ impl From<MangaStatus> for i64 {
 
 /// Filter state used by extensions to read active filter values.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "host", derive(Serialize, Deserialize, ts_rs::TS))]
-#[cfg_attr(feature = "host", ts(export, export_to = "bindings/"))]
+#[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "host", serde(tag = "kind", content = "data"))]
 pub enum FilterState {
     Selection { name: String, value: String },
@@ -97,9 +92,10 @@ impl From<FilterState> for wit_types::FilterState {
 impl From<wit_types::FilterState> for FilterState {
     fn from(s: wit_types::FilterState) -> Self {
         match s {
-            wit_types::FilterState::Selection(opt) => {
-                FilterState::Selection { name: opt.name, value: opt.value }
-            }
+            wit_types::FilterState::Selection(opt) => FilterState::Selection {
+                name: opt.name,
+                value: opt.value,
+            },
             wit_types::FilterState::Checkbox(b) => FilterState::Checkbox(b),
             wit_types::FilterState::TextInput(s) => FilterState::TextInput(s),
             wit_types::FilterState::Multiselect(values) => FilterState::Multiselect(values),
@@ -109,8 +105,7 @@ impl From<wit_types::FilterState> for FilterState {
 
 /// Active filter value passed to extension search/popular methods.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "host", derive(Serialize, Deserialize, ts_rs::TS))]
-#[cfg_attr(feature = "host", ts(export, export_to = "bindings/"))]
+#[cfg_attr(feature = "host", derive(Serialize, Deserialize))]
 pub struct ActiveFilter {
     pub filter_name: String,
     pub state: FilterState,
@@ -120,23 +115,84 @@ pub struct ActiveFilter {
 pub fn to_shared_filters(filters: Vec<wit_types::ActiveFilter>) -> Vec<ActiveFilter> {
     filters
         .into_iter()
-        .map(|f| ActiveFilter { filter_name: f.filter_name, state: f.state.into() })
+        .map(|f| ActiveFilter {
+            filter_name: f.filter_name,
+            state: f.state.into(),
+        })
         .collect()
 }
 
-// ── filter_list! macro ──────────────────────────────────────────────────────
-// Produces `$crate::wit_types::FilterList` directly (no intermediate type).
+pub const DEFAULT_BROWSER_AUTO_SCROLL: bool = false;
 
+/// Whether `id` has the `[a-z][a-z0-9-]*` form every extension id must take. Ids name
+/// artifact files, source rows and cache namespaces, so they may not contain separators.
+pub fn is_valid_extension_id(id: &str) -> bool {
+    let mut chars = id.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Largest decoded source icon, in bytes.
+pub const MAX_ICON_BYTES: usize = 64 * 1024;
+
+/// Checks a base64 source icon and returns the MIME type its bytes carry. Only PNG and WebP
+/// are accepted, so an icon rendered from a `data:` URL can never be markup.
+pub fn source_icon_mime(icon: &str) -> Result<&'static str, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(icon)
+        .map_err(|e| format!("icon is not valid base64: {e}"))?;
+    if bytes.len() > MAX_ICON_BYTES {
+        return Err(format!(
+            "icon is {} bytes decoded, over the 64 KiB limit",
+            bytes.len()
+        ));
+    }
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Ok("image/png")
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Ok("image/webp")
+    } else {
+        Err("icon must be a PNG or WebP image".to_string())
+    }
+}
+
+const AUTO_SCROLL_ON: &str = "/*kani:auto-scroll=true*/\n";
+const AUTO_SCROLL_OFF: &str = "/*kani:auto-scroll=false*/\n";
+
+/// Prefixes a capture script with its auto-scroll choice, which is how the setting
+/// crosses the WIT `capture-page-payload` call.
+pub fn mark_auto_scroll(init_script: &str, auto_scroll: bool) -> String {
+    let marker = if auto_scroll {
+        AUTO_SCROLL_ON
+    } else {
+        AUTO_SCROLL_OFF
+    };
+    format!("{marker}{init_script}")
+}
+
+/// Splits a capture script into its auto-scroll choice and the script itself; an
+/// unmarked script takes [`DEFAULT_BROWSER_AUTO_SCROLL`].
+pub fn take_auto_scroll(init_script: &str) -> (bool, &str) {
+    if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_ON) {
+        (true, script)
+    } else if let Some(script) = init_script.strip_prefix(AUTO_SCROLL_OFF) {
+        (false, script)
+    } else {
+        (DEFAULT_BROWSER_AUTO_SCROLL, init_script)
+    }
+}
+
+/// Builds a [`FilterList`](crate::wit_types::FilterList) from semicolon-separated
+/// filter declarations. A declaration may provide separate identifier and label
+/// expressions or use one expression for both; selection options accept either
+/// `(label, value)` pairs or values used as both label and value.
 #[macro_export]
 macro_rules! filter_list {
-    // 1. Base Case
     (@munch [ $($output:tt)* ]) => {
         $crate::wit_types::FilterList { filters: vec![ $($output)* ] }
     };
 
-    // -------------------------------------------------------------------------
-    // INTERNAL SUB-MUNCHER: Parses mixed arrays item-by-item
-    // -------------------------------------------------------------------------
     (@opts $id:expr, [ $($accum:tt)* ] ) => { vec![ $($accum)* ] };
 
     (@opts $id:expr, [ $($accum:tt)* ] ( $n:expr, $v:expr ) $(, $($rest:tt)*)? ) => {
@@ -161,9 +217,6 @@ macro_rules! filter_list {
         ] $($($rest)*)? )
     };
 
-    // -------------------------------------------------------------------------
-    // INTERNAL BUILDER
-    // -------------------------------------------------------------------------
     (@build [ $($output:tt)* ] $id:expr, $display:expr, $kind:ident, $opts:expr, $def:expr, $sem:expr $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [
             $($output)*
@@ -178,10 +231,6 @@ macro_rules! filter_list {
         ] $($($rest)*)?)
     };
 
-    // ==========================================
-    // SELECT & SORT
-    // ==========================================
-    // 2-arg, Tuple Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, $kind:ident, [ $($opts:tt)* ], default: ( $def_n:expr, $def_v:expr ) $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, $kind,
             filter_list!(@opts $id, [] $($opts)*),
@@ -193,11 +242,9 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 2-arg, Flat Default (Translates to Tuple)
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, $kind:ident, [ $($opts:tt)* ], default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $id, $display, $kind, [ $($opts)* ], default: ($def, $def) $(, semantic: $sem)? $(; $($rest)*)? )
     };
-    // 2-arg, No Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, $kind:ident, [ $($opts:tt)* ] $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, $kind,
             filter_list!(@opts $id, [] $($opts)*),
@@ -207,23 +254,16 @@ macro_rules! filter_list {
         )
     };
 
-    // 1-arg, Tuple Default
     (@munch [ $($output:tt)* ] $display:expr, $kind:ident, [ $($opts:tt)* ], default: ( $def_n:expr, $def_v:expr ) $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, $kind, [ $($opts)* ], default: ($def_n, $def_v) $(, semantic: $sem)? $(; $($rest)*)? )
     };
-    // 1-arg, Flat Default
     (@munch [ $($output:tt)* ] $display:expr, $kind:ident, [ $($opts:tt)* ], default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, $kind, [ $($opts)* ], default: ($def, $def) $(, semantic: $sem)? $(; $($rest)*)? )
     };
-    // 1-arg, No Default
     (@munch [ $($output:tt)* ] $display:expr, $kind:ident, [ $($opts:tt)* ] $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, $kind, [ $($opts)* ] $(, semantic: $sem)? $(; $($rest)*)? )
     };
 
-    // ==========================================
-    // CHECKBOX
-    // ==========================================
-    // 2-arg, With Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, Checkbox, default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, Checkbox,
             vec![],
@@ -232,7 +272,6 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 2-arg, No Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, Checkbox $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, Checkbox,
             vec![],
@@ -241,19 +280,13 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 1-arg, With Default
     (@munch [ $($output:tt)* ] $display:expr, Checkbox, default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, Checkbox, default: $def $(, semantic: $sem)? $(; $($rest)*)? )
     };
-    // 1-arg, No Default
     (@munch [ $($output:tt)* ] $display:expr, Checkbox $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, Checkbox $(, semantic: $sem)? $(; $($rest)*)? )
     };
 
-    // ==========================================
-    // TEXT INPUT
-    // ==========================================
-    // 2-arg, With Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, TextInput, default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, TextInput,
             vec![],
@@ -262,7 +295,6 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 2-arg, No Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, TextInput $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, TextInput,
             vec![],
@@ -271,19 +303,13 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 1-arg, With Default
     (@munch [ $($output:tt)* ] $display:expr, TextInput, default: $def:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, TextInput, default: $def $(, semantic: $sem)? $(; $($rest)*)? )
     };
-    // 1-arg, No Default
     (@munch [ $($output:tt)* ] $display:expr, TextInput $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, TextInput $(, semantic: $sem)? $(; $($rest)*)? )
     };
 
-    // ==========================================
-    // MULTISELECT
-    // ==========================================
-    // 2-arg, No Default
     (@munch [ $($output:tt)* ] $id:expr, $display:expr, Multiselect, [ $($opts:tt)* ] $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@build [ $($output)* ] $id, $display, Multiselect,
             filter_list!(@opts $id, [] $($opts)*),
@@ -292,14 +318,41 @@ macro_rules! filter_list {
             $(; $($rest)*)?
         )
     };
-    // 1-arg, No Default
     (@munch [ $($output:tt)* ] $display:expr, Multiselect, [ $($opts:tt)* ] $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
         filter_list!(@munch [ $($output)* ] $display, $display, Multiselect, [ $($opts)* ] $(, semantic: $sem)? $(; $($rest)*)? )
     };
 
-    // ==========================================
-    // ERROR CATCHER & ENTRY POINTS
-    // ==========================================
+    (@munch [ $($output:tt)* ] $id:expr, $display:expr, Multiselect, splice: $opts:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
+        filter_list!(@build [ $($output)* ] $id, $display, Multiselect,
+            $opts.iter().map(|(n, v)| $crate::wit_types::FilterOption {
+                filter_name: ($id).to_string(),
+                name: n.to_string(),
+                value: v.to_string(),
+            }).collect(),
+            None,
+            { #[allow(unused_mut)] let mut _s: Option<$crate::wit_types::FilterSemantic> = None; $( _s = Some($sem); )? _s }
+            $(; $($rest)*)?
+        )
+    };
+    (@munch [ $($output:tt)* ] $display:expr, Multiselect, splice: $opts:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
+        filter_list!(@munch [ $($output)* ] $display, $display, Multiselect, splice: $opts $(, semantic: $sem)? $(; $($rest)*)? )
+    };
+    (@munch [ $($output:tt)* ] $id:expr, $display:expr, Select, splice: $opts:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
+        filter_list!(@build [ $($output)* ] $id, $display, Select,
+            $opts.iter().map(|(n, v)| $crate::wit_types::FilterOption {
+                filter_name: ($id).to_string(),
+                name: n.to_string(),
+                value: v.to_string(),
+            }).collect(),
+            None,
+            { #[allow(unused_mut)] let mut _s: Option<$crate::wit_types::FilterSemantic> = None; $( _s = Some($sem); )? _s }
+            $(; $($rest)*)?
+        )
+    };
+    (@munch [ $($output:tt)* ] $display:expr, Select, splice: $opts:expr $(, semantic: $sem:expr)? $(; $($rest:tt)*)? ) => {
+        filter_list!(@munch [ $($output)* ] $display, $display, Select, splice: $opts $(, semantic: $sem)? $(; $($rest)*)? )
+    };
+
     (@munch $($invalid:tt)*) => {
         compile_error!(concat!("Invalid filter syntax. Stuck on: ", stringify!($($invalid)*)))
     };
@@ -307,44 +360,28 @@ macro_rules! filter_list {
     ($first:expr, $($rest:tt)*) => { filter_list!(@munch [] $first, $($rest)*) };
 }
 
-// ── chapter_sort_list! macro ────────────────────────────────────────────────
-// Produces `Vec<$crate::wit_types::ChapterSortOption>`.
-//
-// Syntax (entries separated by `;`):
-//   "field_id", "Display Name"          — auto-generates a descending and
-//                                         ascending ChapterSortOption pair
-//   raw: <expr>                          — inserts a single ChapterSortOption
-//                                         as-is, for edge-case singlets
-//
-// The auto-generated IDs follow the `{field_id}_desc` / `{field_id}_asc`
-// convention.  Extensions that need to recover the field and direction from
-// the sort string should split on the *last* underscore (via `rsplit_once`)
-// so that field IDs containing underscores (e.g. `created_at`) are handled
-// correctly.
-
 #[macro_export]
+/// Builds chapter sort options. Each `id, label` declaration expands to
+/// descending and ascending options; `raw: expression` inserts one option.
 macro_rules! chapter_sort_list {
-    // Base case: nothing left to process
     (@munch [$($output:tt)*]) => {
         vec![$($output)*]
     };
 
-    // Pair entry: "field_id", "Display Name" → desc + asc options
     (@munch [$($output:tt)*] $id:literal, $name:literal $(; $($rest:tt)*)?) => {
         chapter_sort_list!(@munch [
             $($output)*
-            $crate::wit_types::ChapterSortOption {
+            $crate::wit_types::SortOption {
                 id: concat!($id, "_desc").to_string(),
                 name: concat!($name, " (descending)").to_string(),
             },
-            $crate::wit_types::ChapterSortOption {
+            $crate::wit_types::SortOption {
                 id: concat!($id, "_asc").to_string(),
                 name: concat!($name, " (ascending)").to_string(),
             },
         ] $($($rest)*)?)
     };
 
-    // Raw entry: raw: <expr> → single option inserted verbatim
     (@munch [$($output:tt)*] raw: $expr:expr $(; $($rest:tt)*)?) => {
         chapter_sort_list!(@munch [
             $($output)*
@@ -352,7 +389,6 @@ macro_rules! chapter_sort_list {
         ] $($($rest)*)?)
     };
 
-    // Error catcher & entry points
     (@munch $($invalid:tt)*) => {
         compile_error!(concat!("Invalid chapter_sort_list syntax. Stuck on: ", stringify!($($invalid)*)))
     };
@@ -360,31 +396,14 @@ macro_rules! chapter_sort_list {
     ($($rest:tt)+) => { chapter_sort_list!(@munch [] $($rest)+) };
 }
 
-// ── preference_list! macro ──────────────────────────────────────────────────
-// Produces `Vec<$crate::wit_types::PreferenceSpec>`.
-//
-// Syntax (each entry separated by `;`):
-//   "key", "Label", Toggle, default: <bool>                    // explicit key
-//   "key", "Label", Select, [("Label1","v1"), ...], default: "v"
-//   "key", "Label", Text, default: "value"
-//   "key", "Label", MultiValueList                             // default is always []
-//   "Label", Toggle, default: <bool>                           // key = label
-//   "Label", Select, [("Label1","v1"), ...], default: "v"
-//   "Label", Text, default: "value"
-//   "Label", MultiValueList
-// Optional modifiers (order matters for Text):
-//   , description: "..."
-//   , secret: true                      (Text only; false by default)
-//   , description: "...", secret: true
-// MultiValueList-specific modifier (before description):
-//   , placeholder: "..."
-
 #[macro_export]
+/// Builds preference specifications from semicolon-separated declarations.
+/// The label may also serve as the key; text preferences may be secret, and
+/// multi-value preferences always use `[]` as their serialized default while
+/// storing an optional placeholder in the options list.
 macro_rules! preference_list {
-    // Base case: no more entries
     (@munch [ $($output:tt)* ]) => { vec![ $($output)* ] };
 
-    // ── Option accumulator for Select ───────────────────────────────────────
     (@opts [ $($accum:tt)* ]) => { vec![ $($accum)* ] };
     (@opts [ $($accum:tt)* ] ( $l:expr, $v:expr ) $(, $($rest:tt)*)? ) => {
         preference_list!(@opts [
@@ -393,7 +412,6 @@ macro_rules! preference_list {
         ] $($($rest)*)? )
     };
 
-    // ── Internal builder ────────────────────────────────────────────────────
     (@build [ $($output:tt)* ] $key:expr, $label:expr, $kind:ident, $opts:expr, $def:expr, $desc:expr, $secret:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [
             $($output)*
@@ -409,124 +427,97 @@ macro_rules! preference_list {
         ] $($($rest)*)?)
     };
 
-    // ── Toggle ──────────────────────────────────────────────────────────────
-    // 2-arg, with description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Toggle, default: $def:expr, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Toggle,
             vec![], if $def { "true" } else { "false" }, Some($desc.to_string()), false
             $(; $($rest)*)?
         )
     };
-    // 2-arg, no description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Toggle, default: $def:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Toggle,
             vec![], if $def { "true" } else { "false" }, None, false
             $(; $($rest)*)?
         )
     };
-    // 1-arg (forward to 2-arg)
     (@munch [ $($output:tt)* ] $label:expr, Toggle, default: $def:expr $(, description: $desc:expr)? $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, Toggle, default: $def $(, description: $desc)? $(; $($rest)*)? )
     };
 
-    // ── Select ──────────────────────────────────────────────────────────────
-    // 2-arg, with description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Select, [ $($opts:tt)* ], default: $def:expr, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Select,
             preference_list!(@opts [] $($opts)*), $def, Some($desc.to_string()), false
             $(; $($rest)*)?
         )
     };
-    // 2-arg, no description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Select, [ $($opts:tt)* ], default: $def:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Select,
             preference_list!(@opts [] $($opts)*), $def, None, false
             $(; $($rest)*)?
         )
     };
-    // 1-arg (forward to 2-arg)
     (@munch [ $($output:tt)* ] $label:expr, Select, [ $($opts:tt)* ], default: $def:expr $(, description: $desc:expr)? $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, Select, [ $($opts)* ], default: $def $(, description: $desc)? $(; $($rest)*)? )
     };
 
-    // ── Text ────────────────────────────────────────────────────────────────
-    // 2-arg, description + secret: true
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Text, default: $def:expr, description: $desc:expr, secret: true $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Text, vec![], $def, Some($desc.to_string()), true $(; $($rest)*)?)
     };
-    // 2-arg, description only
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Text, default: $def:expr, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Text, vec![], $def, Some($desc.to_string()), false $(; $($rest)*)?)
     };
-    // 2-arg, secret: true only
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Text, default: $def:expr, secret: true $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Text, vec![], $def, None, true $(; $($rest)*)?)
     };
-    // 2-arg, no modifiers
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, Text, default: $def:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, Text, vec![], $def, None, false $(; $($rest)*)?)
     };
-    // 1-arg (forward to 2-arg)
     (@munch [ $($output:tt)* ] $label:expr, Text, default: $def:expr $(, $($mods:tt)*)? $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, Text, default: $def $(, $($mods)*)? $(; $($rest)*)? )
     };
 
-    // ── MultiValueList ───────────────────────────────────────────────────────
-    // Default is always "[]" (empty JSON array); placeholder stored in options.
-    // 2-arg: with placeholder, with description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, MultiValueList, placeholder: $ph:expr, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, MultiValueList,
             vec![("placeholder".to_string(), $ph.to_string())], "[]", Some($desc.to_string()), false
             $(; $($rest)*)?
         )
     };
-    // 2-arg: with placeholder, no description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, MultiValueList, placeholder: $ph:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, MultiValueList,
             vec![("placeholder".to_string(), $ph.to_string())], "[]", None, false
             $(; $($rest)*)?
         )
     };
-    // 2-arg: no placeholder, with description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, MultiValueList, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, MultiValueList,
             vec![], "[]", Some($desc.to_string()), false
             $(; $($rest)*)?
         )
     };
-    // 2-arg: no placeholder, no description
     (@munch [ $($output:tt)* ] $key:expr, $label:expr, MultiValueList $(; $($rest:tt)*)? ) => {
         preference_list!(@build [ $($output)* ] $key, $label, MultiValueList,
             vec![], "[]", None, false
             $(; $($rest)*)?
         )
     };
-    // 1-arg: with placeholder, with description
     (@munch [ $($output:tt)* ] $label:expr, MultiValueList, placeholder: $ph:expr, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, MultiValueList, placeholder: $ph, description: $desc $(; $($rest)*)? )
     };
-    // 1-arg: with placeholder, no description
     (@munch [ $($output:tt)* ] $label:expr, MultiValueList, placeholder: $ph:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, MultiValueList, placeholder: $ph $(; $($rest)*)? )
     };
-    // 1-arg: no placeholder, with description
     (@munch [ $($output:tt)* ] $label:expr, MultiValueList, description: $desc:expr $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, MultiValueList, description: $desc $(; $($rest)*)? )
     };
-    // 1-arg: no placeholder, no description
     (@munch [ $($output:tt)* ] $label:expr, MultiValueList $(; $($rest:tt)*)? ) => {
         preference_list!(@munch [ $($output)* ] $label, $label, MultiValueList $(; $($rest)*)? )
     };
 
-    // ── Error catcher & entry points ─────────────────────────────────────────
     (@munch $($invalid:tt)*) => {
         compile_error!(concat!("Invalid preference syntax. Stuck on: ", stringify!($($invalid)*)))
     };
     () => { vec![] };
     ($first:expr, $($rest:tt)*) => { preference_list!(@munch [] $first, $($rest)*) };
 }
-
-// ── Host-only types ─────────────────────────────────────────────────────────
 
 /// Deserializes `Vec<NamedItem>` from either an array of objects or plain strings.
 #[cfg(feature = "host")]
@@ -563,8 +554,7 @@ where
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct NamedItem {
     pub id: i64,
@@ -572,25 +562,40 @@ pub struct NamedItem {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MangaListItem {
     pub id: String,
     pub title: String,
     pub cover_url: Option<String>,
+    #[serde(default)]
+    pub new_chapter_count: i64,
+    #[serde(default)]
+    pub resume: Option<ContinueReadingChapter>,
+    /// Which indexed field matched a library search, when it was not the title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_field: Option<String>,
+    /// The matching fragment of that field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_text: Option<String>,
+    /// `pending` or `unlinked` while an imported id has no proven replacement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_link_status: Option<String>,
+    /// The source no longer lists this manga.
+    #[serde(default)]
+    pub is_orphaned: bool,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MangaList {
     pub manga: Vec<MangaListItem>,
     pub has_next_page: bool,
+    #[serde(default)]
+    pub total_pages: Option<u32>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MangaInfo {
     pub id: String,
     pub title: String,
@@ -607,9 +612,70 @@ pub struct MangaInfo {
     pub tags: Vec<NamedItem>,
 }
 
+/// Durable download lifecycle state of a chapter, stored as the integer
+/// `download_status` column. Serialises as that integer (0/1/2) to preserve the
+/// existing JSON API and frontend contract.
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(into = "i64", try_from = "i64")]
+#[repr(i64)]
+pub enum DownloadStatus {
+    #[default]
+    Pending = 0,
+    InProgress = 1,
+    Complete = 2,
+}
+
+#[cfg(feature = "host")]
+impl From<DownloadStatus> for i64 {
+    fn from(s: DownloadStatus) -> i64 {
+        s as i64
+    }
+}
+
+#[cfg(feature = "host")]
+impl TryFrom<i64> for DownloadStatus {
+    type Error = String;
+    fn try_from(v: i64) -> Result<Self, String> {
+        match v {
+            0 => Ok(Self::Pending),
+            1 => Ok(Self::InProgress),
+            2 => Ok(Self::Complete),
+            other => Err(format!("invalid download_status: {other}")),
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl sqlx::Type<sqlx::Sqlite> for DownloadStatus {
+    fn type_info() -> sqlx::sqlite::SqliteTypeInfo {
+        <i64 as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+    fn compatible(ty: &sqlx::sqlite::SqliteTypeInfo) -> bool {
+        <i64 as sqlx::Type<sqlx::Sqlite>>::compatible(ty)
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for DownloadStatus {
+    fn encode_by_ref(
+        &self,
+        buf: &mut Vec<sqlx::sqlite::SqliteArgumentValue<'q>>,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        <i64 as sqlx::Encode<sqlx::Sqlite>>::encode_by_ref(&(*self as i64), buf)
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl<'r> sqlx::Decode<'r, sqlx::Sqlite> for DownloadStatus {
+    fn decode(value: sqlx::sqlite::SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let v = <i64 as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
+        DownloadStatus::try_from(v).map_err(Into::into)
+    }
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Chapter {
     pub id: String,
     pub title: Option<String>,
@@ -619,7 +685,7 @@ pub struct Chapter {
     pub scanlator: Option<String>,
     pub date_uploaded: Option<i64>,
     #[serde(default)]
-    pub download_status: i64,
+    pub download_status: DownloadStatus,
     #[serde(default)]
     pub is_orphaned: bool,
     pub page_count: Option<i64>,
@@ -627,28 +693,34 @@ pub struct Chapter {
     pub is_read: bool,
     #[serde(default)]
     pub last_page_read: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_error: Option<serde_json::Value>,
+    /// Upgrade candidates found for this chapter, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrade_available: Option<serde_json::Value>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChapterList {
     pub chapters: Vec<Chapter>,
     pub has_next_page: bool,
+    #[serde(default)]
+    pub total_pages: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u32>,
 }
 
-/// A sort option declared by a source extension for its chapter list.
+/// A sort option declared by an extension (e.g. for ordering a chapter list).
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
-pub struct ChapterSortOption {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SortOption {
     pub id: String,
     pub name: String,
 }
 
 #[cfg(feature = "host")]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ChapterSortOrder {
     #[default]
@@ -713,8 +785,7 @@ impl ChapterSortOrder {
 }
 
 #[cfg(feature = "host")]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MangaSortOrder {
     #[default]
@@ -786,8 +857,7 @@ impl MangaSortOrder {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DownloadProgressEvent {
     ChapterStarted {
@@ -796,6 +866,8 @@ pub enum DownloadProgressEvent {
         manga_id: i64,
         manga_title: String,
         total_pages: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        job_id: Option<String>,
     },
     PageCompleted {
         chapter_id: i64,
@@ -818,24 +890,23 @@ pub enum DownloadProgressEvent {
         chapter_id: i64,
         chapter_name: String,
     },
-    ChapterDeferred {
-        chapter_id: i64,
-        chapter_name: String,
-        reason: String,
-    },
 }
 
 #[cfg(feature = "host")]
-#[derive(Clone, Serialize, Deserialize, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LibraryPage {
     pub items: Vec<MangaListItem>,
     pub has_next_page: bool,
+    pub total_pages: Option<u32>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+fn default_true() -> bool {
+    true
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct Source {
     pub id: i64,
@@ -845,21 +916,48 @@ pub struct Source {
     pub enabled: bool,
     pub favourited: bool,
     pub unrestricted_http: bool,
+    #[serde(default = "default_true")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub browser_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub download_concurrency: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub circuit_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub description: Option<String>,
+    /// JSON-encoded `Vec<String>` of language codes; kept as the raw column text
+    /// rather than decoded server-side since nothing on the host needs the typed
+    /// form yet — the frontend parses it directly for display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub languages: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ssr", sqlx(default))]
+    pub schema_version: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct GlobalSearchResult {
     pub source_id: i64,
     pub source_name: String,
     pub has_next_page: bool,
     pub manga: Vec<MangaListItem>,
+    /// Why this source contributed nothing, when it failed rather than matched
+    /// nothing. Without it the two are the same empty list, and a source that
+    /// never answered is reported as one that found no matches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SearchScope {
     FavouritedOnly,
     AllEnabled,
@@ -867,8 +965,7 @@ pub enum SearchScope {
 }
 
 #[cfg(feature = "host")]
-#[derive(Debug, Clone, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct ChapterFilterRow {
     pub id: i64,
@@ -881,8 +978,7 @@ pub struct ChapterFilterRow {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum DownloadRuleKind {
     LanguageInclude(String),
     LanguageExclude(String),
@@ -940,9 +1036,7 @@ impl DownloadRuleKind {
                 let cutoff = now - (*days as i64) * 86_400;
                 chapter.uploaded_at.is_none_or(|t| t >= cutoff)
             }
-            Self::PublishedAfter(epoch) => {
-                chapter.uploaded_at.is_none_or(|t| t >= *epoch)
-            }
+            Self::PublishedAfter(epoch) => chapter.uploaded_at.is_none_or(|t| t >= *epoch),
         }
     }
 }
@@ -965,8 +1059,7 @@ impl std::fmt::Display for DownloadRuleKind {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DownloadRule {
     pub id: i64,
     pub manga_id: i64,
@@ -974,12 +1067,12 @@ pub struct DownloadRule {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct ScanlatorPreference {
     pub id: i64,
-    pub manga_id: i64,
+    /// `None` for a library-wide default. A per-manga row always wins over it.
+    pub manga_id: Option<i64>,
     pub scanlator: String,
     pub priority: i64,
     /// In `priority` mode: if `true` this scanlator is completely blocked.
@@ -987,8 +1080,7 @@ pub struct ScanlatorPreference {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct Category {
     pub id: i64,
@@ -997,66 +1089,137 @@ pub struct Category {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrowserStats {
+    pub calls_total: u64,
+    pub restarts: u64,
+    pub graceful_shutdowns: u64,
+    pub forced_terminations: u64,
+    pub solver_attempts: u64,
+    pub solver_successes: u64,
+    pub solver_failures: u64,
+    pub max_memory_mb: u32,
+    pub idle_timeout_s: u32,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AppSettings {
     pub flaresolverr_url: String,
     pub library_path: String,
+    pub wasm_storage_path: String,
     pub concurrent_page_downloads: i64,
-    pub concurrent_manga_downloads: i64,
-    pub chapter_queue_size: i64,
     pub max_retries: i64,
     pub initial_retry_delay_ms: i64,
     pub max_wasm_instances: i64,
     pub auto_scan: bool,
     pub scan_interval_minutes: i64,
+    pub scan_exclude_completed: bool,
+    pub auto_download_category_ids: Vec<i64>,
     pub default_tracking_enabled: bool,
+    pub http_request_logging: bool,
+    #[serde(alias = "browser_debug_logging")]
+    pub v8_debug_logging: bool,
+    pub registration_enabled: bool,
+    pub cover_max_dimension: Option<i64>,
+    pub email_enabled: bool,
+    pub email_provider: String,
+    pub email_provider_config: String,
+    pub email_from_address: String,
+    pub app_url: String,
+    pub password_reset_enabled: bool,
+    pub email_verification_required: bool,
+    pub first_run_complete: bool,
+    pub scan_concurrency: i64,
+    pub per_source_download_concurrency: i64,
+    pub trash_retention_days: i64,
+    pub audit_retention_days: i64,
+    pub audit_security_retention_days: i64,
+    pub disk_warn_threshold: f64,
+    pub thumbnail_formats: String,
+    pub max_login_attempts: i64,
+    pub max_ip_attempts: i64,
+    pub login_lockout_seconds: i64,
+    pub session_timeout_secs: i64,
+    pub tracker_auto_sync_enabled: bool,
+    pub tracker_sync_interval_hours: i64,
+    pub max_concurrent_jobs: i64,
+    pub db_maintenance_interval_hours: i64,
+    pub db_vacuum_interval_hours: i64,
+    pub audit_prune_interval_hours: i64,
+    pub trash_purge_interval_hours: i64,
+    pub integrity_quick_scrub_interval_hours: i64,
+    pub integrity_deep_scrub_interval_hours: i64,
+    pub scrub_on_startup: bool,
+    #[serde(default = "default_revalidate_days")]
+    pub integrity_revalidate_after_days: i64,
+    pub upgrade_detection_enabled: bool,
+    pub upgrade_min_res_gain: f64,
+    pub upgrade_confirm_fetches: i64,
+    pub upgrade_axis_resolution: String,
+    pub upgrade_axis_colour: String,
+    pub upgrade_axis_encoder: String,
+    pub upgrade_axis_bitrate: String,
+    pub upgrade_show_downgrades: bool,
+    pub upgrade_auto_replace_reasons: String,
+    #[serde(alias = "browser_max_memory_mb")]
+    pub v8_max_memory_mb: i64,
+    #[serde(alias = "browser_idle_timeout_s")]
+    pub v8_idle_timeout_s: i64,
+    pub update_check_enabled: bool,
+    /// OPDS-PSE `?page=` numbering: `false` is one-based and `true` is zero-based.
+    pub opds_page_index_zero_based: bool,
+    #[serde(default = "default_barren_page_tolerance")]
+    pub scan_barren_page_tolerance: i64,
+    #[serde(default = "default_global_search_timeout_secs")]
+    pub global_search_timeout_secs: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecentUpdate {
     pub recent_updates: Vec<RecentUpdateItem>,
     pub has_next_page: bool,
+    pub total_pages: Option<u32>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecentUpdateItem {
     pub manga_id: i64,
+    pub source_id: i64,
     pub manga_name: String,
     pub cover_url: Option<String>,
     #[serde(skip)]
     pub local_cover_path: Option<String>,
+    #[serde(skip)]
+    pub cover_hash: Option<String>,
     pub base_url: String,
     pub chapter_id: i64,
     pub chapter_number: f64,
     pub chapter_name: Option<String>,
-    #[ts(type = "string")]
     #[serde(with = "time::serde::rfc3339::option")]
     pub discovered_at: std::option::Option<time::OffsetDateTime>,
+    pub is_downloaded: bool,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ChapterContents {
     pub pages: Vec<Page>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Page {
     pub index: i64,
     pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transform: Option<String>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MigrationResult {
     pub chapters_matched: usize,
     pub chapters_orphaned: usize,
@@ -1065,8 +1228,7 @@ pub struct MigrationResult {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MigrationPreview {
     pub target_title: String,
     pub target_cover_url: Option<String>,
@@ -1077,13 +1239,13 @@ pub struct MigrationPreview {
 }
 
 #[cfg(feature = "host")]
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AuthenticatedUser {
     pub id: i64,
     pub username: String,
     pub email: String,
     pub roles: Vec<String>,
+    pub email_verified_at: Option<String>,
 }
 
 #[cfg(feature = "host")]
@@ -1097,53 +1259,176 @@ impl AuthenticatedUser {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct DownloadSettings {
     pub concurrent_page_downloads: i64,
-    pub concurrent_manga_downloads: i64,
-    pub chapter_queue_size: i64,
     pub max_retries: i64,
     pub initial_retry_delay_ms: i64,
+    pub auto_download_category_ids: Vec<i64>,
+    pub scan_concurrency: i64,
+    pub per_source_download_concurrency: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ScanSettings {
     pub auto_scan: bool,
     pub scan_interval_minutes: i64,
+    pub scan_exclude_completed: bool,
+    pub upgrade_detection_enabled: bool,
+    pub upgrade_min_res_gain: f64,
+    pub upgrade_confirm_fetches: i64,
+    // Defaulted so a client that predates the per-axis policy can still PATCH
+    // the scan settings it does know about, rather than being rejected for
+    // omitting fields it has never heard of.
+    #[serde(default = "default_axis_both")]
+    pub upgrade_axis_resolution: String,
+    #[serde(default = "default_axis_both")]
+    pub upgrade_axis_colour: String,
+    #[serde(default = "default_axis_both")]
+    pub upgrade_axis_encoder: String,
+    #[serde(default = "default_axis_gain")]
+    pub upgrade_axis_bitrate: String,
+    #[serde(default)]
+    pub upgrade_show_downgrades: bool,
+    #[serde(default = "default_auto_replace_reasons")]
+    pub upgrade_auto_replace_reasons: String,
+    #[serde(default = "default_barren_page_tolerance")]
+    pub scan_barren_page_tolerance: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+fn default_revalidate_days() -> i64 {
+    30
+}
+
+#[cfg(feature = "host")]
+fn default_barren_page_tolerance() -> i64 {
+    3
+}
+
+#[cfg(feature = "host")]
+fn default_global_search_timeout_secs() -> i64 {
+    6
+}
+
+#[cfg(feature = "host")]
+fn default_axis_both() -> String {
+    "both".into()
+}
+
+#[cfg(feature = "host")]
+fn default_axis_gain() -> String {
+    "gain".into()
+}
+
+#[cfg(feature = "host")]
+fn default_auto_replace_reasons() -> String {
+    "preferred_scanlator,resolution,colour".into()
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AdvancedSettings {
     pub flaresolverr_url: String,
     pub library_path: String,
+    pub wasm_storage_path: String,
     pub max_wasm_instances: i64,
+    pub http_request_logging: bool,
+    #[serde(alias = "browser_debug_logging")]
+    pub v8_debug_logging: bool,
+    pub registration_enabled: bool,
+    pub cover_max_dimension: Option<i64>,
+    #[serde(alias = "browser_max_memory_mb")]
+    pub v8_max_memory_mb: i64,
+    #[serde(alias = "browser_idle_timeout_s")]
+    pub v8_idle_timeout_s: i64,
+    pub update_check_enabled: bool,
+    /// OPDS-PSE `?page=` numbering: `false` is one-based and `true` is zero-based.
+    pub opds_page_index_zero_based: bool,
+    #[serde(default = "default_global_search_timeout_secs")]
+    pub global_search_timeout_secs: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TrackingSettings {
     pub default_tracking_enabled: bool,
+    pub tracker_auto_sync_enabled: bool,
+    pub tracker_sync_interval_hours: i64,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct EmailSettings {
+    pub email_enabled: bool,
+    pub email_provider: String,
+    /// JSON blob with provider-specific credentials. Password/key fields use "••••••" as a
+    /// placeholder meaning "do not update the stored value".
+    pub email_provider_config: String,
+    pub email_from_address: String,
+    pub app_url: String,
+    pub password_reset_enabled: bool,
+    pub email_verification_required: bool,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MaintenanceSettings {
+    pub trash_retention_days: i64,
+    pub audit_retention_days: i64,
+    pub audit_security_retention_days: i64,
+    pub disk_warn_threshold: f64,
+    pub thumbnail_formats: String,
+    pub integrity_quick_scrub_interval_hours: i64,
+    pub integrity_deep_scrub_interval_hours: i64,
+    pub scrub_on_startup: bool,
+    #[serde(default = "default_revalidate_days")]
+    pub integrity_revalidate_after_days: i64,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SecuritySettings {
+    pub max_login_attempts: i64,
+    pub max_ip_attempts: i64,
+    pub login_lockout_seconds: i64,
+    pub session_timeout_secs: i64,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PerformanceSettings {
+    pub max_concurrent_jobs: i64,
+    pub db_maintenance_interval_hours: i64,
+    pub db_vacuum_interval_hours: i64,
+    pub audit_prune_interval_hours: i64,
+    pub trash_purge_interval_hours: i64,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SettingsUpdate {
     Download(DownloadSettings),
     Scan(ScanSettings),
     Advanced(AdvancedSettings),
     Tracking(TrackingSettings),
+    Email(EmailSettings),
+    Maintenance(MaintenanceSettings),
+    Security(SecuritySettings),
+    Performance(PerformanceSettings),
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CredentialEncryptionStatus {
+    pub encryption_enabled: bool,
+    /// Number of credential values currently stored in plaintext.
+    pub plaintext_count: i64,
+}
+
+#[cfg(feature = "host")]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[repr(i64)]
 pub enum MangaTrackingStatus {
@@ -1156,21 +1441,596 @@ pub enum MangaTrackingStatus {
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MangaTracking {
     pub status: Option<MangaTrackingStatus>,
     pub score: Option<f64>,
     pub chapters_read: i64,
     pub total_chapters: i64,
     pub tracking_enabled: bool,
+    pub notify_new_chapters: bool,
+    pub reading_direction: String,
+    pub reader_prefs: Option<String>,
 }
 
 #[cfg(feature = "host")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ts_rs::TS)]
-#[ts(export, export_to = "bindings/")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ContinueReadingChapter {
     pub chapter_id: i64,
     pub chapter_number: f64,
     pub last_page: i64,
+    pub page_count: i64,
+}
+
+#[cfg(all(test, feature = "host"))]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    #[test]
+    fn extension_id_form() {
+        for valid in ["a", "comix", "mangapill-gen", "x9"] {
+            assert!(is_valid_extension_id(valid), "{valid} should be valid");
+        }
+        for invalid in ["", "A", "1a", "-a", "a_b", "a:b", "a b", "é"] {
+            assert!(
+                !is_valid_extension_id(invalid),
+                "{invalid} should be invalid"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_scroll_marker_round_trips_and_defaults_off() {
+        for auto_scroll in [true, false] {
+            let marked = mark_auto_scroll("run()", auto_scroll);
+            assert_eq!(take_auto_scroll(&marked), (auto_scroll, "run()"));
+        }
+        assert_eq!(take_auto_scroll("run()"), (false, "run()"));
+    }
+
+    #[test]
+    fn download_status_serialises_as_integer() {
+        assert_eq!(
+            serde_json::to_string(&DownloadStatus::Complete).unwrap(),
+            "2"
+        );
+        let s: DownloadStatus = serde_json::from_str("1").unwrap();
+        assert_eq!(s, DownloadStatus::InProgress);
+        assert_eq!(DownloadStatus::default(), DownloadStatus::Pending);
+        assert!(serde_json::from_str::<DownloadStatus>("3").is_err());
+        assert_eq!(i64::from(DownloadStatus::Complete), 2);
+        assert_eq!(
+            DownloadStatus::try_from(0).unwrap(),
+            DownloadStatus::Pending
+        );
+    }
+
+    fn json_rt<T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug>(
+        v: &T,
+    ) {
+        let s = serde_json::to_string(v).unwrap();
+        let back: T = serde_json::from_str(&s).unwrap();
+        assert_eq!(*v, back);
+    }
+
+    #[test]
+    fn manga_status_json_variants_are_lowercase() {
+        for (status, expected) in [
+            (MangaStatus::Ongoing, "\"ongoing\""),
+            (MangaStatus::Completed, "\"completed\""),
+            (MangaStatus::Hiatus, "\"hiatus\""),
+            (MangaStatus::Cancelled, "\"cancelled\""),
+            (MangaStatus::Unknown, "\"unknown\""),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&status).unwrap(),
+                expected,
+                "serialise {status:?}"
+            );
+            let back: MangaStatus = serde_json::from_str(expected).unwrap();
+            assert_eq!(status, back, "deserialise {expected}");
+        }
+    }
+
+    #[test]
+    fn manga_status_default_is_unknown() {
+        assert_eq!(MangaStatus::default(), MangaStatus::Unknown);
+    }
+
+    #[test]
+    fn manga_status_from_i64_all_variants() {
+        assert_eq!(MangaStatus::from(0i64), MangaStatus::Ongoing);
+        assert_eq!(MangaStatus::from(1i64), MangaStatus::Completed);
+        assert_eq!(MangaStatus::from(2i64), MangaStatus::Hiatus);
+        assert_eq!(MangaStatus::from(3i64), MangaStatus::Cancelled);
+        assert_eq!(MangaStatus::from(99i64), MangaStatus::Unknown);
+    }
+
+    #[test]
+    fn manga_status_into_i64_all_variants() {
+        assert_eq!(i64::from(MangaStatus::Ongoing), 0i64);
+        assert_eq!(i64::from(MangaStatus::Completed), 1i64);
+        assert_eq!(i64::from(MangaStatus::Hiatus), 2i64);
+        assert_eq!(i64::from(MangaStatus::Cancelled), 3i64);
+        assert_eq!(i64::from(MangaStatus::Unknown), 4i64);
+    }
+
+    #[test]
+    fn filter_state_json_round_trip_all_variants() {
+        for v in &[
+            FilterState::Selection {
+                name: "Genre".into(),
+                value: "action".into(),
+            },
+            FilterState::Checkbox(true),
+            FilterState::Checkbox(false),
+            FilterState::TextInput("naruto".into()),
+            FilterState::Multiselect(vec!["en".into(), "ja".into()]),
+        ] {
+            json_rt(v);
+        }
+    }
+
+    #[test]
+    fn active_filter_json_round_trip() {
+        json_rt(&ActiveFilter {
+            filter_name: "genre".into(),
+            state: FilterState::Checkbox(false),
+        });
+    }
+
+    #[test]
+    fn manga_list_item_json_round_trip() {
+        json_rt(&MangaListItem {
+            id: "abc123".into(),
+            title: "One Piece".into(),
+            cover_url: Some("https://example.com/cover.jpg".into()),
+            new_chapter_count: 5,
+            resume: None,
+            match_field: Some("author".into()),
+            match_text: Some("Oda".into()),
+            import_link_status: Some("pending".into()),
+            is_orphaned: true,
+        });
+    }
+
+    #[test]
+    fn manga_list_item_default_new_chapter_count_is_zero() {
+        let json = r#"{"id":"x","title":"t","cover_url":null}"#;
+        let item: MangaListItem = serde_json::from_str(json).unwrap();
+        assert_eq!(item.new_chapter_count, 0);
+    }
+
+    #[test]
+    fn manga_list_json_round_trip() {
+        json_rt(&MangaList {
+            manga: vec![MangaListItem {
+                id: "1".into(),
+                title: "A".into(),
+                cover_url: None,
+                new_chapter_count: 0,
+                resume: None,
+                match_field: None,
+                match_text: None,
+                import_link_status: None,
+                is_orphaned: false,
+            }],
+            has_next_page: true,
+            total_pages: Some(5),
+        });
+    }
+
+    #[test]
+    fn manga_info_json_round_trip_with_named_item_objects() {
+        json_rt(&MangaInfo {
+            id: "m1".into(),
+            title: "Berserk".into(),
+            cover_url: None,
+            description: Some("Dark fantasy".into()),
+            description_html: None,
+            authors: vec![NamedItem {
+                id: 1,
+                name: "Kentaro Miura".into(),
+            }],
+            artists: vec![NamedItem {
+                id: 2,
+                name: "Studio Gaga".into(),
+            }],
+            status: MangaStatus::Ongoing,
+            tags: vec![NamedItem {
+                id: 3,
+                name: "Action".into(),
+            }],
+        });
+    }
+
+    #[test]
+    fn manga_info_deserializes_authors_as_plain_strings() {
+        let json = r#"{
+            "id":"m1","title":"Test","cover_url":null,
+            "description":null,"description_html":null,
+            "authors":["Oda"],
+            "artists":[],
+            "status":"ongoing",
+            "tags":[]
+        }"#;
+        let info: MangaInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(info.authors.len(), 1);
+        assert_eq!(info.authors[0].name, "Oda");
+        assert_eq!(info.authors[0].id, 0);
+    }
+
+    #[test]
+    fn chapter_json_round_trip() {
+        json_rt(&Chapter {
+            id: "ch1".into(),
+            title: Some("Chapter 1: Dawn".into()),
+            number: 1.0,
+            volume: Some(1),
+            language: "en".into(),
+            scanlator: Some("TeamX".into()),
+            date_uploaded: Some(1_700_000_000),
+            download_status: DownloadStatus::Pending,
+            is_orphaned: false,
+            page_count: Some(20),
+            is_read: true,
+            last_page_read: Some(10),
+            download_error: None,
+            upgrade_available: None,
+        });
+    }
+
+    #[test]
+    fn chapter_missing_optional_fields_default_to_zero_or_false() {
+        let json = r#"{"id":"c","number":1.0,"language":"en"}"#;
+        let ch: Chapter = serde_json::from_str(json).unwrap();
+        assert_eq!(ch.download_status, DownloadStatus::Pending);
+        assert!(!ch.is_orphaned);
+        assert!(!ch.is_read);
+        assert!(ch.last_page_read.is_none());
+    }
+
+    #[test]
+    fn chapter_list_json_round_trip() {
+        json_rt(&ChapterList {
+            chapters: vec![],
+            has_next_page: false,
+            total_pages: None,
+            total: None,
+        });
+    }
+
+    #[test]
+    fn chapter_sort_order_default_is_chapter_desc() {
+        assert_eq!(ChapterSortOrder::default(), ChapterSortOrder::ChapterDesc);
+    }
+
+    #[test]
+    fn chapter_sort_order_select_value_round_trip_all_variants() {
+        for order in &[
+            ChapterSortOrder::ChapterDesc,
+            ChapterSortOrder::ChapterAsc,
+            ChapterSortOrder::UploadedDesc,
+            ChapterSortOrder::UploadedAsc,
+            ChapterSortOrder::VolumeDesc,
+            ChapterSortOrder::VolumeAsc,
+            ChapterSortOrder::LanguageAsc,
+            ChapterSortOrder::LanguageDesc,
+            ChapterSortOrder::ScanlatorAsc,
+            ChapterSortOrder::ScanlatorDesc,
+        ] {
+            let val = order.to_select_value();
+            let back = ChapterSortOrder::from_select_value(val);
+            assert_eq!(*order, back, "failed round-trip for {order:?}");
+        }
+    }
+
+    #[test]
+    fn manga_sort_order_default_is_name_desc() {
+        assert_eq!(MangaSortOrder::default(), MangaSortOrder::NameDesc);
+    }
+
+    #[test]
+    fn manga_sort_order_select_value_round_trip_all_variants() {
+        for order in &[
+            MangaSortOrder::NameDesc,
+            MangaSortOrder::NameAsc,
+            MangaSortOrder::UpdatedDesc,
+            MangaSortOrder::UpdatedAsc,
+            MangaSortOrder::AddedDesc,
+            MangaSortOrder::AddedAsc,
+            MangaSortOrder::ScoreDesc,
+            MangaSortOrder::ScoreAsc,
+            MangaSortOrder::LastReadDesc,
+        ] {
+            let val = order.to_select_value();
+            let back = MangaSortOrder::from_select_value(val);
+            assert_eq!(*order, back, "failed round-trip for {order:?}");
+        }
+    }
+
+    #[test]
+    fn manga_sort_order_needs_columns_flags() {
+        assert!(MangaSortOrder::LastReadDesc.needs_last_read_column());
+        assert!(!MangaSortOrder::NameAsc.needs_last_read_column());
+        assert!(MangaSortOrder::ScoreDesc.needs_tracking_join());
+        assert!(MangaSortOrder::ScoreAsc.needs_tracking_join());
+        assert!(MangaSortOrder::LastReadDesc.needs_tracking_join());
+        assert!(!MangaSortOrder::NameAsc.needs_tracking_join());
+    }
+
+    #[test]
+    fn download_progress_event_json_round_trip_all_variants() {
+        for ev in &[
+            DownloadProgressEvent::ChapterStarted {
+                chapter_id: 1,
+                chapter_name: "Ch1".into(),
+                manga_id: 10,
+                manga_title: "Manga".into(),
+                total_pages: 20,
+                job_id: None,
+            },
+            DownloadProgressEvent::PageCompleted {
+                chapter_id: 1,
+                chapter_name: "Ch1".into(),
+                page_index: 5,
+            },
+            DownloadProgressEvent::ChapterCompleted {
+                chapter_id: 1,
+                chapter_name: "Ch1".into(),
+                manga_id: 10,
+                manga_title: "Manga".into(),
+                successful_pages: 20,
+            },
+            DownloadProgressEvent::ChapterFailed {
+                chapter_id: 1,
+                chapter_name: "Ch1".into(),
+                error: "timeout".into(),
+            },
+            DownloadProgressEvent::ChapterCancelled {
+                chapter_id: 1,
+                chapter_name: "Ch1".into(),
+            },
+        ] {
+            json_rt(ev);
+        }
+    }
+
+    #[test]
+    fn download_rule_kind_json_round_trip_all_variants() {
+        for rule in &[
+            DownloadRuleKind::LanguageInclude("en".into()),
+            DownloadRuleKind::LanguageExclude("ja".into()),
+            DownloadRuleKind::TitleContains("vol".into()),
+            DownloadRuleKind::TitleExcludes("omake".into()),
+            DownloadRuleKind::ChapterNumberMin(1.5),
+            DownloadRuleKind::ChapterNumberMax(100.0),
+            DownloadRuleKind::ExcludeFractional,
+            DownloadRuleKind::MaxAgeDays(30),
+            DownloadRuleKind::PublishedAfter(1_700_000_000),
+        ] {
+            json_rt(rule);
+        }
+    }
+
+    #[test]
+    fn download_rule_kind_axis_values() {
+        assert_eq!(DownloadRuleKind::LanguageInclude("en".into()).axis(), 0);
+        assert_eq!(DownloadRuleKind::LanguageExclude("ja".into()).axis(), 0);
+        assert_eq!(DownloadRuleKind::TitleContains("x".into()).axis(), 1);
+        assert_eq!(DownloadRuleKind::TitleExcludes("x".into()).axis(), 1);
+        assert_eq!(DownloadRuleKind::ChapterNumberMin(1.0).axis(), 2);
+        assert_eq!(DownloadRuleKind::ChapterNumberMax(1.0).axis(), 2);
+        assert_eq!(DownloadRuleKind::ExcludeFractional.axis(), 3);
+        assert_eq!(DownloadRuleKind::MaxAgeDays(7).axis(), 4);
+        assert_eq!(DownloadRuleKind::PublishedAfter(0).axis(), 4);
+    }
+
+    #[test]
+    fn download_rule_kind_is_include() {
+        assert!(DownloadRuleKind::LanguageInclude("en".into()).is_include());
+        assert!(!DownloadRuleKind::LanguageExclude("en".into()).is_include());
+        assert!(DownloadRuleKind::TitleContains("x".into()).is_include());
+        assert!(!DownloadRuleKind::TitleExcludes("x".into()).is_include());
+        assert!(!DownloadRuleKind::ExcludeFractional.is_include());
+    }
+
+    fn ch_row(
+        language: &str,
+        title: Option<&str>,
+        number: f64,
+        uploaded_at: Option<i64>,
+    ) -> ChapterFilterRow {
+        ChapterFilterRow {
+            id: 1,
+            scanlator: None,
+            language: language.into(),
+            name: title.map(Into::into),
+            chapter_number: number,
+            uploaded_at,
+        }
+    }
+
+    #[test]
+    fn download_rule_kind_passes_language_case_insensitive() {
+        let rule = DownloadRuleKind::LanguageInclude("en".into());
+        assert!(rule.passes(&ch_row("EN", None, 1.0, None)));
+        assert!(rule.passes(&ch_row("en", None, 1.0, None)));
+        assert!(!rule.passes(&ch_row("ja", None, 1.0, None)));
+    }
+
+    #[test]
+    fn download_rule_kind_passes_language_exclude() {
+        let rule = DownloadRuleKind::LanguageExclude("ja".into());
+        assert!(rule.passes(&ch_row("en", None, 1.0, None)));
+        assert!(!rule.passes(&ch_row("JA", None, 1.0, None)));
+    }
+
+    #[test]
+    fn download_rule_kind_passes_title_contains() {
+        let rule = DownloadRuleKind::TitleContains("Vol".into());
+        assert!(rule.passes(&ch_row("en", Some("Volume 1"), 1.0, None)));
+        assert!(!rule.passes(&ch_row("en", Some("Chapter 1"), 1.0, None)));
+        assert!(!rule.passes(&ch_row("en", None, 1.0, None)));
+    }
+
+    #[test]
+    fn download_rule_kind_passes_chapter_number_range() {
+        let min = DownloadRuleKind::ChapterNumberMin(5.0);
+        let max = DownloadRuleKind::ChapterNumberMax(10.0);
+        assert!(min.passes(&ch_row("en", None, 5.0, None)));
+        assert!(!min.passes(&ch_row("en", None, 4.99, None)));
+        assert!(max.passes(&ch_row("en", None, 10.0, None)));
+        assert!(!max.passes(&ch_row("en", None, 10.01, None)));
+    }
+
+    #[test]
+    fn download_rule_kind_passes_exclude_fractional() {
+        let rule = DownloadRuleKind::ExcludeFractional;
+        assert!(rule.passes(&ch_row("en", None, 5.0, None)));
+        assert!(!rule.passes(&ch_row("en", None, 5.5, None)));
+    }
+
+    #[test]
+    fn download_rule_kind_passes_published_after() {
+        let rule = DownloadRuleKind::PublishedAfter(1_000_000);
+        assert!(rule.passes(&ch_row("en", None, 1.0, None)));
+        assert!(rule.passes(&ch_row("en", None, 1.0, Some(1_000_001))));
+        assert!(!rule.passes(&ch_row("en", None, 1.0, Some(999_999))));
+    }
+
+    #[test]
+    fn source_json_round_trip() {
+        json_rt(&Source {
+            id: 1,
+            name: "Example Source".into(),
+            version: "1.0.0".into(),
+            base_url: "https://example.com".into(),
+            enabled: true,
+            favourited: false,
+            unrestricted_http: false,
+            browser_enabled: true,
+            download_concurrency: None,
+            circuit_state: None,
+            icon: Some("aWNvbg==".into()),
+            description: Some("A manga source".into()),
+            languages: Some(r#"["en","ja"]"#.into()),
+            schema_version: 1,
+        });
+    }
+
+    #[test]
+    fn search_scope_json_round_trip_all_variants() {
+        json_rt(&SearchScope::FavouritedOnly);
+        json_rt(&SearchScope::AllEnabled);
+        json_rt(&SearchScope::Sources(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn manga_tracking_status_json_round_trip_all_variants() {
+        for s in &[
+            MangaTrackingStatus::Reading,
+            MangaTrackingStatus::OnHold,
+            MangaTrackingStatus::Dropped,
+            MangaTrackingStatus::PlanToRead,
+            MangaTrackingStatus::Completed,
+            MangaTrackingStatus::Rereading,
+        ] {
+            json_rt(s);
+        }
+    }
+
+    #[test]
+    fn manga_tracking_status_repr_values() {
+        assert_eq!(MangaTrackingStatus::Reading as i64, 0);
+        assert_eq!(MangaTrackingStatus::OnHold as i64, 1);
+        assert_eq!(MangaTrackingStatus::Dropped as i64, 2);
+        assert_eq!(MangaTrackingStatus::PlanToRead as i64, 3);
+        assert_eq!(MangaTrackingStatus::Completed as i64, 4);
+        assert_eq!(MangaTrackingStatus::Rereading as i64, 5);
+    }
+
+    #[test]
+    fn settings_update_json_round_trip_all_variants() {
+        json_rt(&SettingsUpdate::Download(DownloadSettings {
+            concurrent_page_downloads: 4,
+            max_retries: 3,
+            initial_retry_delay_ms: 1000,
+            auto_download_category_ids: vec![1, 2],
+            scan_concurrency: 3,
+            per_source_download_concurrency: 2,
+        }));
+        json_rt(&SettingsUpdate::Scan(ScanSettings {
+            auto_scan: true,
+            scan_interval_minutes: 60,
+            scan_exclude_completed: false,
+            upgrade_detection_enabled: true,
+            upgrade_min_res_gain: 1.2,
+            upgrade_confirm_fetches: 3,
+            upgrade_axis_resolution: "both".into(),
+            upgrade_axis_colour: "both".into(),
+            upgrade_axis_encoder: "both".into(),
+            upgrade_axis_bitrate: "gain".into(),
+            upgrade_show_downgrades: false,
+            upgrade_auto_replace_reasons: "preferred_scanlator,resolution,colour".into(),
+            scan_barren_page_tolerance: 3,
+        }));
+        json_rt(&SettingsUpdate::Advanced(AdvancedSettings {
+            flaresolverr_url: String::new(),
+            library_path: "/data/library".into(),
+            wasm_storage_path: "/data/wasm".into(),
+            max_wasm_instances: 4,
+            http_request_logging: false,
+            v8_debug_logging: false,
+            registration_enabled: true,
+            cover_max_dimension: Some(512),
+            v8_max_memory_mb: 512,
+            v8_idle_timeout_s: 300,
+            update_check_enabled: true,
+            opds_page_index_zero_based: false,
+            global_search_timeout_secs: 6,
+        }));
+        json_rt(&SettingsUpdate::Tracking(TrackingSettings {
+            default_tracking_enabled: true,
+            tracker_auto_sync_enabled: false,
+            tracker_sync_interval_hours: 24,
+        }));
+        json_rt(&SettingsUpdate::Email(EmailSettings {
+            email_enabled: false,
+            email_provider: "smtp".into(),
+            email_provider_config: "{}".into(),
+            email_from_address: "noreply@example.com".into(),
+            app_url: "https://example.com".into(),
+            password_reset_enabled: false,
+            email_verification_required: false,
+        }));
+    }
+
+    #[test]
+    fn authenticated_user_role_checks() {
+        let user = AuthenticatedUser {
+            id: 1,
+            username: "alice".into(),
+            email: "alice@example.com".into(),
+            roles: vec!["admin".into(), "user".into()],
+            email_verified_at: None,
+        };
+        assert!(user.is_admin());
+        assert!(user.has_role("admin"));
+        assert!(user.has_role("user"));
+        assert!(!user.has_role("moderator"));
+    }
+
+    #[test]
+    fn authenticated_user_non_admin_does_not_have_admin_role() {
+        let user = AuthenticatedUser {
+            id: 2,
+            username: "bob".into(),
+            email: "bob@example.com".into(),
+            roles: vec!["user".into()],
+            email_verified_at: None,
+        };
+        assert!(!user.is_admin());
+    }
 }

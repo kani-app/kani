@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, manga_id, scanlator, priority, blocked FROM scanlator_preferences WHERE manga_id IS NULL ORDER BY blocked ASC, priority DESC, scanlator ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manga_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scanlator",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "priority",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "blocked",
+        "ordinal": 4,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4296684a83b0fdfb2be39b93dec325b215cbe155308ae7caaf1c03bc8ed9c128"
+}

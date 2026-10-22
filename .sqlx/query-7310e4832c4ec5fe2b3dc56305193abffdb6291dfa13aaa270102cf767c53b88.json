@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT browser_enabled FROM sources WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "browser_enabled",
+        "ordinal": 0,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7310e4832c4ec5fe2b3dc56305193abffdb6291dfa13aaa270102cf767c53b88"
+}

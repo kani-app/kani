@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO scrub_reports (depth, report_json) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b9472f0f45036741b553fbe3f85f5c9f90d98841b5c8fcec30f35f199ff441c2"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM user_roles WHERE user_id = ? AND role_slug = 'admin'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "105b9a82dc914be1e6f4b59a18ad31c3e17c56f973649f3f17a79f5af4cd74d4"
+}

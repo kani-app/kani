@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_manga_tracking (user_id, manga_id, last_seen_at) VALUES (?1, ?2, CURRENT_TIMESTAMP) ON CONFLICT (user_id, manga_id) DO UPDATE SET last_seen_at = CURRENT_TIMESTAMP",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "5194157efc549636697c89bd28a78371d071982b4753b852fbe10efeabc1ca3b"
+}

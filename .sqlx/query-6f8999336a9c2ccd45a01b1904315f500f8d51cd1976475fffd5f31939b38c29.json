@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET volume_id = ? WHERE id = ? AND manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "6f8999336a9c2ccd45a01b1904315f500f8d51cd1976475fffd5f31939b38c29"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET max_login_attempts=?, max_ip_attempts=?, login_lockout_seconds=?, session_timeout_secs=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "d9b27fe59420deef6ec60b56ea21f7851ca01a87eb531c925df5a34403ddbc6b"
+}

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id as \"id!\", name, rule_json, sort_order\n               FROM smart_collections ORDER BY sort_order ASC, id ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "rule_json",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "sort_order",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ceb9491a31f9d452c17dfbf113091fece2beaa0162422f81bca479cb25a2420f"
+}

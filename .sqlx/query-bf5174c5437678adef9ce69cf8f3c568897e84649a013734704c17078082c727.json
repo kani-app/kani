@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT resume_offset FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "resume_offset",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bf5174c5437678adef9ce69cf8f3c568897e84649a013734704c17078082c727"
+}

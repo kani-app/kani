@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT download_status, download_error, id, name, chapter_number FROM chapters WHERE manga_id = ? AND is_orphaned = 0",
+  "describe": {
+    "columns": [
+      {
+        "name": "download_status",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "download_error",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 4,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "d079f64a934d74c8fa74294d77b77648efeeb004dc7a9f61b4cc45a88a22c538"
+}

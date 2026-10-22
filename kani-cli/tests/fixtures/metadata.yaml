@@ -1,0 +1,37 @@
+id: test-metadata
+name: TestMetadata
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+schema_version: 1
+min_kani_version: "0.5.0"
+requires_capabilities:
+  - unrestricted_http
+
+metadata:
+  icon: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+  rate_limit:
+    rps: 5.0
+    burst: 10
+    max_concurrent: 2
+  languages:
+    - en
+    - ja
+  description: "A fixture extension exercising a fully populated metadata block."
+  sections:
+    - id: latest
+      name: Latest
+      nsfw: false
+    - id: popular
+      name: Popular
+      nsfw: false
+
+endpoints:
+  manga_details:
+    route: "/manga/$manga_id$"
+    container: ":root"
+    fields:
+      id: '"$manga_id$"'
+      title: 'dom("h1").text()'
+      status: 'dom(".status").text().lower()'

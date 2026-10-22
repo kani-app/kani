@@ -1,0 +1,84 @@
+name: Benchmarks
+
+on:
+  schedule:
+    # Weekly, Monday 04:00 UTC. Criterion needs a quiet runner to be meaningful.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    name: Criterion
+    runs-on: ubuntu-latest
+    steps:
+      # A scheduled run checks out the default branch, so the cron must name its target itself.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The compare action checks this branch out to read and append history; it cannot create
+      # it. gh-pages is reserved for mike (docs.yml), hence a separate orphan branch.
+      - name: Ensure the benchmark history branch exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git ls-remote --exit-code --heads origin benchmarks >/dev/null 2>&1; then
+            echo "benchmarks branch already present"
+            exit 0
+          fi
+          tmp="$(mktemp -d)"
+          git clone --quiet --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$tmp"
+          git -C "$tmp" checkout --quiet --orphan benchmarks
+          git -C "$tmp" rm -rf --quiet .
+          printf 'Criterion history. Written by .github/workflows/bench.yml.\n' > "$tmp/README.md"
+          git -C "$tmp" add README.md
+          git -C "$tmp" \
+            -c user.name='github-actions[bot]' \
+            -c user.email='github-actions[bot]@users.noreply.github.com' \
+            commit --quiet -m "chore: initialise benchmark history"
+          git -C "$tmp" push --quiet origin benchmarks
+
+      # --output-format bencher emits the libtest lines the action's `cargo` tool parses.
+      # pipefail is required: tee's exit code would otherwise mask a failed bench run.
+      - name: Run benchmarks
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p kani-core --bench blueprint_eval -- --output-format bencher \
+            | tee bench.txt
+        env:
+          SQLX_OFFLINE: "true"
+
+      - name: Compare against history and alert on regressions
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: cargo
+          output-file-path: bench.txt
+          gh-pages-branch: benchmarks
+          benchmark-data-dir-path: criterion
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: "150%"
+          fail-on-alert: true
+          comment-on-alert: true
+
+      - name: Upload criterion reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-reports
+          path: target/criterion
+          retention-days: 90

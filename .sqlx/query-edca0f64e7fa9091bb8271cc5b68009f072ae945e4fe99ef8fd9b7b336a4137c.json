@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET default_tracking_enabled=?, tracker_auto_sync_enabled=?, tracker_sync_interval_hours=? WHERE id='singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "edca0f64e7fa9091bb8271cc5b68009f072ae945e4fe99ef8fd9b7b336a4137c"
+}

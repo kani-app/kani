@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT provider, external_id FROM manga_external_ids WHERE manga_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "provider",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "external_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "24a26cb3921b512a2f1f2375d839372a6dd9ea96a9978615d14dad09d568dc7f"
+}

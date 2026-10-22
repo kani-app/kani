@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT download_error FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "download_error",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "a03d0764b2a71bd0252cb420fe4d136db243bbd4081e2dd14137331fef5abb5a"
+}

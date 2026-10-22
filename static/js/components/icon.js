@@ -1,6 +1,4 @@
 // @ts-check
-// Icon — renders a trusted SVG string as a Preact vnode.
-
 import { h } from 'preact';
 import htm from 'htm';
 const html = htm.bind(h);

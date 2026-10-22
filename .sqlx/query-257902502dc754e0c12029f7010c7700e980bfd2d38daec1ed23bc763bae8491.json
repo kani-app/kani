@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE settings SET wasm_storage_path = ? WHERE id = 'singleton'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "257902502dc754e0c12029f7010c7700e980bfd2d38daec1ed23bc763bae8491"
+}

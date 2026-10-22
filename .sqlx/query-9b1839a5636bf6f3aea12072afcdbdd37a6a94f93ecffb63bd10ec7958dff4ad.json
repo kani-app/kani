@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH RECURSIVE role_tree(slug) AS (\n                SELECT role_slug FROM user_roles WHERE user_id = ?\n                UNION\n                SELECT r.parent FROM roles r JOIN role_tree rt ON r.slug = rt.slug\n                WHERE r.parent IS NOT NULL\n            )\n            SELECT DISTINCT rp.permission\n            FROM role_permissions rp\n            JOIN role_tree rt ON rp.role_slug = rt.slug",
+  "describe": {
+    "columns": [
+      {
+        "name": "permission",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9b1839a5636bf6f3aea12072afcdbdd37a6a94f93ecffb63bd10ec7958dff4ad"
+}

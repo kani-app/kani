@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT c.download_status, c.volume, c.chapter_number, c.name, c.scanlator,\n                    c.file_path,\n                    m.id as manga_id, m.name as manga_name,\n                    s.name as source_name\n             FROM chapters c\n             JOIN manga m ON c.manga_id = m.id\n             JOIN sources s ON s.id = m.source_id\n             WHERE c.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "download_status",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "volume",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "chapter_number",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "scanlator",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_path",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "manga_id",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manga_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ce41864d7be7dce55532cf0748eed34ad7c890655fbe3fa7cc471aa07b1ec1f3"
+}

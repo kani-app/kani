@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT local_cover_path FROM manga WHERE local_cover_path IS NOT NULL AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "local_cover_path",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "fa9fc6b4a7725ce3af961ceb22c166414861854a1a0f3b43613df99355bc3a14"
+}

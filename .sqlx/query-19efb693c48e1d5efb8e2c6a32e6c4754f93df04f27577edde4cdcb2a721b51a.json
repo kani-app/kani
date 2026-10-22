@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT user_id, last_page_read FROM user_chapter_tracking WHERE chapter_id = ? AND last_page_read > 0",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_page_read",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "19efb693c48e1d5efb8e2c6a32e6c4754f93df04f27577edde4cdcb2a721b51a"
+}

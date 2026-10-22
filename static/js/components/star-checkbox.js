@@ -1,10 +1,8 @@
 // @ts-check
-// Star checkbox — favourite toggle for manga.
 
 import { iconStarFilled, iconStarOutline } from '../icons.js';
 
 /**
- * Creates a star checkbox element.
  * @param {{
  *   checked: boolean,
  *   onChange: (checked: boolean) => void,
@@ -26,7 +24,7 @@ export function createStarCheckbox({ checked, onChange, label = 'Favourite' }) {
   input.setAttribute('aria-label', label);
 
   const icon = document.createElement('span');
-  icon.className = '[&_svg]:w-5 [&_svg]:h-5 transition-colors duration-150 cursor-pointer peer-checked:text-warn text-text-muted';
+  icon.className = 'icon-md transition-colors duration-150 cursor-pointer peer-checked:text-warn text-text-muted';
   icon.setAttribute('aria-hidden', 'true');
   icon.innerHTML = _checked ? iconStarFilled : iconStarOutline;
 

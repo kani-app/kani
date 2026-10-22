@@ -67,6 +67,61 @@
         "name": "download_all_preferred_only",
         "ordinal": 12,
         "type_info": "Bool"
+      },
+      {
+        "name": "auto_scan",
+        "ordinal": 13,
+        "type_info": "Bool"
+      },
+      {
+        "name": "notes",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_name",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_description",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_status",
+        "ordinal": 17,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cover_overridden",
+        "ordinal": 18,
+        "type_info": "Bool"
+      },
+      {
+        "name": "is_orphaned",
+        "ordinal": 19,
+        "type_info": "Bool"
+      },
+      {
+        "name": "cover_hash",
+        "ordinal": 20,
+        "type_info": "Text"
+      },
+      {
+        "name": "deleted_at",
+        "ordinal": 21,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "upgrade_auto_replace",
+        "ordinal": 22,
+        "type_info": "Bool"
+      },
+      {
+        "name": "suppressed_chapter_count",
+        "ordinal": 23,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -84,6 +139,17 @@
       false,
       false,
       false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
       false,
       false
     ]

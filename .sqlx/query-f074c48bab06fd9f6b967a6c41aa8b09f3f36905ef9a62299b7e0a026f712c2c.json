@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT source_id, source_manga_id, s.base_url as base_url, m.cover_overridden\n            FROM manga m\n            JOIN sources s ON m.source_id = s.id\n            WHERE m.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "source_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_manga_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "base_url",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "cover_overridden",
+        "ordinal": 3,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f074c48bab06fd9f6b967a6c41aa8b09f3f36905ef9a62299b7e0a026f712c2c"
+}

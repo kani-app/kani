@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT user_id FROM email_verification_tokens\n             WHERE token_hash = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c0da3ddfff2ef5fc5d719a3985f7a7473c7b55e37fa2db5f78c2a3fa7b7d18af"
+}

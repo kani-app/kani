@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE scanlator_preferences SET priority = ?, blocked = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "b1897f0c540dd2455e7b3f1b7bca3e09e41d8e693567ac7d0e2f9f6f88def03d"
+}

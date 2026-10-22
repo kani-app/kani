@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n            captured_at as \"captured_at: String\",\n            library_used_bytes, cover_used_bytes, chapter_used_bytes,\n            data_used_bytes, free_bytes, total_manga, total_chapters\n           FROM storage_history\n           ORDER BY captured_at DESC\n           LIMIT 90",
+  "describe": {
+    "columns": [
+      {
+        "name": "captured_at: String",
+        "ordinal": 0,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "library_used_bytes",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cover_used_bytes",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "chapter_used_bytes",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "data_used_bytes",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "free_bytes",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_manga",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "total_chapters",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "45570bf825510e7a549a8ddb33eb131d6e515b6a6385523bfbfef2a40a7f18b7"
+}

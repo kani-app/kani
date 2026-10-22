@@ -1,0 +1,17 @@
+id: repl-test
+name: ReplTest
+version: "0.1.0"
+base_url: "https://api.example.com"
+language: en
+
+endpoints:
+  popular:
+    route: "/manga"
+    type: json
+    container: "/results"
+    fields:
+      id: 'self.ptr("/id").str()'
+      title: 'self.ptr("/title").str()'
+      cover_url:
+        expr: 'self.ptr("/cover").str()'
+        optional: true

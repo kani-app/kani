@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT quality_long_edge, quality_bytes_per_mp, quality_encoder, quality_colour, page_count FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "quality_long_edge",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "quality_bytes_per_mp",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "quality_encoder",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "quality_colour",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "page_count",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "02d7f6d33dbc355ccf92b108bbe486a3efbdbe082d4bdbb9c6c56ed9449a0805"
+}

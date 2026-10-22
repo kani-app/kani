@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT needs_reauth AS \"needs_reauth: bool\" FROM user_tracker_credentials WHERE user_id = ? AND tracker_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "needs_reauth: bool",
+        "ordinal": 0,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "691e1dd03a7b8595c942e431f45979c823a262b4660ee9cdf689961b5b735560"
+}

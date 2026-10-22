@@ -1,0 +1,19 @@
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+
+  - type: input
+    id: version
+    attributes:
+      label: Kani version (if relevant)

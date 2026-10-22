@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COALESCE(c.scanlator, 'Unknown') AS scanlator_name, COUNT(*) AS n FROM chapters c JOIN manga m ON m.id = c.manga_id WHERE m.deleted_at IS NULL GROUP BY scanlator_name ORDER BY n DESC, scanlator_name ASC LIMIT 200",
+  "describe": {
+    "columns": [
+      {
+        "name": "scanlator_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "n",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "849a4c2d137902f880002810e86afd93ee6b5a72edf7d1edd00a393ae978225c"
+}

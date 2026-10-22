@@ -1,0 +1,20 @@
+id: cursor-source
+name: CursorSource
+version: "0.1.0"
+base_url: "https://example.com"
+
+endpoints:
+  search:
+    route: "/list"
+    type: json
+    container: "/items"
+    queries:
+      q: $query$
+    pagination:
+      native_page_size: 32
+      offset_param: after
+      offset_type: cursor
+      cursor_field: /next
+    fields:
+      id: 'self.ptr("/id").str()'
+      title: 'self.ptr("/title").str()'

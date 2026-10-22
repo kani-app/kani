@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT s.id, s.name, s.version, s.base_url, s.enabled, s.favourited, s.unrestricted_http, s.browser_enabled, s.download_concurrency, s.icon, s.description, s.languages, s.schema_version, scb.state as circuit_state FROM sources s LEFT JOIN source_circuit_breakers scb ON scb.source_id = s.id WHERE s.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "version",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "base_url",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "enabled",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "favourited",
+        "ordinal": 5,
+        "type_info": "Bool"
+      },
+      {
+        "name": "unrestricted_http",
+        "ordinal": 6,
+        "type_info": "Bool"
+      },
+      {
+        "name": "browser_enabled",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "download_concurrency",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "icon",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "languages",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "schema_version",
+        "ordinal": 12,
+        "type_info": "Integer"
+      },
+      {
+        "name": "circuit_state",
+        "ordinal": 13,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "01012e076bfbe3ea91ef8891f733460b882c89abc003f494053bcf93e55a3832"
+}

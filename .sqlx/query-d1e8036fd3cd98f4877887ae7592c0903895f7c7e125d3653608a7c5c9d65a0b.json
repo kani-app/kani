@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT webhook_id FROM webhook_manga_overrides WHERE manga_id = ? AND enabled = FALSE",
+  "describe": {
+    "columns": [
+      {
+        "name": "webhook_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d1e8036fd3cd98f4877887ae7592c0903895f7c7e125d3653608a7c5c9d65a0b"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP\n             WHERE token_hash = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP\n             RETURNING user_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9926a923f2504e4e60312f7bc2a9b456454e9abfba18834c14168504601b25f8"
+}

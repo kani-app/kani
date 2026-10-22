@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["kani-core", "kani-shared", "kani-extensions/*", "kani-web", "kani-app", "kani-cli"]
+members = ["kani-core", "kani-shared", "kani-extensions/*", "kani-web", "kani-app", "kani-cli", "kani-yaml", "kani-shared-test", "kani-lease", "workspace-hack"]
+default-members = ["kani-core", "kani-shared", "kani-app", "kani-web", "kani-cli", "kani-yaml", "kani-lease"]
+
+[profile.dev]
+opt-level = 0
+debug = 1
+codegen-units = 256
+incremental = true
 
 [profile.release]
 opt-level = 3
@@ -12,12 +19,80 @@ strip = true
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"
-lto = true
+lto = "thin"
 codegen-units = 1
 strip = true
 panic = "abort"
 
+# Debug WASM profile: preserves function names for readable backtraces.
+# Use with: cargo run -p kani-cli -- build --debug <extension>
+[profile.wasm-debug]
+inherits = "wasm-release"
+opt-level = 1
+lto = "thin"
+debug = true
+strip = "none"
+debug-assertions = true
+
+[profile.bench]
+inherits = "release"
+debug = 1
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+[workspace.package]
+license = "MIT"
+repository = "https://github.com/kani-app/kani"
+edition = "2024"
+
+[workspace.dependencies]
+serde       = { version = "1.0", features = ["derive", "rc"] }
+serde_json  = "1.0"
+thiserror   = "2.0"
+tracing     = "0.1"
+time        = { version = "0.3", features = ["serde"] }
+sqlx        = { version = "0.8", features = ["runtime-tokio", "sqlite", "time"], default-features = false }
+dashmap     = "6"
+moka        = { version = "0.12", features = ["future"] }
+indexmap    = "2"
+base64      = "0.22"
+sha2        = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+futures     = "0.3"
+bytes       = "1"
+tokio-util  = "0.7"
+urlencoding = "2.1"
+talc        = { version = "4", default-features = false, features = ["lock_api"] }
+governor    = { version = "0.10", default-features = false, features = ["std", "dashmap"] }
+arc-swap    = "1"
+ordered-float = "5"
+
+[workspace.lints.rust]
+# kani-lease is model-checked under `--cfg loom`; the cfg is declared here
+# because a crate opting into workspace lints cannot also carry its own table.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
 [workspace.lints.clippy]
 unwrap_used = { level = "deny", priority = 1 }
-pedantic = "warn"
-nursery = "warn"
+
+# Lints that find dead or redundant code rather than style; see the
+# engineering-constraints register for why the whole groups stay off. An `allow`
+# holds only while its count is drained; raise it in the change that clears it.
+derivable_impls = "warn"
+equatable_if_let = "warn"
+explicit_iter_loop = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+or_fun_call = "warn"
+redundant_clone = "warn"
+redundant_pub_crate = "warn"
+
+needless_collect = "allow"                   # 1 remaining
+redundant_else = "allow"                     # 2 remaining, both in the solver retry ladder
+unnecessary_wraps = "allow"                  # 2 remaining, both change a signature
+useless_let_if_seq = "allow"                 # 3 remaining
+manual_let_else = "allow"                    # 20 remaining
+redundant_closure_for_method_calls = "allow" # 54 remaining

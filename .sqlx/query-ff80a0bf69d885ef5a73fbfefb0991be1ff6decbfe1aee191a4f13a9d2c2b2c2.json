@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO source_circuit_breakers (source_id, state, failure_count, last_failure_at, next_retry_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(source_id) DO UPDATE SET state=excluded.state, failure_count=excluded.failure_count, last_failure_at=excluded.last_failure_at, next_retry_at=excluded.next_retry_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "ff80a0bf69d885ef5a73fbfefb0991be1ff6decbfe1aee191a4f13a9d2c2b2c2"
+}

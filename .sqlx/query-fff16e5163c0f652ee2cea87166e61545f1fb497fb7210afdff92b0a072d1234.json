@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT status, score FROM user_manga_tracking WHERE manga_id = ? AND user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "score",
+        "ordinal": 1,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "fff16e5163c0f652ee2cea87166e61545f1fb497fb7210afdff92b0a072d1234"
+}

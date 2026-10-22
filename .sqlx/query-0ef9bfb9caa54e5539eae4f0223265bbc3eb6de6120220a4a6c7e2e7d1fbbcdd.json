@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    DATE(last_read_at) as \"date!: String\",\n                    COUNT(*) as \"chapters_read!: i64\"\n                FROM user_chapter_tracking\n                WHERE is_read = TRUE AND user_id = ? AND last_read_at >= ?\n                GROUP BY DATE(last_read_at)\n                ORDER BY 1 ASC\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "date!: String",
+        "ordinal": 0,
+        "type_info": "Null"
+      },
+      {
+        "name": "chapters_read!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "0ef9bfb9caa54e5539eae4f0223265bbc3eb6de6120220a4a6c7e2e7d1fbbcdd"
+}

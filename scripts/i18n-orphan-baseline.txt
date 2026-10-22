@@ -1,0 +1,3 @@
+# Catalog keys nothing references. Drained to empty by the waste sweep's
+# frontend phase; check-i18n-keys.js keeps it that way.
+

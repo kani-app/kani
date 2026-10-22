@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR REPLACE INTO user_manga_tracking (user_id, manga_id, status, score) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "7142498f269efe5555f4fade20e1341c94ed7cac941ad4b0e159f2b83aa32a57"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO download_rules (manga_id, rule_type, value) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "708fb202fdf428ddc95e6cd0457ffc0573dd8c5117a9393134207c3c83fc1bfc"
+}

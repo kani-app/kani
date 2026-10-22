@@ -1,0 +1,32 @@
+id: for-each-source
+name: ForEachSource
+version: "0.1.0"
+base_url: "https://example.com"
+
+endpoints:
+  search:
+    route: "https://example.com/search"
+    fields:
+      id:
+        expr: "dom(\".id\").text()"
+      title:
+        expr: "dom(\".title\").text()"
+    for_each:
+      - endpoint: manga_details
+        url_expr: "dom(\".link\").attr(\"href\")"
+        merge_as: details
+        on_failure: skip
+    then:
+      - endpoint: manga_details
+        url_expr: "dom(\".banner\").attr(\"href\")"
+        merge_as: banner
+
+  manga_details:
+    route: "https://example.com/manga/$manga_id$"
+    fields:
+      id:
+        expr: "dom(\".id\").text()"
+      title:
+        expr: "dom(\".title\").text()"
+      status:
+        expr: "dom(\".status\").text()"

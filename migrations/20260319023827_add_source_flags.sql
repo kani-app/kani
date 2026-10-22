@@ -1,1 +1,0 @@
-ALTER TABLE sources ADD COLUMN unrestricted_http BOOLEAN NOT NULL DEFAULT 0;

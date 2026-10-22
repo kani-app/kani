@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE chapters SET file_verified_at = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "488a8e49ce6cbf36e1e00d4f2e4086a96c94d9be0709683ea6d9bf3e8d6df230"
+}

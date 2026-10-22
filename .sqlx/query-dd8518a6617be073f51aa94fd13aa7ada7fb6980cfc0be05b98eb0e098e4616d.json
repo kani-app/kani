@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM scrub_reports WHERE id NOT IN (SELECT id FROM scrub_reports ORDER BY created_at DESC, id DESC LIMIT 20)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "dd8518a6617be073f51aa94fd13aa7ada7fb6980cfc0be05b98eb0e098e4616d"
+}

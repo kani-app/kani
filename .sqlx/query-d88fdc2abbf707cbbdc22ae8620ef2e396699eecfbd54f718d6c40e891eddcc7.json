@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE manga SET suppressed_chapter_count = 0 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d88fdc2abbf707cbbdc22ae8620ef2e396699eecfbd54f718d6c40e891eddcc7"
+}

@@ -1,0 +1,392 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT flaresolverr_url, library_path, wasm_storage_path, concurrent_page_downloads, max_retries, initial_retry_delay_ms, max_wasm_instances, auto_scan, scan_interval_minutes, scan_exclude_completed, auto_download_category_ids, default_tracking_enabled, http_request_logging, v8_debug_logging, registration_enabled, cover_max_dimension, email_enabled, email_provider, email_provider_config, email_from_address, app_url, password_reset_enabled, email_verification_required, first_run_complete, scan_concurrency, per_source_download_concurrency, job_max_history, job_shutdown_timeout_secs, trash_retention_days, audit_retention_days, audit_security_retention_days, disk_warn_threshold, thumbnail_formats, max_login_attempts, max_ip_attempts, login_lockout_seconds, session_timeout_secs, tracker_auto_sync_enabled, tracker_sync_interval_hours, max_concurrent_jobs, db_maintenance_interval_hours, db_vacuum_interval_hours, audit_prune_interval_hours, trash_purge_interval_hours, v8_max_memory_mb, v8_idle_timeout_s, update_check_enabled, integrity_quick_scrub_interval_hours, integrity_deep_scrub_interval_hours, scrub_on_startup, integrity_revalidate_after_days, upgrade_detection_enabled, upgrade_min_res_gain, upgrade_confirm_fetches, upgrade_axis_resolution, upgrade_axis_colour, upgrade_axis_encoder, upgrade_axis_bitrate, upgrade_show_downgrades, upgrade_auto_replace_reasons, opds_page_index_zero_based, scan_barren_page_tolerance, global_search_timeout_secs FROM settings",
+  "describe": {
+    "columns": [
+      {
+        "name": "flaresolverr_url",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "library_path",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "wasm_storage_path",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "concurrent_page_downloads",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_retries",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "initial_retry_delay_ms",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_wasm_instances",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "auto_scan",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "scan_interval_minutes",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scan_exclude_completed",
+        "ordinal": 9,
+        "type_info": "Bool"
+      },
+      {
+        "name": "auto_download_category_ids",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "default_tracking_enabled",
+        "ordinal": 11,
+        "type_info": "Bool"
+      },
+      {
+        "name": "http_request_logging",
+        "ordinal": 12,
+        "type_info": "Bool"
+      },
+      {
+        "name": "v8_debug_logging",
+        "ordinal": 13,
+        "type_info": "Bool"
+      },
+      {
+        "name": "registration_enabled",
+        "ordinal": 14,
+        "type_info": "Bool"
+      },
+      {
+        "name": "cover_max_dimension",
+        "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "email_enabled",
+        "ordinal": 16,
+        "type_info": "Bool"
+      },
+      {
+        "name": "email_provider",
+        "ordinal": 17,
+        "type_info": "Text"
+      },
+      {
+        "name": "email_provider_config",
+        "ordinal": 18,
+        "type_info": "Text"
+      },
+      {
+        "name": "email_from_address",
+        "ordinal": 19,
+        "type_info": "Text"
+      },
+      {
+        "name": "app_url",
+        "ordinal": 20,
+        "type_info": "Text"
+      },
+      {
+        "name": "password_reset_enabled",
+        "ordinal": 21,
+        "type_info": "Bool"
+      },
+      {
+        "name": "email_verification_required",
+        "ordinal": 22,
+        "type_info": "Bool"
+      },
+      {
+        "name": "first_run_complete",
+        "ordinal": 23,
+        "type_info": "Bool"
+      },
+      {
+        "name": "scan_concurrency",
+        "ordinal": 24,
+        "type_info": "Integer"
+      },
+      {
+        "name": "per_source_download_concurrency",
+        "ordinal": 25,
+        "type_info": "Integer"
+      },
+      {
+        "name": "job_max_history",
+        "ordinal": 26,
+        "type_info": "Integer"
+      },
+      {
+        "name": "job_shutdown_timeout_secs",
+        "ordinal": 27,
+        "type_info": "Integer"
+      },
+      {
+        "name": "trash_retention_days",
+        "ordinal": 28,
+        "type_info": "Integer"
+      },
+      {
+        "name": "audit_retention_days",
+        "ordinal": 29,
+        "type_info": "Integer"
+      },
+      {
+        "name": "audit_security_retention_days",
+        "ordinal": 30,
+        "type_info": "Integer"
+      },
+      {
+        "name": "disk_warn_threshold",
+        "ordinal": 31,
+        "type_info": "Float"
+      },
+      {
+        "name": "thumbnail_formats",
+        "ordinal": 32,
+        "type_info": "Text"
+      },
+      {
+        "name": "max_login_attempts",
+        "ordinal": 33,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_ip_attempts",
+        "ordinal": 34,
+        "type_info": "Integer"
+      },
+      {
+        "name": "login_lockout_seconds",
+        "ordinal": 35,
+        "type_info": "Integer"
+      },
+      {
+        "name": "session_timeout_secs",
+        "ordinal": 36,
+        "type_info": "Integer"
+      },
+      {
+        "name": "tracker_auto_sync_enabled",
+        "ordinal": 37,
+        "type_info": "Bool"
+      },
+      {
+        "name": "tracker_sync_interval_hours",
+        "ordinal": 38,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_concurrent_jobs",
+        "ordinal": 39,
+        "type_info": "Integer"
+      },
+      {
+        "name": "db_maintenance_interval_hours",
+        "ordinal": 40,
+        "type_info": "Integer"
+      },
+      {
+        "name": "db_vacuum_interval_hours",
+        "ordinal": 41,
+        "type_info": "Integer"
+      },
+      {
+        "name": "audit_prune_interval_hours",
+        "ordinal": 42,
+        "type_info": "Integer"
+      },
+      {
+        "name": "trash_purge_interval_hours",
+        "ordinal": 43,
+        "type_info": "Integer"
+      },
+      {
+        "name": "v8_max_memory_mb",
+        "ordinal": 44,
+        "type_info": "Integer"
+      },
+      {
+        "name": "v8_idle_timeout_s",
+        "ordinal": 45,
+        "type_info": "Integer"
+      },
+      {
+        "name": "update_check_enabled",
+        "ordinal": 46,
+        "type_info": "Bool"
+      },
+      {
+        "name": "integrity_quick_scrub_interval_hours",
+        "ordinal": 47,
+        "type_info": "Integer"
+      },
+      {
+        "name": "integrity_deep_scrub_interval_hours",
+        "ordinal": 48,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scrub_on_startup",
+        "ordinal": 49,
+        "type_info": "Bool"
+      },
+      {
+        "name": "integrity_revalidate_after_days",
+        "ordinal": 50,
+        "type_info": "Integer"
+      },
+      {
+        "name": "upgrade_detection_enabled",
+        "ordinal": 51,
+        "type_info": "Bool"
+      },
+      {
+        "name": "upgrade_min_res_gain",
+        "ordinal": 52,
+        "type_info": "Float"
+      },
+      {
+        "name": "upgrade_confirm_fetches",
+        "ordinal": 53,
+        "type_info": "Integer"
+      },
+      {
+        "name": "upgrade_axis_resolution",
+        "ordinal": 54,
+        "type_info": "Text"
+      },
+      {
+        "name": "upgrade_axis_colour",
+        "ordinal": 55,
+        "type_info": "Text"
+      },
+      {
+        "name": "upgrade_axis_encoder",
+        "ordinal": 56,
+        "type_info": "Text"
+      },
+      {
+        "name": "upgrade_axis_bitrate",
+        "ordinal": 57,
+        "type_info": "Text"
+      },
+      {
+        "name": "upgrade_show_downgrades",
+        "ordinal": 58,
+        "type_info": "Bool"
+      },
+      {
+        "name": "upgrade_auto_replace_reasons",
+        "ordinal": 59,
+        "type_info": "Text"
+      },
+      {
+        "name": "opds_page_index_zero_based",
+        "ordinal": 60,
+        "type_info": "Bool"
+      },
+      {
+        "name": "scan_barren_page_tolerance",
+        "ordinal": 61,
+        "type_info": "Integer"
+      },
+      {
+        "name": "global_search_timeout_secs",
+        "ordinal": 62,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6a637054cc0ceefe5a30b89cd6e863a2833124de69d889dab147b0e28a6bb2f2"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT note FROM user_chapter_notes WHERE user_id = ? AND chapter_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "note",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8a6a6b953007d115cfdafc0b74223d55b3ead5dc1e134e9895008de0c1d70103"
+}

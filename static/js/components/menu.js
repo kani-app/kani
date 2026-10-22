@@ -1,7 +1,6 @@
 // @ts-check
-// Reusable context/dropdown menu component.
 
-import { h } from 'preact';
+import { h, render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import htm from 'htm';
 const html = htm.bind(h);
@@ -17,9 +16,10 @@ const html = htm.bind(h);
  *   items: MenuItem[],
  *   trigger: { current: HTMLElement | null } | { x: number, y: number },
  *   onClose: () => void,
+ *   id?: string,
  * }} props
  */
-export function ContextMenu({ items, trigger, onClose }) {
+export function ContextMenu({ items, trigger, onClose, id }) {
   const menuRef = useRef(/** @type {HTMLDivElement|null} */(null));
   const [pos, setPos] = useState(/** @type {{ top: number|null, bottom: number|null, left: number|null, right: number|null }} */({ top: 0, bottom: null, left: 0, right: null }));
   const [visible, setVisible] = useState(false);
@@ -44,7 +44,6 @@ export function ContextMenu({ items, trigger, onClose }) {
     let right = /** @type {number|null} */ (null);
 
     if ('current' in trigger) {
-      // Button-anchored dropdown
       const el = trigger.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -58,7 +57,6 @@ export function ContextMenu({ items, trigger, onClose }) {
       right = vw - rect.right;
       if (vw - right - menuW < MARGIN) right = vw - menuW - MARGIN;
     } else {
-      // Context menu at pointer coordinates
       left = trigger.x;
       top = trigger.y;
       if (left + menuW > vw - MARGIN) left = vw - menuW - MARGIN;
@@ -92,11 +90,12 @@ export function ContextMenu({ items, trigger, onClose }) {
   return html`
     <div
       ref=${menuRef}
+      id=${id}
       class="min-w-40 max-w-64 rounded-lg bg-surface shadow-lg py-1"
       role="menu"
       style=${{
         position: 'fixed',
-        zIndex: 9999,
+        zIndex: 'var(--z-popover)',
         visibility: visible ? 'visible' : 'hidden',
         top: pos.top != null ? pos.top + 'px' : 'auto',
         bottom: pos.bottom != null ? pos.bottom + 'px' : 'auto',
@@ -115,6 +114,7 @@ export function ContextMenu({ items, trigger, onClose }) {
             type="button"
             role="menuitem"
             disabled=${!!item.disabled}
+            aria-disabled=${item.disabled ? 'true' : undefined}
             class=${[
               'w-full text-left px-4 py-2 text-sm transition-colors',
               item.danger ? 'text-danger hover:bg-danger/10' : 'text-text hover:bg-surface-2',
@@ -126,4 +126,26 @@ export function ContextMenu({ items, trigger, onClose }) {
       })}
     </div>
   `;
+}
+
+/**
+ * Imperatively show a ContextMenu in a body-appended container, owning the
+ * mount/unmount ritual. Returns a close function (idempotent).
+ *
+ * @param {MenuItem[]} items
+ * @param {{ current: HTMLElement | null } | { x: number, y: number }} trigger
+ * @returns {() => void}
+ */
+export function showContextMenu(items, trigger) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    render(null, container);
+    container.remove();
+  };
+  render(html`<${ContextMenu} items=${items} trigger=${trigger} onClose=${close} />`, container);
+  return close;
 }

@@ -7,7 +7,7 @@ impl AppService {
             "SELECT key, value FROM source_preferences WHERE source_id=?",
             source_id
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await?
         .into_iter()
         .map(|r| (r.key, r.value))
@@ -21,7 +21,7 @@ impl AppService {
             source_id,
             key
         )
-        .fetch_optional(&self.db)
+        .fetch_optional(&self.db_read)
         .await
         .map_err(Into::into)
     }
@@ -29,18 +29,19 @@ impl AppService {
     pub async fn set_preference(&self, source_id: i64, key: &str, value: &str) -> Result<()> {
         sqlx::query!("INSERT INTO source_preferences (source_id, key, value) VALUES (?, ?, ?) ON CONFLICT (source_id, key) DO UPDATE SET value = excluded.value", source_id, key, value)
             .execute(&self.db).await?;
+        self.cache.invalidate_source(source_id);
         self.reload_preferences(source_id).await
     }
 
-    pub async fn reload_preferences(&self, source_id: i64) -> Result<()> {
+    pub(crate) async fn reload_preferences(&self, source_id: i64) -> Result<()> {
         let prefs = self.load_pref_map(source_id).await?;
-        if let Some(mgr) = self.sources.read().await.get(&source_id) {
-            mgr.update_preferences(prefs);
+        if let Some(backend) = self.sources.get_backend(source_id) {
+            backend.update_preferences(prefs);
         }
         Ok(())
     }
 
-    pub async fn load_pref_map(&self, source_id: i64) -> Result<HashMap<String, String>> {
+    pub(crate) async fn load_pref_map(&self, source_id: i64) -> Result<HashMap<String, String>> {
         Self::load_pref_map_static(&self.db, source_id).await
     }
 
@@ -83,7 +84,7 @@ impl AppService {
         self.set_preference(
             source_id,
             key,
-            &serde_json::to_string(&list).map_err(|e| ServiceError::Other(e.to_string()))?,
+            &serde_json::to_string(&list).map_err(|e| ServiceError::Internal(e.to_string()))?,
         )
         .await
     }
@@ -98,9 +99,55 @@ impl AppService {
         self.set_preference(
             source_id,
             key,
-            &serde_json::to_string(&list).map_err(|e| ServiceError::Other(e.to_string()))?,
+            &serde_json::to_string(&list).map_err(|e| ServiceError::Internal(e.to_string()))?,
         )
         .await
+    }
+
+    pub async fn get_source_pref_schema(
+        &self,
+        source_id: i64,
+    ) -> Result<Vec<kani_core::PreferenceSpec>> {
+        if let Some(cached) = self.cache.get_preference_schema(source_id) {
+            return Ok(cached);
+        }
+        let backend = self.sources.get_backend(source_id);
+        let raw = if let Some(backend) = backend {
+            backend
+                .get_preferences()
+                .await
+                .map_err(ServiceError::Core)?
+        } else {
+            let name = sqlx::query_scalar!("SELECT name FROM sources WHERE id=?", source_id)
+                .fetch_optional(&self.db_read)
+                .await?
+                .ok_or_else(|| ServiceError::NotFound(format!("Source {source_id} not found")))?;
+            let wasm_path = self
+                .settings
+                .read()
+                .await
+                .wasm_storage_path
+                .join(format!("{}.wasm", name));
+            let bytes = tokio::fs::read(&wasm_path)
+                .await
+                .map_err(|e| ServiceError::Core(kani_core::Error::Io(e)))?;
+            let component = self
+                .wasm_runtime
+                .compile_component(&bytes)
+                .map_err(ServiceError::Core)?;
+            let mut inst =
+                kani_core::sources::SourceInstance::new(self.smart_client.clone(), None, false);
+            inst.load(
+                self.wasm_runtime.engine(),
+                &component,
+                self.wasm_runtime.linker(),
+            )
+            .await
+            .map_err(ServiceError::Core)?;
+            inst.get_preferences().await.map_err(ServiceError::Core)?
+        };
+        self.cache.insert_preference_schema(source_id, raw.clone());
+        Ok(raw)
     }
 
     pub async fn toggle_pref_select_item(
@@ -125,7 +172,7 @@ impl AppService {
         self.set_preference(
             source_id,
             key,
-            &serde_json::to_string(&list).map_err(|e| ServiceError::Other(e.to_string()))?,
+            &serde_json::to_string(&list).map_err(|e| ServiceError::Internal(e.to_string()))?,
         )
         .await
     }

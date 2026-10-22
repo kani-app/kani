@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT user_id, manga_id FROM tracker_manga_mappings WHERE last_synced_at IS NULL OR last_synced_at < ? ORDER BY manga_id LIMIT ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "manga_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9836d77d966a149ff8751e3ac33239fc9fb303004481b974f4d923b3d5795011"
+}

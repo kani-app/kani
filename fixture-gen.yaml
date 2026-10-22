@@ -1,0 +1,102 @@
+id: fixture-gen
+name: FixtureGen
+version: "0.1.0"
+base_url: "https://fixture.invalid"
+language: en
+nsfw: false
+unrestricted_http: true
+
+option_sets:
+  genres:
+    - name: Action
+      value: action
+    - name: Comedy
+      value: comedy
+
+filters:
+  - id: genre
+    name: Genre
+    type: multiselect
+    options_ref: genres
+
+endpoints:
+  popular:
+    route: "/popular"
+    container: ".item"
+    has_next_page: false
+    fields:
+      id: 'self.attr("data-id")'
+      title: 'self.first(".title").text()'
+
+  search:
+    route: "/search"
+    method: POST
+    body:
+      type: json
+      content:
+        q: "$query$"
+        page: "$page$"
+        label: "p$page$"
+    queries:
+      q: $query$
+      kw: "title-$query$ extra"
+    filter_mapping:
+      genre: genre
+    pagination:
+      native_page_size: 20
+      offset_param: "page"
+      offset_type: page
+      page_start: 1
+    container: ".item"
+    fields:
+      id: 'self.attr("data-id")'
+      title: 'self.first(".title").text()'
+
+  manga_details:
+    route: "/manga/$manga_id$"
+    queries:
+      ref: "id-$manga_id$"
+    container: ".manga"
+    fields:
+      id: '"$manga_id$"'
+      title: 'self.first("h1").text()'
+      status: '"unknown"'
+      authors: '[]'
+      artists: '[]'
+      tags: '[]'
+
+  chapter_list:
+    route: "/manga/$manga_id$/chapters"
+    queries:
+      order: $sort$
+    pagination:
+      native_page_size: 2
+      offset_param: p
+      offset_type: page
+    total_pages: 'dom(".pager").attr("data-last").parse_int()'
+    container: ".ch"
+    fields:
+      id: 'self.attr("data-id")'
+      number: '0.0'
+      title:
+        expr: 'self.first(".title").text()'
+        optional: true
+      language: '"en"'
+
+  pages:
+    route: "/manga/$manga_id$/chapter/$chapter_id$"
+    headers:
+      X-Ref: "m-$manga_id$"
+    container: ".page"
+    fields:
+      index: "index()"
+      url: 'self.attr("data-url")'
+
+chapter_sort:
+  options:
+    - id: date_desc
+      label: Newest first
+    - id: number_asc
+      label: Oldest first
+
+preferences: []

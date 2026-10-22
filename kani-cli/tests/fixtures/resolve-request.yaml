@@ -1,0 +1,47 @@
+id: resolve-request
+name: ResolveRequest
+version: "0.1.0"
+base_url: "https://api.example.com"
+language: en
+
+endpoints:
+  popular:
+    route: "/items"
+    type: json
+    queries:
+      order: "score"
+      from: "page-$page$"
+    pagination:
+      native_page_size: 50
+      offset_param: page
+      offset_type: page
+    filter_mapping:
+      rating: rating
+      tags: tags
+    filter_format:
+      multiselect: bracket
+    container: "/result/items"
+    fields:
+      id: 'self.ptr("/id").str()'
+      title: 'self.ptr("/title").str()'
+
+filters:
+  - id: rating
+    name: Rating
+    type: select
+    options:
+      - name: "Safe"
+        value: "safe"
+      - name: "All"
+        value: "all"
+    default:
+      name: "Safe"
+      value: "safe"
+  - id: tags
+    name: Tags
+    type: multiselect
+    options:
+      - name: "Action"
+        value: "action"
+      - name: "Drama"
+        value: "drama"

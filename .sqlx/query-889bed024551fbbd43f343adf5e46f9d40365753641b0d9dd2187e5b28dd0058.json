@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, url, secret, events, enabled AS \"enabled: bool\", created_at\n               FROM webhooks WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "url",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "secret",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "events",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "enabled: bool",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "889bed024551fbbd43f343adf5e46f9d40365753641b0d9dd2187e5b28dd0058"
+}

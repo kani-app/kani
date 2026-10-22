@@ -1,0 +1,24 @@
+id: pure-scripts-test
+name: PureScriptsTest
+version: "0.1.0"
+base_url: "https://example.com"
+
+scripts:
+  pure:
+    slug: |
+      fn slug(s) {
+        s.to_lower().replace(" ", "-")
+      }
+    clean_title: |
+      fn clean_title(s) {
+        s.trim()
+      }
+
+endpoints:
+  popular:
+    route: "/popular"
+    type: json
+    container: "/results"
+    fields:
+      id: 'self.ptr("/id").str().user.slug()'
+      title: 'self.ptr("/title").str().user.clean_title()'

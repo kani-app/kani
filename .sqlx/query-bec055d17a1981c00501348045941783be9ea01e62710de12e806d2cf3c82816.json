@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    t.name as \"genre!: String\",\n                    COUNT(uct.chapter_id) as \"chapters_read!: i64\"\n                FROM user_chapter_tracking uct\n                JOIN chapters c ON c.id = uct.chapter_id\n                JOIN manga_tags mt ON mt.manga_id = c.manga_id\n                JOIN tags t ON t.id = mt.tag_id\n                WHERE uct.is_read = TRUE AND uct.user_id = ?\n                GROUP BY t.name\n                ORDER BY 2 DESC\n                LIMIT 15\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "genre!: String",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapters_read!: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bec055d17a1981c00501348045941783be9ea01e62710de12e806d2cf3c82816"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT email_verified_at FROM users WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "email_verified_at",
+        "ordinal": 0,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f6f0ac2813df2f714fafc22eec9a9dc603347fd8f574c4504046faf7a7e5c935"
+}

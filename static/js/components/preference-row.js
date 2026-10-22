@@ -1,5 +1,4 @@
 // @ts-check
-// Preference row — renders a single source preference of any widget type.
 
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
@@ -8,8 +7,23 @@ import * as api from '../api.js';
 import { iconX, iconChevronRight, iconChevronLeft } from '../icons.js';
 import { Icon } from './icon.js';
 import { getJsonSafe } from '../utils.js';
+import { t } from '../i18n.js';
 import { Combobox } from './combobox.js';
+import { updateState } from '../ui-state.js';
 const html = htm.bind(h);
+
+/**
+ * Increment the per-source preference version so browse/search pages re-fetch
+ * after any preference mutation (setPreference, togglePreferenceSelect, etc.).
+ * @param {number} sourceId
+ */
+function bumpPrefVersion(sourceId) {
+  updateState('sourcePreferenceVersion', (/** @type {Map<number, number>} */ m) => {
+    const nm = new Map(m);
+    nm.set(sourceId, (nm.get(sourceId) ?? 0) + 1);
+    return nm;
+  });
+}
 
 /**
  * @typedef {{
@@ -31,11 +45,30 @@ const html = htm.bind(h);
  *   currentValue: any,
  *   liveValues: Record<string, any>,
  *   onValueChange: (key: string, value: any) => void,
+ *   onDirtyChange?: (dirty: boolean) => void,
+ *   dirty?: boolean,
  * }} props
  */
-export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, onValueChange, onOpenDetail }) {
-  // Support both new shape (label, kind as plain string, options as [[label,val],...])
-  // and old shape (title, kind as tagged-enum object, options nested inside kind data).
+/**
+ * Reads a multi-value preference into a list.
+ *
+ * The server sends these as a JSON string, but once the user adds or removes an
+ * item the live value held in component state is a real array. `JSON.parse` on
+ * an array coerces it to a comma-joined string first, throws, and yields an
+ * empty list — which is why a just-added item disappeared until the page was
+ * refetched. `MultiSelect` already accepts an array directly; this is the same
+ * tolerance for `MultiValueList`.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function asStringList(value) {
+  if (Array.isArray(value)) return /** @type {string[]} */ (value);
+  const parsed = getJsonSafe(/** @type {any} */ (value));
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, onValueChange, onOpenDetail, onDirtyChange, dirty = false }) {
   const key = descriptor.key;
   const title = descriptor.label ?? descriptor.title ?? '';
   const description = descriptor.description;
@@ -45,7 +78,6 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
   const kindName = typeof rawKind === 'string' ? rawKind : Object.keys(rawKind ?? {})[0] ?? '';
   const kindData = typeof rawKind === 'string' ? {} : (rawKind[kindName] ?? {});
 
-  // Options: new format [[label, value], ...] tuples, or old format {label, value} objects
   /** @type {Array<{label: string, value: string}>} */
   const selectOptions = (() => {
     const src = Array.isArray(descriptor.options) ? descriptor.options
@@ -54,7 +86,6 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
     return src.map(opt => Array.isArray(opt) ? { label: opt[0], value: opt[1] } : opt);
   })();
 
-  // Visibility check
   if (requires_key) {
     const dep = liveValues[requires_key];
     const isTruthy = dep === true || dep === 'true' || (typeof dep === 'string' && dep !== '' && dep !== 'false');
@@ -71,6 +102,8 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
     try {
       await api.setPreference(sourceId, key, String(value));
       onValueChange(key, value);
+      // Bust the source browse/search cache so the next view reflects the new preference.
+      bumpPrefVersion(sourceId);
     } finally {
       setSaving(false);
     }
@@ -97,16 +130,20 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
   if (kindName === 'TextInput' || kindName === 'Text') {
     const isSecret = descriptor.secret || kindName === 'TextInput' && kindData.secret;
     control = html`
-      <div class="flex items-center gap-2">
-        <input
-          type=${isSecret ? 'password' : 'text'}
-          class="input"
-          value=${textVal}
-          onInput=${(e) => setTextVal(/** @type {HTMLInputElement} */ (e.target).value)}
-        />
-        <button class="btn-primary btn-sm" disabled=${saving} onClick=${() => save(textVal)}>
-          ${saving ? '…' : 'Save'}
-        </button>
+      <div class="flex flex-col items-end gap-1">
+        <div class="flex items-center gap-2">
+          <input
+            type=${isSecret ? 'password' : 'text'}
+            class="input"
+            aria-label=${title}
+            value=${textVal}
+            onInput=${(e) => setTextVal(/** @type {HTMLInputElement} */ (e.target).value)}
+          />
+          <button class="btn-secondary btn-sm" disabled=${saving} onClick=${() => save(textVal)}>
+            ${saving ? '…' : t('common.save')}
+          </button>
+        </div>
+        ${isSecret && html`<span class="text-xs text-text-muted">${t('pref_row.secret_disclosure')}</span>`}
       </div>
     `;
   } else if (kindName === 'Checkbox' || kindName === 'Toggle') {
@@ -131,12 +168,14 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
       <div class="flex items-center gap-2">
         <input
           type="number"
+          inputMode="numeric"
           class="input w-24"
+          aria-label=${title}
           value=${numVal}
           onInput=${(e) => setNumVal(/** @type {HTMLInputElement} */ (e.target).value)}
         />
-        <button class="btn-primary btn-sm" disabled=${saving} onClick=${() => save(numVal)}>
-          ${saving ? '…' : 'Save'}
+        <button class="btn-secondary btn-sm" disabled=${saving} onClick=${() => save(numVal)}>
+          ${saving ? '…' : t('common.save')}
         </button>
       </div>
     `;
@@ -152,7 +191,6 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
     `;
   } else if (kindName === 'MultiSelect') {
     const selected = /** @type {string[]} */ (Array.isArray(currentValue) ? currentValue : []);
-    // Map selectOptions to Combobox {id, name} using index as id
     const comboOptions = selectOptions.map((o, i) => ({ id: i, name: o.label }));
     const selectedIds = selected.map(v => selectOptions.findIndex(o => o.value === v)).filter(i => i !== -1);
 
@@ -169,11 +207,12 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
           for (const v of added) await api.togglePreferenceSelect(sourceId, key, v, true);
           for (const v of removed) await api.togglePreferenceSelect(sourceId, key, v, false);
           onValueChange(key, newVals);
+          bumpPrefVersion(sourceId);
         }}
       />`;
   } else if (kindName === 'MultiValueList') {
-    const list /** @type {string[]} */ = getJsonSafe(currentValue) || [];
-    const placeholder = selectOptions.find(o => o.label === 'placeholder')?.value ?? 'Add item…';
+    const list /** @type {string[]} */ = asStringList(currentValue);
+    const placeholder = selectOptions.find(o => o.label === 'placeholder')?.value ?? t('pref_row.add_item_placeholder');
 
     if (onOpenDetail) {
       return html`
@@ -182,8 +221,8 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
           onClick=${() => onOpenDetail(descriptor)}
         >
           ${meta}
-          <div class="shrink-0 flex items-center gap-1.5 text-text-muted [&_svg]:w-4 [&_svg]:h-4">
-            <span class="text-sm">${list.length} item${list.length !== 1 ? 's' : ''}</span>
+          <div class="shrink-0 flex items-center gap-1.5 text-text-muted icon-sm">
+            <span class="text-sm">${list.length !== 1 ? t('pref_row.items_other', { n: list.length }) : t('pref_row.items_one', { n: list.length })}</span>
             <${Icon} svg=${iconChevronRight} />
           </div>
         </button>
@@ -198,10 +237,11 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
               <span class="flex-1 text-sm text-text">${item}</span>
               <button
                 class="btn-icon w-8 h-8 text-text-muted"
-                aria-label=${'Remove ' + item}
+                aria-label=${t('pref_row.remove_item', { item })}
                 onClick=${async () => {
                   await api.removePreferenceItem(sourceId, key, item);
                   onValueChange(key, list.filter((_, j) => j !== i));
+                  bumpPrefVersion(sourceId);
                 }}
               ><${Icon} svg=${iconX} /></button>
             </li>
@@ -219,30 +259,32 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
                 await api.appendPreferenceItem(sourceId, key, mvlInput.trim());
                 onValueChange(key, [...list, mvlInput.trim()]);
                 setMvlInput('');
+                bumpPrefVersion(sourceId);
               }
             }}
           />
           <button
-            class="btn-primary btn-sm"
+            class="btn-secondary btn-sm"
             disabled=${!mvlInput.trim()}
             onClick=${async () => {
               if (!mvlInput.trim()) return;
               await api.appendPreferenceItem(sourceId, key, mvlInput.trim());
               onValueChange(key, [...list, mvlInput.trim()]);
               setMvlInput('');
+              bumpPrefVersion(sourceId);
             }}
-          >Add</button>
+          >${t('common.add')}</button>
         </div>
       </div>
     `;
   } else {
-    control = html`<span class="text-sm text-danger">Unknown preference kind: ${kindName}</span>`;
+    control = html`<span class="text-sm text-danger">${t('pref_row.unknown_kind', { kind: kindName })}</span>`;
   }
 
   return html`
-    <div class="flex items-start gap-4 py-3">
+    <div class=${'flex items-start gap-4 py-3' + (dirty ? ' pref-dirty' : '')}>
       ${meta}
-      <div class="shrink-0">${control}</div>
+      <div class=${'shrink-0 pref-ctrl' + (dirty ? ' [&_.input]:border-warn [&_select]:border-warn' : '')}>${control}</div>
     </div>
   `;
 }
@@ -257,9 +299,10 @@ export function PreferenceRow({ sourceId, descriptor, currentValue, liveValues, 
  *   liveValues: Record<string, any>,
  *   onValueChange: (key: string, value: any) => void,
  *   onBack: () => void,
+ *   showHeader?: boolean,
  * }} props
  */
-export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveValues, onValueChange, onBack }) {
+export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveValues, onValueChange, onBack, showHeader = true }) {
   const key = descriptor.key;
   const title = descriptor.label ?? descriptor.title ?? '';
   const description = descriptor.description;
@@ -278,10 +321,10 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
   const [mvlInput, setMvlInput] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const header = html`
+  const header = !showHeader ? null : html`
     <div class="flex items-start gap-3 pb-4 mb-2 border-b border-border-subtle">
-      <button class="btn-ghost btn-sm shrink-0 flex items-center gap-1 [&_svg]:w-4 [&_svg]:h-4" onClick=${onBack}>
-        <${Icon} svg=${iconChevronLeft} /> Back
+      <button class="btn-ghost btn-sm shrink-0 flex items-center gap-1 icon-sm" onClick=${onBack}>
+        <${Icon} svg=${iconChevronLeft} /> ${t('common.back')}
       </button>
       <div class="flex flex-col gap-0.5 min-w-0">
         <span class="text-sm font-medium text-text">${title}</span>
@@ -291,8 +334,8 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
   `;
 
   if (kindName === 'MultiValueList') {
-    const list = /** @type {string[]} */ (getJsonSafe(currentValue) || []);
-    const placeholder = selectOptions.find(o => o.label === 'placeholder')?.value ?? 'Add item…';
+    const list = asStringList(currentValue);
+    const placeholder = selectOptions.find(o => o.label === 'placeholder')?.value ?? t('pref_row.add_item_placeholder');
     return html`
       <div class="flex flex-col gap-3 py-3">
         ${header}
@@ -302,10 +345,11 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
               <span class="flex-1 text-sm text-text">${item}</span>
               <button
                 class="btn-icon w-8 h-8 text-text-muted"
-                aria-label=${'Remove ' + item}
+                aria-label=${t('pref_row.remove_item', { item })}
                 onClick=${async () => {
                   await api.removePreferenceItem(sourceId, key, item);
                   onValueChange(key, list.filter((_, j) => j !== i));
+                  bumpPrefVersion(sourceId);
                 }}
               ><${Icon} svg=${iconX} /></button>
             </li>
@@ -323,19 +367,21 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
                 await api.appendPreferenceItem(sourceId, key, mvlInput.trim());
                 onValueChange(key, [...list, mvlInput.trim()]);
                 setMvlInput('');
+                bumpPrefVersion(sourceId);
               }
             }}
           />
           <button
-            class="btn-primary btn-sm"
+            class="btn-secondary btn-sm"
             disabled=${!mvlInput.trim()}
             onClick=${async () => {
               if (!mvlInput.trim()) return;
               await api.appendPreferenceItem(sourceId, key, mvlInput.trim());
               onValueChange(key, [...list, mvlInput.trim()]);
               setMvlInput('');
+              bumpPrefVersion(sourceId);
             }}
-          >Add</button>
+          >${t('common.add')}</button>
         </div>
       </div>
     `;
@@ -361,6 +407,7 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
               for (const v of added) await api.togglePreferenceSelect(sourceId, key, v, true);
               for (const v of removed) await api.togglePreferenceSelect(sourceId, key, v, false);
               onValueChange(key, newVals);
+              bumpPrefVersion(sourceId);
             } finally {
               setSaving(false);
             }
@@ -370,5 +417,5 @@ export function PreferenceDetailView({ sourceId, descriptor, currentValue, liveV
     `;
   }
 
-  return html`<p class="text-sm text-danger">No detail view for kind: ${kindName}</p>`;
+  return html`<p class="text-sm text-danger">${t('pref_row.no_detail_view', { kind: kindName })}</p>`;
 }

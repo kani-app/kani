@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT c.name FROM manga_categories mc JOIN categories c ON c.id = mc.category_id WHERE mc.manga_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5efe1513053a19426b743627dd0e6c2a2a37c54a0a6e1e41e9cd8743d82c315d"
+}

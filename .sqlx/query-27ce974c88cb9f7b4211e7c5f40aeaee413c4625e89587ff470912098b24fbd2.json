@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT title, tracking, chapter_progress FROM pending_imports WHERE id = ? AND user_id = ? AND resolved = FALSE",
+  "describe": {
+    "columns": [
+      {
+        "name": "title",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "tracking",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "chapter_progress",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "27ce974c88cb9f7b4211e7c5f40aeaee413c4625e89587ff470912098b24fbd2"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id FROM manga WHERE deleted_at IS NULL AND is_orphaned = FALSE ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ab1f76bceb1679b16aaa32c1db402c297998da93b945b25ef8da2c0f6e0c5f84"
+}

@@ -1,20 +1,19 @@
 services:
   kani:
-    build: .
-    image: kani:latest
+    # Signed multi-arch release image. To build from source, swap this for a
+    # `build:` block with context "." and args GIT_SHA, plus INSTALL_KCC: "true"
+    # for Kindle Comic Converter (MOBI/AZW3 export).
+    image: ghcr.io/kani-app/kani:latest
     ports:
       - "8242:8242"
     volumes:
-      # Database and WASM extensions.
-      # The kani user inside the container runs as UID 1000.
-      # If using a bind mount and you hit permission errors, run:
-      #   sudo chown -R 1000:1000 ./data
+      # Database and WASM extensions. The kani user inside the container runs
+      # as UID 1000
       - ./data:/data
 
-      # Manga image library. This is kept separate so it can be placed on a
-      # different drive or filesystem on the host. To use a custom path, replace
-      # the left-hand side with an absolute path, e.g.:
-      #   - /mnt/large-drive/manga:/library
+      # Manga image library. This is kept separate so it can be placed on a different drive or
+      # filesystem on the host. To use a custom path, replace the left-hand side with an absolute
+      # path, e.g.: - /mnt/large-drive/manga:/library
       - ./library:/library
 
     environment:
@@ -30,4 +29,53 @@ services:
 
       # Override the log level (error, warn, info, debug, trace).
       # RUST_LOG: "info"
+
+      # Emit structured JSON logs instead of human-readable text ("text" | "json").
+      # KANI_LOG_FORMAT: "json"
+
+      # Warn-log any SQL statement slower than this many milliseconds.
+      # KANI_SLOW_QUERY_THRESHOLD_MS: "100"
+
+      # Shared key sent to the solver on every request. Must match the solver's
+      # API_KEY. Leave unset only when the solver is unreachable from elsewhere.
+      # KANI_SOLVER_SECRET: "change-me"
+
+      # Signs cover-image proxy URLs. Auto-provisioned to /data/proxy.key on
+      # first boot — no action needed unless you want a fixed key across restarts.
+      # KANI_PROXY_SECRET: ""   # base64url-encoded 32 bytes
+
+      # How long a session stays alive after last activity. Default: 30 days.
+      # KANI_SESSION_TIMEOUT_SECONDS: "2592000"
+
+      # Failed-login lockout: max attempts per identity before a 15-minute block.
+      # KANI_MAX_LOGIN_ATTEMPTS: "5"
+
+      # Lockout window length in seconds. Default: 15 minutes.
+      # KANI_LOGIN_LOCKOUT_SECONDS: "900"
+
+      # Max failed attempts from one IP (across all identities) before IP-level block.
+      # KANI_MAX_IP_ATTEMPTS: "20"
+
+      # Set to "false" to prevent self-registration after initial administrator setup.
+      # KANI_ALLOW_REGISTRATION: "true"
+
+      # Marks the deployment internet-facing so the UI can surface hardened-setup
+      # guidance. Security settings still need configuring explicitly.
+      # KANI_PUBLIC_INSTANCE: "false"
+
+      # Where kani stores its database and auto-provisioned key files. Defaults to
+      # the working directory (/data in Docker); set it only when that differs.
+      # KANI_DATA_DIR: "/data"
+    restart: unless-stopped
+
+  # Runs capture scripts for browser sources. /v1 executes caller-supplied
+  # JavaScript, so it is unpublished: only kani reaches it, at
+  # http://solver:8191. API_KEY plus KANI_SOLVER_SECRET admits anything else.
+  solver:
+    image: ghcr.io/kani-app/flaresolverr:latest
+    # ports:
+    #   - "127.0.0.1:8191:8191"
+    environment:
+      LOG_LEVEL: info
+      # API_KEY: "change-me"
     restart: unless-stopped

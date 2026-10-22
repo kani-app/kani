@@ -1,0 +1,158 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * FROM manga WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_manga_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "cover_url",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_cover_path",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 7,
+        "type_info": "Integer"
+      },
+      {
+        "name": "auto_download",
+        "ordinal": 8,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 9,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 10,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "scanlator_mode",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "download_all_preferred_only",
+        "ordinal": 12,
+        "type_info": "Bool"
+      },
+      {
+        "name": "auto_scan",
+        "ordinal": 13,
+        "type_info": "Bool"
+      },
+      {
+        "name": "notes",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_name",
+        "ordinal": 15,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_description",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_status",
+        "ordinal": 17,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cover_overridden",
+        "ordinal": 18,
+        "type_info": "Bool"
+      },
+      {
+        "name": "is_orphaned",
+        "ordinal": 19,
+        "type_info": "Bool"
+      },
+      {
+        "name": "cover_hash",
+        "ordinal": 20,
+        "type_info": "Text"
+      },
+      {
+        "name": "deleted_at",
+        "ordinal": 21,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "upgrade_auto_replace",
+        "ordinal": 22,
+        "type_info": "Bool"
+      },
+      {
+        "name": "suppressed_chapter_count",
+        "ordinal": 23,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b1addc825a55abcad1f64fa70bae7947f9dfd2f6900d8b87c802205e5809152f"
+}

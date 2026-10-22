@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO tracker_manga_mappings (user_id, tracker_id, manga_id, tracker_manga_id) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "f84d7c32b47b0131c42579b5a743e626a4422ef03690d7ccdc04b4aa0a455f86"
+}

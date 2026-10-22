@@ -1,0 +1,12 @@
+#!/bin/sh
+
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
+[ -z "$STAGED_RS" ] && exit 0
+
+cargo fmt --all
+printf '%s\n' "$STAGED_RS" | tr '\n' '\0' | xargs -0 git add
+
+# Lint default-members only. Extension crates (kani-extensions/*) are WASM-only and
+# cannot compile on the native target, so they are excluded from default-members;
+# `cargo clippy` (no --workspace) mirrors CI and skips them.
+cargo clippy -- -D warnings || exit 1

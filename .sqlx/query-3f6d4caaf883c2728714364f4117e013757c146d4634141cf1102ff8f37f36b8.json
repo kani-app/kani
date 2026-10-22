@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_tracker_credentials (user_id, tracker_id, access_token, refresh_token, expires_at)\n           VALUES (?1, ?2, ?3, ?4, ?5)\n           ON CONFLICT (user_id, tracker_id) DO UPDATE SET\n               access_token = excluded.access_token,\n               refresh_token = COALESCE(excluded.refresh_token, user_tracker_credentials.refresh_token),\n               expires_at = excluded.expires_at,\n               needs_reauth = FALSE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "3f6d4caaf883c2728714364f4117e013757c146d4634141cf1102ff8f37f36b8"
+}

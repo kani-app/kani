@@ -1,6 +1,6 @@
 package kani:extension;
 
-// Host provides these (Imports for Guest)
+/// Host-mediated HTTP access for extension requests.
 interface http {
     enum method { get, post, put, delete }
 
@@ -20,6 +20,8 @@ interface http {
     send: func(req: request) -> result<response, string>;
 }
 
+/// Host-owned HTML documents and element lists referenced by opaque handles.
+/// Guests must release every returned document and list handle exactly once.
 interface html {
     type doc-handle = s32;
     type list-handle = s32;
@@ -41,6 +43,7 @@ interface html {
     children: func(doc: doc-handle) -> result<list-handle, string>;
 }
 
+/// Stateless URL, date, form-encoding, and diagnostic helpers supplied by the host.
 interface utility {
     date-parse: func(date: string, fmt: string) -> result<s64, string>;
     date-parse-rfc3339: func(date: string) -> result<s64, string>;
@@ -58,6 +61,8 @@ interface utility {
     log: func(level: u8, line: u32, message: string);
 }
 
+/// Host-owned JSON trees addressed through JSON Pointer paths and opaque handles.
+/// Guests must release every root or child handle exactly once.
 interface json {
     type json-handle = s32;
 
@@ -79,7 +84,29 @@ interface json {
     drop-json: func(handle: json-handle);
 }
 
+/// Data contracts shared by host imports and the guest provider export.
 interface types {
+    enum extension-error-kind {
+        network,
+        parse,
+        not-found,
+        rate-limited,
+        auth,
+        content-unavailable,
+        timeout,
+        invalid-input,
+        internal,
+        unknown,
+        source-updating,
+    }
+
+    record extension-error {
+        kind: extension-error-kind,
+        message: string,
+        source-url: option<string>,
+        retry-after-secs: option<u32>,
+    }
+
     enum manga-status {
         ongoing,
         completed,
@@ -97,6 +124,7 @@ interface types {
     record manga-list {
         manga: list<manga-list-item>,
         has-next-page: bool,
+        total-pages: option<u32>,
     }
 
     record manga-info {
@@ -110,6 +138,8 @@ interface types {
         tags: list<string>,
     }
 
+    /// Pages reported by the source listing, when available. This remains distinct from the
+    /// downloaded archive count in `chapters.page_count` so re-uploads can be detected.
     record chapter-info {
         id: string,
         number: f64,
@@ -118,15 +148,17 @@ interface types {
         scanlator: option<string>,
         date-uploaded: option<s64>,
         language: string,
+        page-count: option<u32>,
     }
 
     record chapter-list {
         chapters: list<chapter-info>,
         has-next-page: bool,
+        total-pages: option<u32>,
     }
 
-    /// A single sort option that an extension can apply to its chapter list.
-    record chapter-sort-option {
+    /// A single sort option for ordering a list (chapter list or similar).
+    record sort-option {
         id: string,
         name: string,
     }
@@ -134,20 +166,11 @@ interface types {
     record page {
         index: s32,
         url: string,
+        transform: option<string>,
     }
 
     record chapter {
         pages: list<page>
-    }
-
-    record extension-metadata {
-        id: string,
-        name: string,
-        version: string,
-        base-url: string,
-        language: string,
-        nsfw: bool,
-        unrestricted-http: bool,
     }
 
     enum filter-type-tag {
@@ -200,13 +223,16 @@ interface types {
         state: filter-state,
     }
 
-    // Simplified flat preference manifest - extensions declare what they need,
-    // the host handles storage, rendering, and serialization.
+    /// Flat preference declarations rendered and persisted by the host.
     enum pref-kind {
-        toggle,          // bool stored as "true"/"false"
-        select,          // single-value selection; options lists available values
-        text,            // free-form text input
-        multi-value-list, // JSON-array of strings; options may carry metadata (e.g. placeholder)
+        /// Boolean stored as "true" or "false".
+        toggle,
+        /// Single selection from the accompanying options.
+        select,
+        /// Free-form text.
+        text,
+        /// JSON array of strings; options may carry metadata such as a placeholder.
+        multi-value-list,
     }
 
     record preference-spec {
@@ -223,26 +249,38 @@ interface types {
     }
 }
 
+/// Read-only access to the installed extension's host-managed preferences.
 interface prefs {
     get-value: func(key: string) -> option<string>;
 }
 
+/// Manga source operations implemented by each extension and called by the host.
 interface manga-provider {
-    use types.{manga-list, manga-info, chapter-list, chapter, extension-metadata, preference-spec, filter-list, active-filter, chapter-sort-option};
+    use types.{manga-list, manga-info, chapter-list, chapter-info, chapter, preference-spec, filter-list, active-filter, sort-option, extension-error};
 
-    get-metadata: func() -> result<extension-metadata, string>;
+    // Returns a JSON-encoded `kani_shared::extension::ExtensionMetadata`. Encoded as a
+    // string (rather than a WIT record) so new metadata fields are serde-only additions
+    // with no WIT/binding churn.
+    get-metadata: func() -> result<string, extension-error>;
 
-    get-popular-manga: func(page: s32, page-size: s32, filters: list<active-filter>) -> result<manga-list, string>;
-    search-manga: func(query: string, page: s32, page-size: s32, filters: list<active-filter>) -> result<manga-list, string>;
-    get-manga-details: func(manga-id: string) -> result<manga-info, string>;
-    get-chapter-list: func(manga-id: string, page: s32, page-size: option<s32>, sort: option<string>) -> result<chapter-list, string>;
-    get-pages: func(manga-id: string, chapter-id: string) -> result<chapter, string>;
+    get-popular-manga: func(page: s32, page-size: s32, filters: list<active-filter>) -> result<manga-list, extension-error>;
+    search-manga: func(query: string, page: s32, page-size: s32, filters: list<active-filter>) -> result<manga-list, extension-error>;
+    get-manga-details: func(manga-id: string) -> result<manga-info, extension-error>;
+    get-chapter-list: func(manga-id: string, page: s32, page-size: option<s32>, sort: option<string>) -> result<chapter-list, extension-error>;
+    get-chapter-list-stream: async func(manga-id: string, sort: option<string>) -> stream<result<chapter-info, extension-error>>;
+    get-pages: func(manga-id: string, chapter-id: string) -> result<chapter, extension-error>;
 
-    get-chapter-sort-list: func() -> result<list<chapter-sort-option>, string>;
-    get-filter-list: func() -> result<filter-list, string>;
-    get-preferences: func() -> result<list<preference-spec>, string>;
+    get-chapter-sort-list: func() -> result<list<sort-option>, extension-error>;
+    get-filter-list: func() -> result<filter-list, extension-error>;
+    // Returns a JSON-encoded list of `kani_shared::FilterFetchDef`. Encoded as a
+    // string so new fields are serde-only additions with no WIT/binding churn.
+    get-fetched-option-sets: func() -> result<string, extension-error>;
+    get-preferences: func() -> result<list<preference-spec>, extension-error>;
+
+    get-url: func(manga-id: string) -> result<string, extension-error>;
 }
 
+/// Host-side blueprint evaluation that returns an opaque JSON result handle.
 interface extraction {
     // Blueprint is passed as postcard-encoded bytes (list<u8>).
     extract-html: func(doc: option<s32>, blueprint: list<u8>) -> result<s32, string>;
@@ -250,8 +288,46 @@ interface extraction {
     // Like extract-html but the host handles multi-chunk fetching for fixed-page-size sources.
     // Blueprint must include a PaginationConfig; the host injects the offset param per chunk.
     paginated-extract-html: func(page: s32, page-size: s32, blueprint: list<u8>) -> result<s32, string>;
+    // Like paginated-extract-html but the request is provided separately so blueprint bytes
+    // need not contain a RequestDef (used by the embedded-bytes codegen path).
+    paginated-extract-html-raw: func(page: s32, page-size: s32, url: string, method: string, headers: list<tuple<string, string>>, queries: list<tuple<string, string>>, blueprint: list<u8>) -> result<s32, string>;
+    // Like paginated-extract-html but for JSON sources.
+    paginated-extract-json: func(page: s32, page-size: s32, blueprint: list<u8>) -> result<s32, string>;
+    // Like paginated-extract-json but the request is provided separately.
+    paginated-extract-json-raw: func(page: s32, page-size: s32, url: string, method: string, headers: list<tuple<string, string>>, queries: list<tuple<string, string>>, blueprint: list<u8>) -> result<s32, string>;
 }
 
+/// Host-managed binary cache scoped to the calling extension installation.
+interface cache {
+    get: func(key: string) -> option<list<u8>>;
+    put: func(key: string, value: list<u8>, ttl-secs: u32);
+    delete: func(key: string);
+    clear: func();
+}
+
+/// Host-managed V8 contexts and browser capture operations for script-dependent sources.
+interface scripting {
+    /// Returns true if a named V8 (Node.js) context is currently live on the host.
+    v8-context-exists: func(name: string) -> bool;
+
+    /// Creates a named V8 context by evaluating init-script in a Node.js vm.createContext
+    /// sandbox with native Web APIs. Idempotent: if the context already exists returns ok.
+    v8-context-create: func(name: string, init-script: string) -> result<_, string>;
+
+    /// Evaluates a JS expression in the named V8 context. Must produce a string value.
+    v8-context-eval: func(name: string, script: string) -> result<string, string>;
+
+    /// Drops the named V8 context.
+    v8-context-drop: func(name: string);
+
+    /// Loads page-url in the configured solver's cleared browser, runs init-script
+    /// before any page JS, and waits for the page's script to call the host-injected
+    /// `passPayload(string)` function. Returns the string passed to passPayload.
+    /// timeout-ms is the deadline.
+    capture-page-payload: func(page-url: string, init-script: string, timeout-ms: u32) -> result<string, string>;
+}
+
+/// Extension component boundary: the host supplies capabilities and the guest exports a provider.
 world kani-extension {
     import types;
     import http;
@@ -260,5 +336,7 @@ world kani-extension {
     import json;
     import prefs;
     import extraction;
+    import cache;
+    import scripting;
     export manga-provider;
 }

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM storage_history WHERE captured_at < datetime('now', '-90 days')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "53c9463e68f5e91bed973dbaf8cb0287a822d0139f8a506b10dc48a8ed0ddbfd"
+}

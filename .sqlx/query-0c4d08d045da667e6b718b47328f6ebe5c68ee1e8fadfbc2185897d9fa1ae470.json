@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO user_page_bookmarks (user_id, chapter_id, page_index) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "0c4d08d045da667e6b718b47328f6ebe5c68ee1e8fadfbc2185897d9fa1ae470"
+}

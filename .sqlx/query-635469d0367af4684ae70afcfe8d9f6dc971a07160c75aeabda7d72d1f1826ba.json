@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) FROM password_reset_tokens\n             WHERE user_id = ? AND created_at > datetime('now', '-1 hour') AND used_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "name": "COUNT(*)",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "635469d0367af4684ae70afcfe8d9f6dc971a07160c75aeabda7d72d1f1826ba"
+}

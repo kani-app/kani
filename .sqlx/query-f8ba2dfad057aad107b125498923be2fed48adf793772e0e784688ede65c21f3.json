@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)\n             VALUES (?, ?, datetime('now', '+24 hours'))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f8ba2dfad057aad107b125498923be2fed48adf793772e0e784688ede65c21f3"
+}

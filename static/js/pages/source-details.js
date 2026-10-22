@@ -5,64 +5,105 @@
 import { h, render } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import htm from 'htm';
+import { replaceState } from '../url-params.js';
 import * as api from '../api.js';
-import { hasPermission, updateState, subscribe } from '../state.js';
-import { navigate } from '../router.js';
-import { setLocal, getLocal, getLocalInt, debounce, hasNextPage, confirmDialog } from '../utils.js';
-import { skeletonGrid } from '../components/skeletons.js';
+import { hasPermission } from '../session.js';
+import { subscribe as subscribeCache, updateState as updateCacheState } from '../cache.js';
+import { subscribe as subscribeUiState } from '../ui-state.js';
+import { navigate, scrollPageTop } from '../router.js';
+import { debounce, hasNextPage, fmtCompactDate, errorCountAriaLabel } from '../utils.js';
+import { getTileSize, setTileSize } from '../tile-size.js';
+import { skeletonSettingsCards, skeletonKeyValueRows } from '../components/skeletons.js';
 import { renderPagination } from '../components/pagination.js';
 import { createMangaCard } from '../components/manga-card.js';
-import { Modal } from '../components/modal.js';
-import { SourcesSidebar, consumePendingSourceId } from '../components/sources-sidebar.js';
+import { fetchPagedGrid } from '../components/paged-grid.js';
+import { Modal, mountIntoModalRoot, showConfirm } from '../components/modal.js';
+import { showApiError } from '../components/toast.js';
+import { SourcesSidebar, AddSourceModal } from '../components/sources-sidebar.js';
 import { PreferenceRow, PreferenceDetailView } from '../components/preference-row.js';
+import { TileSizeSelect } from '../components/tile-size-select.js';
+import { FALLBACK_PAGE_SIZE, MAX_PAGE_SIZE, gridCapacity, gridFitEnabled, observeCapacity } from '../grid-columns.js';
 import { Icon } from '../components/icon.js';
-import { startLoading, finishLoading } from '../components/page-loading-bar.js';
-import { createBreadcrumb } from '../components/breadcrumb.js';
+import { sourceIconSrc } from '../source-icon.js';
+import { setPageHeader, clearPageHeader } from '../components/app-header.js';
+import { createSourcesHeaderActions } from '../components/sources-header.js';
 import { createErrorState } from '../components/error-state.js';
 import { createEmptyState } from '../components/empty-state.js';
 import { mountFilterModal } from '../components/filter-panel.js';
 import { renderTabs } from '../components/tabs.js';
 import { iconSearch, iconChevronDown, iconWarning } from '../icons.js';
+import { t } from '../i18n.js';
+import { prefersInfiniteScroll } from '../pagination-mode.js';
 const html = htm.bind(h);
 
-// ── Module state ──────────────────────────────────────────────────────────────
 
 let _sourceId = 0;
 let _page = 1;
 let _pageSize = 0;
+/** @type {import('../tile-size.js').TileSize} */
+let _tileSize = 'md';
+/** @type {Array<() => void>} */ let _stopColumnWatches = [];
+
+/**
+ * @param {HTMLElement | null} gridEl A grid container fetchPagedGrid renders into.
+ * @returns {HTMLElement | null}
+ */
+function _mangaGridIn(gridEl) {
+  return /** @type {HTMLElement|null} */ (gridEl?.querySelector('.manga-grid') ?? null);
+}
+
+/**
+ * The page holds exactly what fits. Where the shell does not pin the page to
+ * the viewport the question has no answer, so a fixed batch is used instead.
+ *
+ * @param {HTMLElement | null} gridEl
+ */
+function _syncPageSize(gridEl) {
+  const next = gridFitEnabled() && !_isInfinite()
+    ? gridCapacity(_mangaGridIn(gridEl), gridEl)
+    : 0;
+  if (next > 0) _pageSize = Math.min(next, MAX_PAGE_SIZE);
+  else if (_pageSize < 1) _pageSize = FALLBACK_PAGE_SIZE;
+}
+
+function _isInfinite() {
+  return prefersInfiniteScroll('kani_source_pagination');
+}
 let _query = '';
 let _sourceName = '';
 let _sourceEnabled = true;
 let _activeTab = 'popular';
 /** @type {AbortController | null} */
 let _abort = null;
-/** @type {AbortController | null} */
-let _libAbort = null;
 /** @type {(() => void) | null} */
 let _destroyPaginationSearch = null;
 /** @type {(() => void) | null} */
 let _destroyPaginationPopular = null;
 /** @type {(() => void) | null} */
-let _destroyLibPagination = null;
-/** @type {(() => void) | null} */
 let _unsubSourcesInvalidation = null;
+/** @type {(() => void) | null} */
+let _unsubPrefVersion = null;
 /** @type {IntersectionObserver | null} */
 let _sentinelObserver = null;
 /** @type {HTMLElement | null} */
 let _settingsMountEl = null;
 /** @type {HTMLElement | null} */
-let _breadcrumbEl = null;
+let _prefsMountEl = null;
 /** @type {HTMLElement | null} */
 let _asideEl = null;
+/** @type {HTMLButtonElement | null} */
+let _addSourceBtn = null;
+/** @type {HTMLElement[] | null} */
+let _headerActions = null;
 /** @type {HTMLElement | null} */
 let _popularPanelEl = null;
 /** @type {HTMLElement | null} */
 let _searchPanelEl = null;
-/** @type {((activeId: string) => void) | null} */
+/** @type {((activeId: string, tabs?: any[]) => void) | null} */
 let _tabsUpdateFn = null;
 let _settingsMounted = false;
-let _libPage = 1;
-let _libPageSize = 24;
+let _prefsMounted = false;
+let _hasPrefs = false;
 /** @type {any[]} */
 let _filterDefs = [];
 /** @type {Record<string, string>} */
@@ -72,7 +113,6 @@ let _filterModalDestroy = null;
 /** @type {Record<string, string>} */
 let _pendingFilterParams = {};
 
-// ── Filter helpers ─────────────────────────────────────────────────────────────
 
 /**
  * Normalize a filter state value from either adjacently-tagged ({kind, data}) or
@@ -81,10 +121,26 @@ let _pendingFilterParams = {};
  * @param {any} raw
  * @returns {any}
  */
+/** Builds the "source disabled" empty-state element shown in place of browse content. */
+function _disabledStateEl() {
+  return createEmptyState({
+    icon: iconWarning,
+    title: t('source.disabled.title'),
+    subtitle: t('source.disabled.hint'),
+  });
+}
+
+/** Shows a "disabled" placeholder in a panel, replacing its content. */
+function _showDisabledPanel(panelEl) {
+  const inner = panelEl.querySelector('.flex.flex-col');
+  if (!inner) return;
+  inner.innerHTML = '';
+  inner.appendChild(_disabledStateEl());
+}
+
 function _normalizeFilterState(raw) {
   if (!raw || typeof raw !== 'object') return raw;
-  if (typeof raw.kind === 'string') return raw; // already adjacently-tagged
-  // Externally-tagged: { Selection: {...} } → { kind: 'Selection', data: {...} }
+  if (typeof raw.kind === 'string') return raw;
   const entries = Object.entries(raw);
   if (entries.length === 1) return { kind: entries[0][0], data: entries[0][1] };
   return raw;
@@ -104,7 +160,107 @@ function _buildDefaultFilters(filterDefs) {
   return defaults;
 }
 
-// ── Source settings page component ───────────────────────────────────────────
+
+/**
+ * Renders the source's full preference list. Complex preference types open in
+ * a modal, giving the same flow on desktop and mobile.
+ * @param {{ sourceId: number }} props
+ */
+function SourcePreferencesPanel({ sourceId }) {
+  const [schema, setSchema] = useState(/** @type {any[]} */ ([]));
+  const [liveValues, setLiveValues] = useState(/** @type {Record<string,any>} */ ({}));
+  const [loading, setLoading] = useState(true);
+  const [activeDescriptor, setActiveDescriptor] = useState(/** @type {any} */ (null));
+  const [collapsedGroups, setCollapsedGroups] = useState(/** @type {Set<string>} */ (new Set()));
+
+  useEffect(() => {
+    Promise.all([api.getPreferenceSchema(sourceId), api.getPreferences(sourceId)])
+      .then(([schemaRes, prefsRes]) => {
+        setSchema(Array.isArray(schemaRes) ? schemaRes : []);
+        setLiveValues(Array.isArray(prefsRes)
+          ? Object.fromEntries(prefsRes.map(pr => [pr.key, pr.value]))
+          : {});
+      })
+      .catch(showApiError)
+      .finally(() => setLoading(false));
+  }, [sourceId]);
+
+  /** @type {Map<string, any[]>} */
+  const groups = new Map();
+  for (const d of schema) {
+    const g = d.group ?? '';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(d);
+  }
+
+  const _toggleGroup = (/** @type {string} */ group) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(group) ? next.delete(group) : next.add(group);
+    return next;
+  });
+
+  if (loading) {
+    return html`<div class="max-w-narrow py-1" dangerouslySetInnerHTML=${{ __html: skeletonSettingsCards(4) }} />`;
+  }
+  if (schema.length === 0) {
+    return html`<p class="text-sm text-text-muted py-4">${t('source.prefs.empty')}</p>`;
+  }
+
+  return html`
+    <div class="bg-surface border border-border rounded-xl px-4 md:px-6 py-1 max-w-narrow">
+      <div class="flex flex-col">
+        ${[...groups.entries()].map(([group, descriptors]) => {
+          const isCollapsed = collapsedGroups.has(group);
+          return html`
+            <div key=${group} class="flex flex-col">
+              ${group && html`
+                <button
+                  class="flex items-center justify-between gap-2 py-2 w-full text-left text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded"
+                  onClick=${() => _toggleGroup(group)}
+                  aria-expanded=${!isCollapsed}
+                >
+                  ${group}
+                  <span class=${'icon-xs transition-transform ' + (isCollapsed ? '' : 'rotate-180')}>
+                    <${Icon} svg=${iconChevronDown} />
+                  </span>
+                </button>
+              `}
+              ${!isCollapsed && descriptors.map(d => html`
+                <${PreferenceRow}
+                  key=${d.key}
+                  sourceId=${sourceId}
+                  descriptor=${d}
+                  currentValue=${liveValues[d.key]}
+                  liveValues=${liveValues}
+                  onValueChange=${(key, val) => setLiveValues(prev => ({ ...prev, [key]: val }))}
+                  onOpenDetail=${(desc) => setActiveDescriptor(desc)}
+                />
+              `)}
+            </div>
+          `;
+        })}
+      </div>
+      <${Modal}
+        open=${activeDescriptor != null}
+        onClose=${() => setActiveDescriptor(null)}
+        title=${activeDescriptor ? (activeDescriptor.label ?? activeDescriptor.title ?? '') : ''}
+      >
+        ${activeDescriptor && html`
+          <${PreferenceDetailView}
+            sourceId=${sourceId}
+            descriptor=${activeDescriptor}
+            currentValue=${liveValues[activeDescriptor.key]}
+            liveValues=${liveValues}
+            onValueChange=${(key, val) => setLiveValues(prev => ({ ...prev, [key]: val }))}
+            onBack=${() => setActiveDescriptor(null)}
+            showHeader=${false}
+          />
+        `}
+      </${Modal}>
+    </div>
+  `;
+}
+
 
 /**
  * Full-page settings panel for a single source, designed for the Settings tab.
@@ -123,41 +279,35 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
   const [enabled, setEnabled] = useState(source.enabled ?? false);
   const [confirming, setConfirming] = useState(false);
 
+  const [dlConcurrency, setDlConcurrency] = useState(
+    /** @type {string} */ (source.download_concurrency != null ? String(source.download_concurrency) : '')
+  );
+  const [dlConcurrencySaving, setDlConcurrencySaving] = useState(false);
 
+  const canGrantLocal = hasPermission('admin:manage');
+  const [localHosts, setLocalHosts] = useState('');
+  const [localHostsSaving, setLocalHostsSaving] = useState(false);
+  const [localHostsError, setLocalHostsError] = useState(/** @type {string|null} */ (null));
 
-  const [schema, setSchema] = useState(/** @type {any[]} */ ([]));
-  const [liveValues, setLiveValues] = useState(/** @type {Record<string,any>} */ ({}));
-  const [prefsLoading, setPrefsLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeDescriptor, setActiveDescriptor] = useState(/** @type {any} */ (null));
-  const [collapsedGroups, setCollapsedGroups] = useState(/** @type {Set<string>} */ (new Set()));
+  const [health, setHealth] = useState(/** @type {any|null} */ (null));
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
+  const [reloadMsg, setReloadMsg] = useState(/** @type {'ok'|'err'|null} */ (null));
+  const [capabilities, setCapabilities] = useState(/** @type {{streaming_chapters:boolean}|null} */ (null));
 
-  // Load preferences on mount
   useEffect(() => {
-    Promise.all([api.getPreferenceSchema(sid), api.getPreferences(sid)])
-        .then(([schemaRes, prefsRes]) => {
-            setSchema(Array.isArray(schemaRes) ? schemaRes : []);
-
-            if (Array.isArray(prefsRes)) {
-                const liveObject = Object.fromEntries(
-                    prefsRes.map(p => [p.key, p.value])
-                );
-                setLiveValues(liveObject);
-            } else {
-                setLiveValues({});
-            }
-        })
-        .catch(e => console.error('Failed to load prefs:', e))
-        .finally(() => setPrefsLoading(false));
+    api.getSourcesHealth().then(rows => {
+      if (Array.isArray(rows)) {
+        setHealth(rows.find(r => r.source_id === sid) ?? null);
+      }
+    }).catch(() => {}).finally(() => setHealthLoading(false));
+    api.getSourceCapabilities(sid).then(setCapabilities).catch(() => {});
+    if (canGrantLocal) {
+      api.getSourceLocalHosts(sid)
+        .then(r => setLocalHosts((r.hosts ?? []).join('\n')))
+        .catch(() => {});
+    }
   }, [sid]);
-
-  /** @type {Map<string, any[]>} */
-  const groups = new Map();
-  for (const d of schema) {
-    const g = d.group ?? '';
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(d);
-  }
 
   async function toggleEnabled(val) {
     if (val && source.unrestricted_http && !confirming) {
@@ -169,14 +319,51 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
       await api.toggleSourceEnabled(sid, val);
       setEnabled(val);
       onEnabledChange?.(val);
-    } catch { /* revert on error */ }
+    } catch { }
+  }
+
+  async function handleSaveDlConcurrency() {
+    const val = dlConcurrency.trim() === '' ? null : Number(dlConcurrency);
+    setDlConcurrencySaving(true);
+    try {
+      await api.setSourceDownloadConcurrency(sid, val);
+    } finally {
+      setDlConcurrencySaving(false);
+    }
+  }
+
+  async function handleSaveLocalHosts() {
+    const hosts = localHosts.split('\n').map(h => h.trim()).filter(Boolean);
+    setLocalHostsSaving(true);
+    setLocalHostsError(null);
+    try {
+      const saved = await api.setSourceLocalHosts(sid, hosts);
+      setLocalHosts((saved.hosts ?? []).join('\n'));
+    } catch (e) {
+      setLocalHostsError(/** @type {any} */ (e)?.message ?? t('common.error.failed'));
+    } finally {
+      setLocalHostsSaving(false);
+    }
+  }
+
+  async function handleReload() {
+    setReloading(true);
+    setReloadMsg(null);
+    try {
+      await api.reloadSource(sid);
+      setReloadMsg('ok');
+    } catch {
+      setReloadMsg('err');
+    } finally {
+      setReloading(false);
+      setTimeout(() => setReloadMsg(null), 3000);
+    }
   }
 
   async function handleDelete() {
-    const confirmed = await confirmDialog({
-      title: 'Delete source?',
-      message: 'This will permanently delete this source extension. This cannot be undone.',
-      confirmLabel: 'Delete',
+    const confirmed = await showConfirm(t('source.delete.message'), {
+      title: t('source.delete.title'),
+      confirmLabel: t('common.delete'),
       danger: true,
     });
     if (!confirmed) return;
@@ -184,65 +371,11 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
       await api.deleteSource(sid);
       onDeleted();
     } catch (e) {
-      console.error('Delete failed:', e);
+      showApiError(e);
     }
   }
 
 
-
-  const _toggleGroup = (group) => setCollapsedGroups(prev => {
-    const next = new Set(prev);
-    next.has(group) ? next.delete(group) : next.add(group);
-    return next;
-  });
-
-  const prefContent = prefsLoading
-    ? html`<p class="text-sm text-text-muted py-2">Loading preferences…</p>`
-    : activeDescriptor
-      ? html`<${PreferenceDetailView}
-          sourceId=${sid}
-          descriptor=${activeDescriptor}
-          currentValue=${liveValues[activeDescriptor.key]}
-          liveValues=${liveValues}
-          onValueChange=${(key, val) => setLiveValues(prev => ({ ...prev, [key]: val }))}
-          onBack=${() => setActiveDescriptor(null)}
-        />`
-      : schema.length === 0
-        ? html`<p class="text-sm text-text-muted py-4">No preferences available.</p>`
-        : html`
-          <div class="flex flex-col">
-            ${[...groups.entries()].map(([group, descriptors]) => {
-              const isCollapsed = collapsedGroups.has(group);
-              return html`
-                <div key=${group} class="flex flex-col">
-                  ${group && html`
-                    <button
-                      class="flex items-center justify-between gap-2 py-2 w-full text-left text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded"
-                      onClick=${() => _toggleGroup(group)}
-                      aria-expanded=${!isCollapsed}
-                    >
-                      ${group}
-                      <span class=${'[&_svg]:w-3.5 [&_svg]:h-3.5 transition-transform ' + (isCollapsed ? '' : 'rotate-180')}>
-                        <${Icon} svg=${iconChevronDown} />
-                      </span>
-                    </button>
-                  `}
-                  ${!isCollapsed && descriptors.map(d => html`
-                    <${PreferenceRow}
-                      key=${d.key}
-                      sourceId=${sid}
-                      descriptor=${d}
-                      currentValue=${liveValues[d.key]}
-                      liveValues=${liveValues}
-                      onValueChange=${(key, val) => setLiveValues(prev => ({ ...prev, [key]: val }))}
-                      onOpenDetail=${(desc) => setActiveDescriptor(desc)}
-                    />
-                  `)}
-                </div>
-              `;
-            })}
-          </div>
-        `;
 
   /** @param {string} title @param {string} subtitle */
   const mkSectionHdr = (title, subtitle) => html`
@@ -252,22 +385,60 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
     </div>
   `;
 
+  let sourceLanguages = [];
+  if (source.languages) {
+    try {
+      const parsed = JSON.parse(source.languages);
+      if (Array.isArray(parsed)) sourceLanguages = parsed;
+    } catch { }
+  }
+
   return html`
     <div class="flex flex-col gap-8">
 
+      <!-- 0. About -->
+      <div class="flex flex-col gap-3">
+        <div class="bg-surface border border-border rounded-xl px-4 md:px-6 py-4 flex items-start gap-4">
+          ${sourceIconSrc(source.icon)
+            ? html`<img src=${sourceIconSrc(source.icon)} alt="" class="w-12 h-12 rounded-lg shrink-0 object-contain bg-surface-2" />`
+            : html`<span class="w-12 h-12 rounded-lg shrink-0 flex items-center justify-center text-lg font-medium" style="background:var(--color-surface-3);color:var(--color-text-muted)">${(source.name ?? '?')[0]?.toUpperCase()}</span>`
+          }
+          <div class="flex flex-col gap-1.5 min-w-0">
+            <p class="text-sm font-medium text-text truncate">${source.name}</p>
+            <p class="text-xs text-text-muted">${source.description || t('source.about.no_description')}</p>
+            ${sourceLanguages.length > 0 && html`
+              <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <span class="text-2xs text-text-faint">${t('source.about.languages')}:</span>
+                ${sourceLanguages.map(lang => html`<span key=${lang} class="text-2xs px-1.5 py-0.5 rounded bg-surface-2 text-text-muted">${lang}</span>`)}
+              </div>
+            `}
+            ${source.backend && html`
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span
+                  class="text-2xs px-1.5 py-0.5 rounded bg-surface-2 text-text-muted cursor-help"
+                  data-tooltip=${t('source.backend.tooltip')}
+                >
+                  ${source.backend === 'yaml' ? t('source.backend.yaml') : t('source.backend.wasm')}
+                </span>
+              </div>
+            `}
+          </div>
+        </div>
+      </div>
+
       <!-- 1. General -->
       <div class="flex flex-col gap-3">
-        ${mkSectionHdr('General', 'Configure basic source behaviour and status.')}
+        ${mkSectionHdr(t('source.settings.general'), t('source.settings.general.desc'))}
         <div class=${'bg-surface border rounded-xl px-4 md:px-6 py-1 ' + (source.unrestricted_http ? 'border-warn/50' : 'border-border')}>
 
           <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-text">Runtime status</p>
-                <p class="text-xs text-text-muted mt-0.5">Whether the extension is currently loaded in memory</p>
+                <p class="text-sm font-medium text-text">${t('source.settings.runtime_status')}</p>
+                <p class="text-xs text-text-muted mt-0.5">${t('source.settings.runtime_status.desc')}</p>
               </div>
               <span class=${'shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ' + (isActive ? 'bg-success/20 text-success' : 'bg-surface-2 text-text-muted')}>
-                ${isActive ? 'Loaded' : 'Unloaded'}
+                ${isActive ? t('source.settings.loaded') : t('source.settings.unloaded')}
               </span>
             </div>
           </div>
@@ -275,15 +446,15 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
           <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-text">Enabled</p>
-                <p class="text-xs text-text-muted mt-0.5">Allow this source to be used for browsing and searching</p>
+                <p class="text-sm font-medium text-text">${t('source.settings.enabled')}</p>
+                <p class="text-xs text-text-muted mt-0.5">${t('source.settings.enabled.desc')}</p>
               </div>
               <label class="kani-toggle shrink-0 cursor-pointer">
                 <input
                   type="checkbox"
                   class="kani-toggle__input"
                   checked=${enabled}
-                  aria-label=${enabled ? 'Disable source' : 'Enable source'}
+                  aria-label=${enabled ? t('source.settings.disable') : t('source.settings.enable')}
                   onChange=${(e) => toggleEnabled(/** @type {HTMLInputElement} */ (e.target).checked)}
                 />
                 <span class="kani-toggle__track"></span>
@@ -293,11 +464,11 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
               <div class="mt-3 rounded-lg bg-warn/10 border border-warn/30 p-3 flex flex-col gap-2">
                 <p class="text-sm text-warn flex items-center gap-1.5">
                   <${Icon} svg=${iconWarning} />
-                  This extension uses unrestricted HTTP. Only enable it if you trust the source.
+                  ${t('source.settings.unrestricted_warning')}
                 </p>
                 <div class="flex items-center gap-2 justify-end">
-                  <button class="btn-ghost btn-sm" onClick=${() => setConfirming(false)}>Cancel</button>
-                  <button class="btn-danger btn-sm" onClick=${() => toggleEnabled(true)}>Enable Anyway</button>
+                  <button class="btn-ghost btn-sm" onClick=${() => setConfirming(false)}>${t('common.cancel')}</button>
+                  <button class="btn-danger btn-sm" onClick=${() => toggleEnabled(true)}>${t('source.settings.enable_anyway')}</button>
                 </div>
               </div>
             `}
@@ -305,66 +476,158 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
 
           ${source.unrestricted_http && html`
             <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
-              <div class="flex items-center gap-1.5 text-warn [&_svg]:w-4 [&_svg]:h-4">
+              <div class="flex items-center gap-1.5 text-warn icon-sm">
                 <${Icon} svg=${iconWarning} />
-                <p class="text-sm font-medium">Unrestricted HTTP</p>
+                <p class="text-sm font-medium">${t('source.settings.unrestricted_http')}</p>
               </div>
-              <p class="text-xs text-text-muted mt-0.5">This extension can make arbitrary network requests. Only use it if you trust the source.</p>
+              <p class="text-xs text-text-muted mt-0.5">${t('source.settings.unrestricted_http.desc')}</p>
             </div>
           `}
 
           <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
             <div class="flex items-center justify-between gap-4">
-              <p class="text-sm font-medium text-text">Version</p>
-              <span class="text-sm text-text-muted shrink-0">v${source.version ?? '?'}</span>
+              <p class="text-sm font-medium text-text">${t('source.settings.version')}</p>
+              <span class="flex items-center gap-2 shrink-0">
+                ${source.version?.includes('+debug') && html`
+                  <span class="text-2xs px-1.5 py-0.5 rounded bg-warn/20 text-warn font-medium leading-none" title="Built with debug info — readable WASM backtraces, larger binary">DEBUG</span>
+                `}
+                <span class="text-sm text-text-muted">v${(source.version ?? '?').replace('+debug', '')}</span>
+              </span>
             </div>
           </div>
+
+          ${capabilities?.streaming_chapters && html`
+            <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
+              <div class="flex items-center gap-1.5 text-text icon-sm">
+                <p class="text-sm font-medium">${t('source.settings.streaming')}</p>
+              </div>
+              <p class="text-xs text-text-muted mt-0.5">${t('source.settings.streaming.desc')}</p>
+            </div>
+          `}
+
+          ${hasPermission('source:install') && html`
+            <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-text">${t('source.settings.reload')}</p>
+                  <p class="text-xs text-text-muted mt-0.5">${t('source.settings.reload.desc')}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  ${reloadMsg === 'ok' && html`<span class="text-xs text-success">${t('source.settings.reloaded')}</span>`}
+                  ${reloadMsg === 'err' && html`<span class="text-xs text-danger">${t('common.error.failed')}</span>`}
+                  <button class="btn-ghost btn-sm" disabled=${reloading} onClick=${handleReload}>
+                    ${reloading ? t('source.settings.reloading') : t('source.settings.reload.action')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-text">${t('source.concurrency.title')}</p>
+                  <p class="text-xs text-text-muted mt-0.5">${t('source.concurrency.desc')}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <input
+                    type="number"
+                    class="input w-20 text-sm"
+                    min="1"
+                    max="16"
+                    placeholder=${t('source.concurrency.placeholder')}
+                    value=${dlConcurrency}
+                    disabled=${dlConcurrencySaving}
+                    onInput=${(/** @type {any} */ e) => setDlConcurrency(e.target.value)}
+                  />
+                  <button
+                    class="btn-ghost btn-sm"
+                    disabled=${dlConcurrencySaving}
+                    onClick=${handleSaveDlConcurrency}
+                  >${dlConcurrencySaving ? t('common.saving') : t('common.save')}</button>
+                </div>
+              </div>
+            </div>
+          `}
+
+          ${canGrantLocal && html`
+            <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
+              <div class="flex flex-col gap-2">
+                <div>
+                  <p class="text-sm font-medium text-text">${t('source.local_hosts.title')}</p>
+                  <p class="text-xs text-text-muted mt-0.5">${t('source.local_hosts.desc')}</p>
+                </div>
+                <textarea
+                  class="input text-sm font-mono"
+                  rows="3"
+                  aria-label=${t('source.local_hosts.title')}
+                  placeholder=${t('source.local_hosts.placeholder')}
+                  value=${localHosts}
+                  disabled=${localHostsSaving}
+                  onInput=${(/** @type {any} */ e) => setLocalHosts(e.target.value)}
+                ></textarea>
+                ${localHostsError && html`<p class="text-xs text-danger">${localHostsError}</p>`}
+                <div class="flex justify-end">
+                  <button
+                    class="btn-secondary btn-sm"
+                    disabled=${localHostsSaving}
+                    onClick=${handleSaveLocalHosts}
+                  >${localHostsSaving ? t('common.saving') : t('common.save')}</button>
+                </div>
+              </div>
+            </div>
+          `}
 
         </div>
       </div>
 
-      <!-- 2. Preferences -->
-    <div class="flex flex-col gap-3">
-        ${mkSectionHdr('Preferences', 'Extension-specific settings and configuration options.')}
-
-        <!-- Desktop: inline in card -->
-        <div class="hidden md:block bg-surface border border-border rounded-xl px-4 md:px-6 py-1">
-          ${prefContent}
-        </div>
-
-        <!-- Mobile: configure button + modal -->
-        <div class="md:hidden">
-            <div class="bg-surface border border-border rounded-xl px-4 md:px-6 py-1 flex flex-col divide-y divide-border-subtle">
-                <div class="py-4 first:pt-3 last:pb-3">
-                    <div class="flex items-start justify-between gap-4 flex-wrap">
-                        <div>
-                            <p class="text-sm font-medium text-text">Configure Extension Preferences</p>
-                            <p class="text-xs text-text-muted mt-0.5">Configure the internal preferences exposed by the extension.</p>
-                        </div>
-                        <button class="btn-ghost" onClick=${() => setModalOpen(true)}>Configure preferences</button>
-                    </div>
-                    <${Modal} open=${modalOpen} onClose=${() => setModalOpen(false)} title="Extension Preferences">
-                        <div class="flex flex-col divide-y divide-border-subtle">
-                            ${prefContent}
-                        </div>
-                    </${Modal}>
+      <!-- 3. Health -->
+      <div class="flex flex-col gap-3">
+        ${mkSectionHdr(t('source.settings.health'), t('source.settings.health.desc'))}
+        <div class="bg-surface border border-border rounded-xl px-4 md:px-6 py-1">
+          ${healthLoading
+            ? html`<div dangerouslySetInnerHTML=${{ __html: skeletonKeyValueRows(4) }} />`
+            : health == null
+              ? html`<p class="text-sm text-text-muted py-3">${t('source.settings.health.empty')}</p>`
+              : html`
+                <div class="flex flex-col divide-y divide-border-subtle">
+                  <div class="flex items-center justify-between gap-4 py-3">
+                    <p class="text-sm text-text">${t('source.health.last_success')}</p>
+                    <span class="text-sm text-text-muted">${health.last_success_at ? fmtCompactDate(health.last_success_at) : '—'}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4 py-3">
+                    <p class="text-sm text-text">${t('source.health.last_error')}</p>
+                    <span class="text-sm text-text-muted">${health.last_error_at ? fmtCompactDate(health.last_error_at) : '—'}</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-4 py-3">
+                    <p class="text-sm text-text">${t('source.health.consecutive_errors')}</p>
+                    ${(health.consecutive_error_count ?? 0) >= 3
+                      ? html`<span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-danger/20 text-danger" aria-label=${errorCountAriaLabel(health.consecutive_error_count ?? 0)}>${health.consecutive_error_count}</span>`
+                      : (health.consecutive_error_count ?? 0) > 0
+                        ? html`<span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-warn/20 text-warn" aria-label=${errorCountAriaLabel(health.consecutive_error_count ?? 0)}>${health.consecutive_error_count}</span>`
+                        : html`<span class="text-sm text-success" aria-label="${t('source.health.zero_errors')}">0</span>`
+                    }
+                  </div>
+                  <div class="flex items-center justify-between gap-4 py-3">
+                    <p class="text-sm text-text">${t('source.health.avg_response')}</p>
+                    <span class="text-sm text-text-muted">${health.avg_response_ms != null ? Math.round(health.avg_response_ms) + ' ms' : '—'}</span>
+                  </div>
                 </div>
-            </div>
+              `
+          }
         </div>
-    </div>
-
+      </div>
 
       <!-- 4. Danger Zone -->
       <div class="flex flex-col gap-3">
-        ${mkSectionHdr('Danger Zone', 'These actions are difficult or impossible to reverse. Proceed with care.')}
+        ${mkSectionHdr(t('source.settings.danger'), t('source.settings.danger.desc'))}
         <div class="bg-surface border border-border rounded-xl px-4 md:px-6 py-1">
           <div class="py-4 first:pt-3 last:pb-3 border-b border-border-subtle last:border-b-0">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-text">Delete source</p>
-                <p class="text-xs text-text-muted mt-0.5">Permanently removes this source extension</p>
+                <p class="text-sm font-medium text-text">${t('source.delete.action')}</p>
+                <p class="text-xs text-text-muted mt-0.5">${t('source.delete.desc')}</p>
               </div>
-              <button class="btn-danger btn-sm shrink-0" onClick=${handleDelete}>Delete</button>
+              <button class="btn-danger btn-sm shrink-0" onClick=${handleDelete}>${t('common.delete')}</button>
             </div>
           </div>
         </div>
@@ -374,36 +637,33 @@ function SourceSettingsPage({ source, activeIds, onDeleted, onEnabledChange }) {
   `;
 }
 
-// ── URL state ─────────────────────────────────────────────────────────────────
+
 
 function _updateUrl() {
-  const params = new URLSearchParams();
-  params.set('tab', _activeTab);
-  if (_page > 1) params.set('page', String(_page));
-  if (_query) params.set('q', _query);
+  /** @type {Record<string, string|number|null>} */
+  const params = {
+    tab: _activeTab,
+    page: _page > 1 ? _page : null,
+    q: _query || null,
+  };
   for (const [filterId, state] of Object.entries(_filters)) {
-    params.set('f_' + filterId, JSON.stringify(state));
+    params['f_' + filterId] = JSON.stringify(state);
   }
-  const qs = params.toString();
-  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+  replaceState(params);
 }
 
-// ── Breadcrumb ────────────────────────────────────────────────────────────────
 
 function _updateBreadcrumb() {
-  if (!_breadcrumbEl) return;
-  _breadcrumbEl.innerHTML = '';
-  const crumbs = [{ label: 'Sources', href: '/sources' }];
+  const crumbs = [{ label: t('source.nav.sources'), href: '/sources' }];
   if (_query) {
-    crumbs.push({ label: _sourceName || 'Source', href: `/source/${_sourceId}` });
-    crumbs.push({ label: `Search: ${_query}` });
+    crumbs.push({ label: _sourceName || t('source.nav.source'), href: `/source/${_sourceId}` });
+    crumbs.push({ label: t('source.nav.search', { query: _query }) });
   } else {
-    crumbs.push({ label: _sourceName || 'Source' });
+    crumbs.push({ label: _sourceName || t('source.nav.source') });
   }
-  _breadcrumbEl.appendChild(createBreadcrumb(crumbs));
+  setPageHeader({ crumbs, actions: _headerActions });
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 
 /**
  * @param {HTMLElement} container
@@ -414,20 +674,21 @@ export async function init(container, { id }) {
   _page = 1;
   const _urlParams = new URLSearchParams(location.search);
   _query = _urlParams.get('q') ?? '';
-  _pageSize = getLocalInt('kani_source_page_size', 24);
+  _tileSize = getTileSize();
   _sourceName = '';
   _sourceEnabled = true;
   _settingsMountEl = null;
-  _breadcrumbEl = null;
+  _prefsMountEl = null;
   _popularPanelEl = null;
   _searchPanelEl = null;
   _tabsUpdateFn = null;
   _settingsMounted = false;
+  _prefsMounted = false;
+  _hasPrefs = false;
   _filterDefs = [];
   _filterModalDestroy?.();
   _filterModalDestroy = null;
 
-  // If a query or filter arrives from a semantic link, open directly to Search tab
   const _preFilterName  = _urlParams.get('filter_name');
   const _preFilterValue = _urlParams.get('filter_value');
   _filters = (_preFilterName && _preFilterValue)
@@ -436,13 +697,17 @@ export async function init(container, { id }) {
 
   // Restore tab from URL (takes precedence over query-based heuristic)
   const _tabParam = _urlParams.get('tab');
-  if (_tabParam && ['popular', 'search', 'library', 'settings'].includes(_tabParam)) {
+  if (_tabParam === 'library') {
+    navigate(`/?source_id=${_sourceId}`, { replace: true });
+    return;
+  }
+  if (_tabParam && ['popular', 'search', 'prefs', 'settings'].includes(_tabParam)) {
     _activeTab = _tabParam;
   } else {
     _activeTab = (_query || _preFilterName) ? 'search' : 'popular';
   }
 
-  // Restore page number from URL
+  // Restore page numbers from URL
   const _pageParam = _urlParams.get('page');
   if (_pageParam) _page = Math.max(1, parseInt(_pageParam, 10) || 1);
 
@@ -454,77 +719,77 @@ export async function init(container, { id }) {
 
   if (!hasPermission('source:browse')) {
     container.innerHTML = '';
-    container.appendChild(createErrorState({ message: 'You do not have permission to browse sources.' }));
+    container.appendChild(createErrorState({ message: t('source.error.no_permission') }));
     return;
   }
 
+  const header = createSourcesHeaderActions({
+    canInstall: hasPermission('source:install'),
+    onTab: (tab) => navigate(tab === 'repos' ? '/sources?tab=repos' : '/sources'),
+  });
+  header.setActive('extensions');
+  _headerActions = header.actions;
+  _addSourceBtn = header.addSourceBtn;
+
+  container.classList.add('page-fixed');
   container.innerHTML = `
-    <div class="flex">
+    <div class="flex page-body-host">
 
       <!-- Sidebar (lg+) — SourcesSidebar mounts here -->
       <aside
-        class="hidden lg:flex flex-col w-60 shrink-0 border-r border-border bg-surface sticky top-14 overflow-hidden"
-        style="height: calc(100vh - 3.5rem); margin-bottom: -1.5rem"
-        aria-label="Sources"
+        class="hidden lg:flex flex-col w-72 shrink-0 border-r border-border-subtle sticky overflow-y-auto"
+        style="top:0;height:calc(100dvh - var(--header-h));"
+        aria-label="${t('source.nav.sources')}"
       ></aside>
 
       <!-- Main panel -->
-      <div class="flex-1 min-w-0 flex flex-col">
+      <div class="flex-1 min-w-0 flex flex-col page-col">
 
-        <div class="flex-1 max-w-[1400px] w-full px-4 md:px-6 py-4 md:pt-6 md:pb-0 flex flex-col gap-4">
-          <!-- Breadcrumb -->
-          <div class="js-breadcrumb"></div>
-
+        <div class="flex-1 max-w-page mx-auto w-full px-4 md:px-6 py-4 md:pt-6 md:pb-0 flex flex-col gap-4 page-col">
           <!-- Tab bar -->
           <div class="js-tabs"></div>
 
           <!-- Popular panel -->
-          <div class="js-panel" data-panel="popular">
-            <div class="flex flex-col gap-4">
+          <div class="js-panel page-panel" data-panel="popular">
+            <div class="flex flex-col gap-4 page-col page-fill">
               <div class="flex items-end justify-end gap-2">
-                <select class="input w-20 js-popular-page-size" aria-label="Page size">
-                  ${[12, 24, 48].map(n => `<option value="${n}"${n === _pageSize ? ' selected' : ''}>${n}</option>`).join('')}
-                </select>
+                <div class="js-popular-tile-size-mount w-28"></div>
               </div>
-              <div class="js-popular-grid" aria-live="polite" aria-busy="false"></div>
+              <div class="js-popular-grid page-body" aria-live="polite" aria-busy="false"><div class="manga-grid"></div></div>
               <div class="js-popular-pagination"></div>
             </div>
           </div>
 
           <!-- Search panel (hidden initially) -->
-          <div class="js-panel hidden" data-panel="search">
-            <div class="flex flex-col gap-4">
+          <div class="js-panel page-panel hidden" data-panel="search">
+            <div class="flex flex-col gap-4 page-col page-fill">
               <div class="flex items-center gap-3 flex-wrap">
-                <div class="relative flex-1 min-w-[200px] max-w-sm">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none [&_svg]:w-4 [&_svg]:h-4" aria-hidden="true">${iconSearch}</span>
+                <div class="relative flex-1 min-w-48 max-w-sm">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none icon-sm" aria-hidden="true">${iconSearch}</span>
                   <input
                     type="search"
                     class="input w-full pl-9 js-search"
-                    placeholder="Search manga…"
-                    aria-label="Search manga in this source"
+                    placeholder="${t('source.search.placeholder')}"
+                    aria-label="${t('source.search.aria')}"
                   />
                 </div>
-                <select class="input w-20 js-page-size" aria-label="Page size">
-                  ${[12, 24, 48].map(n => `<option value="${n}"${n === _pageSize ? ' selected' : ''}>${n}</option>`).join('')}
-                </select>
-                <button type="button" class="js-filter-btn btn-ghost btn-sm flex items-center gap-1.5" aria-label="Open filters" style="display:none">Filters</button>
+                <div class="js-tile-size-mount w-28 shrink-0"></div>
+                <button type="button" class="js-filter-btn input flex items-center justify-center gap-1.5 w-full sm:w-auto shrink-0" aria-label="${t('source.filters.open')}" style="display:none">${t('library.filters')}</button>
               </div>
-              <div class="js-search-grid" aria-live="polite" aria-busy="false"></div>
+              <div class="js-search-grid page-body" aria-live="polite" aria-busy="false"><div class="manga-grid"></div></div>
               <div class="js-search-pagination"></div>
             </div>
           </div>
 
-          <!-- Library panel (hidden initially) -->
-          <div class="js-panel hidden" data-panel="library">
-            <div class="flex flex-col gap-4">
-              <div class="js-lib-grid" aria-live="polite" aria-busy="false"></div>
-              <div class="js-lib-pagination"></div>
-            </div>
+
+          <!-- Preferences panel (hidden initially) -->
+          <div class="js-panel page-panel hidden" data-panel="prefs">
+            <div class="js-prefs-mount flex flex-col gap-4 page-body"></div>
           </div>
 
           <!-- Settings panel (hidden initially) -->
-          <div class="js-panel hidden" data-panel="settings">
-            <div class="js-settings-mount flex flex-col gap-4"></div>
+          <div class="js-panel page-panel hidden" data-panel="settings">
+            <div class="js-settings-mount flex flex-col gap-4 page-body"></div>
           </div>
         </div>
       </div>
@@ -532,44 +797,40 @@ export async function init(container, { id }) {
   `;
 
   _asideEl = /** @type {HTMLElement} */ (container.querySelector('aside'));
-  _breadcrumbEl    = /** @type {HTMLElement} */ (container.querySelector('.js-breadcrumb'));
   _settingsMountEl = /** @type {HTMLElement} */ (container.querySelector('.js-settings-mount'));
+  _prefsMountEl = /** @type {HTMLElement} */ (container.querySelector('.js-prefs-mount'));
   _popularPanelEl  = /** @type {HTMLElement} */ (container.querySelector('[data-panel="popular"]'));
   _searchPanelEl   = /** @type {HTMLElement} */ (container.querySelector('[data-panel="search"]'));
 
   const popularGridEl  = /** @type {HTMLElement} */ (container.querySelector('.js-popular-grid'));
   const popularPaginEl = /** @type {HTMLElement} */ (container.querySelector('.js-popular-pagination'));
-  const popularSizeEl  = /** @type {HTMLSelectElement} */ (container.querySelector('.js-popular-page-size'));
+  const popularSizeMountEl = /** @type {HTMLElement} */ (container.querySelector('.js-popular-tile-size-mount'));
   const searchGridEl   = /** @type {HTMLElement} */ (container.querySelector('.js-search-grid'));
   const searchPaginEl  = /** @type {HTMLElement} */ (container.querySelector('.js-search-pagination'));
   const filterBtnEl    = /** @type {HTMLButtonElement} */ (container.querySelector('.js-filter-btn'));
   const searchEl       = /** @type {HTMLInputElement} */ (container.querySelector('.js-search'));
-  const searchSizeEl   = /** @type {HTMLSelectElement} */ (container.querySelector('.js-page-size'));
-  const libGridEl      = /** @type {HTMLElement} */ (container.querySelector('.js-lib-grid'));
-  const libPaginEl     = /** @type {HTMLElement} */ (container.querySelector('.js-lib-pagination'));
+  const searchSizeMountEl = /** @type {HTMLElement} */ (container.querySelector('.js-tile-size-mount'));
 
-  // ── Breadcrumb ──
   _updateBreadcrumb();
+
+  // Wire add source button. Mount once per click and close via the returned
+  // cleanup — mountIntoModalRoot gives each call its own container, so
+  // re-mounting with open=false would stack an empty modal instead of closing.
+  if (_addSourceBtn) {
+    _addSourceBtn.addEventListener('click', () => {
+      let cleanup = () => {};
+      cleanup = mountIntoModalRoot(html`
+        <${AddSourceModal}
+          open=${true}
+          onClose=${() => cleanup()}
+          onCreated=${() => { cleanup(); _refreshSidebar(); }}
+        />
+      `);
+    });
+  }
 
   if (_query) searchEl.value = _query;
 
-  // ── Disabled subpage helper ──
-  /** Shows a "disabled" placeholder in a panel, replacing its content. */
-  function _showDisabledPanel(panelEl) {
-    const inner = panelEl.querySelector('.flex.flex-col');
-    if (!inner) return;
-    inner.innerHTML = `
-      <div class="flex flex-col items-center justify-center py-20 gap-4 text-center">
-        <span class="[&_svg]:w-8 [&_svg]:h-8 text-warn">${iconWarning}</span>
-        <div>
-          <p class="text-sm font-medium text-text">This extension is disabled</p>
-          <p class="text-xs text-text-muted mt-1">Enable it in the Settings tab to browse manga.</p>
-        </div>
-      </div>
-    `;
-  }
-
-  // ── Tab switching ──
   const panels = /** @type {NodeListOf<HTMLElement>} */ (container.querySelectorAll('.js-panel'));
 
   let _popularFetched = false;
@@ -581,10 +842,9 @@ export async function init(container, { id }) {
       panel.classList.toggle('hidden', panel.dataset.panel !== tab);
     }
     if (tab === 'settings') _mountSettings();
-    if (tab === 'library') _fetchLibrary(libGridEl, libPaginEl);
+    if (tab === 'prefs') _mountPrefs();
     if (tab === 'popular' && !_popularFetched) {
       _popularFetched = true;
-      _page = 1;
       if (!_sourceEnabled) {
         _showDisabledPanel(/** @type {HTMLElement} */ (container.querySelector('[data-panel="popular"]')));
       } else {
@@ -596,19 +856,27 @@ export async function init(container, { id }) {
     }
   };
 
-  // ── Tab bar ──
+  const _tabDefs = () => [
+    { id: 'popular', name: t('source.tab.popular') },
+    { id: 'search', name: t('source.tab.search') },
+    { id: 'prefs', name: t('source.tab.preferences'), disabled: !_hasPrefs },
+    { id: 'settings', name: t('source.tab.settings') },
+  ];
   const tabsEl = /** @type {HTMLElement} */ (container.querySelector('.js-tabs'));
   const { update: tabsUpdate } = renderTabs(tabsEl, {
-    tabs: [
-      { id: 'popular', name: 'Popular' },
-      { id: 'search', name: 'Search' },
-      { id: 'library', name: 'Library' },
-      { id: 'settings', name: 'Settings' },
-    ],
+    tabs: _tabDefs(),
     activeId: _activeTab,
     onSelect: (tab) => { _switchTab(tab); _updateUrl(); },
   });
   _tabsUpdateFn = tabsUpdate;
+
+  api.getPreferenceSchema(_sourceId).then(schema => {
+    _hasPrefs = Array.isArray(schema) && schema.length > 0;
+    if (_hasPrefs) _tabsUpdateFn?.(_activeTab, _tabDefs());
+  }).catch(() => {
+    _hasPrefs = true;
+    _tabsUpdateFn?.(_activeTab, _tabDefs());
+  });
 
   _switchTab(_activeTab);
 
@@ -617,7 +885,6 @@ export async function init(container, { id }) {
     _fetch(searchGridEl, searchPaginEl, true);
   }
 
-  // ── Search tab events ──
   searchEl.addEventListener('input', debounce(() => {
     _query = searchEl.value.trim();
     _page = 1;
@@ -626,26 +893,50 @@ export async function init(container, { id }) {
     _fetch(searchGridEl, searchPaginEl, true);
   }, 600));
 
-  searchSizeEl.addEventListener('change', () => {
-    _pageSize = Number(searchSizeEl.value);
-    setLocal('kani_source_page_size', String(_pageSize));
-    _page = 1;
-    _updateUrl();
-    _fetch(searchGridEl, searchPaginEl, true);
-  });
+  const _renderTileSize = () => {
+    for (const [mountEl, gridEl, paginEl, isSearch] of /** @type {Array<[HTMLElement, HTMLElement, HTMLElement, boolean]>} */ ([
+      [searchSizeMountEl, searchGridEl, searchPaginEl, true],
+      [popularSizeMountEl, popularGridEl, popularPaginEl, false],
+    ])) {
+      render(html`<${TileSizeSelect}
+        value=${_tileSize}
+        onChange=${(/** @type {import('../tile-size.js').TileSize} */ size) => {
+          _tileSize = size;
+          setTileSize(size);
+          _page = 1;
+          _updateUrl();
+          // The new track width only exists after the browser has laid the grid
+          // out again, so refetch on the next frame rather than this one.
+          requestAnimationFrame(() => {
+            _renderTileSize();
+            if (!isSearch) _popularFetched = false;
+            _fetch(gridEl, paginEl, isSearch);
+            if (!isSearch) _popularFetched = true;
+          });
+        }}
+      />`, mountEl);
+    }
+  };
+  _renderTileSize();
 
-  // ── Popular tab page size ──
-  popularSizeEl.addEventListener('change', () => {
-    _pageSize = Number(popularSizeEl.value);
-    setLocal('kani_source_page_size', String(_pageSize));
-    _page = 1;
-    _popularFetched = false; // force re-fetch
-    _updateUrl();
-    _fetch(popularGridEl, popularPaginEl, false);
-    _popularFetched = true;
-  });
+  // Infinite mode does not fit: its batch is fixed, and refetching on resize
+  // would discard every batch already appended.
+  if (!_isInfinite()) {
+    for (const [gridEl, paginEl, isSearch] of /** @type {Array<[HTMLElement, HTMLElement, boolean]>} */ ([
+      [popularGridEl, popularPaginEl, false],
+      [searchGridEl, searchPaginEl, true],
+    ])) {
+      _stopColumnWatches.push(observeCapacity(gridEl, () => _mangaGridIn(gridEl), () => gridEl, () => {
+        // Only the visible tab refetches; the other measures again when shown.
+        if ((_activeTab === 'search') !== isSearch) return;
+        _page = 1;
+        if (!isSearch) _popularFetched = false;
+        _fetch(gridEl, paginEl, isSearch);
+        if (!isSearch) _popularFetched = true;
+      }, _pageSize));
+    }
+  }
 
-  // ── Filter modal — shown in Search tab, hidden until filter defs load ──
   _filterDefs = [];
   _filterModalDestroy?.();
   _filterModalDestroy = null;
@@ -658,11 +949,10 @@ export async function init(container, { id }) {
     if (Object.keys(_pendingFilterParams).length > 0) {
       const merged = _buildDefaultFilters(_filterDefs);
       for (const [filterId, value] of Object.entries(_pendingFilterParams)) {
-        try { merged[filterId] = JSON.parse(value); } catch { /* skip malformed */ }
+        try { merged[filterId] = JSON.parse(value); } catch { }
       }
       _filters = merged;
       _pendingFilterParams = {};
-      // Re-fetch on search tab with the restored filter state
       if (_activeTab === 'search') _fetch(searchGridEl, searchPaginEl, true);
     }
 
@@ -679,17 +969,15 @@ export async function init(container, { id }) {
     });
   }).catch(() => {});
 
-  // ── Source name + title ──
-  document.title = 'Source - Kani';
+  document.title = t('source.title');
   api.getSource(_sourceId).then(src => {
     if (src?.name) {
       _sourceName = src.name;
-      document.title = src.name + ' - Kani';
+      document.title = t('source.title.named', { name: src.name });
       _updateBreadcrumb();
     }
     if (src && src.enabled === false) {
       _sourceEnabled = false;
-      // If currently on popular or search panel, replace with disabled state
       if (_activeTab === 'popular') {
         _popularFetched = false;
         _showDisabledPanel(/** @type {HTMLElement} */ (container.querySelector('[data-panel="popular"]')));
@@ -700,7 +988,6 @@ export async function init(container, { id }) {
     }
   }).catch(() => {});
 
-  // ── Sidebar component ──
   let _sidebarSources = /** @type {any[]} */ ([]);
 
   function _mountSidebar() {
@@ -719,7 +1006,7 @@ export async function init(container, { id }) {
         _sidebarSources = updated;
         _mountSidebar();
       }
-    } catch { /* ignore */ }
+    } catch { }
   }
 
   api.getSources().then(sources => {
@@ -727,11 +1014,32 @@ export async function init(container, { id }) {
     _mountSidebar();
   }).catch(() => { _mountSidebar(); });
 
-  // Re-fetch sidebar when any source is enabled/disabled (e.g. from Settings tab)
-  _unsubSourcesInvalidation = subscribe('sourcesInvalidation', _refreshSidebar);
+  _unsubSourcesInvalidation = subscribeCache('sourcesInvalidation', _refreshSidebar);
+
+  let _prevPrefVersion = /** @type {number | undefined} */ (undefined);
+  _unsubPrefVersion = subscribeUiState('sourcePreferenceVersion', (/** @type {Map<number, number>} */ map) => {
+    const v = map.get(_sourceId);
+    if (v === undefined || v === _prevPrefVersion) return;
+    _prevPrefVersion = v;
+    const popularGridEl = _popularPanelEl?.querySelector('.js-popular-grid');
+    const popularPaginEl = _popularPanelEl?.querySelector('.js-popular-pagination');
+    const searchGridEl = _searchPanelEl?.querySelector('.js-search-grid');
+    const searchPaginEl = _searchPanelEl?.querySelector('.js-search-pagination');
+    if (_activeTab === 'popular' && popularGridEl && popularPaginEl) {
+      _fetch(/** @type {HTMLElement} */ (popularGridEl), /** @type {HTMLElement} */ (popularPaginEl), false);
+    } else if (_activeTab === 'search' && searchGridEl && searchPaginEl) {
+      _fetch(/** @type {HTMLElement} */ (searchGridEl), /** @type {HTMLElement} */ (searchPaginEl), true);
+    }
+  });
 }
 
-// ── Settings tab ──────────────────────────────────────────────────────────────
+
+function _mountPrefs() {
+  if (_prefsMounted || !_prefsMountEl) return;
+  _prefsMounted = true;
+  render(html`<${SourcePreferencesPanel} sourceId=${_sourceId} />`, _prefsMountEl);
+}
+
 
 async function _mountSettings() {
   if (_settingsMounted || !_settingsMountEl) return;
@@ -748,7 +1056,7 @@ async function _mountSettings() {
     : []);
 
   if (!source) {
-    _settingsMountEl.appendChild(createErrorState({ message: 'Failed to load source settings.' }));
+    _settingsMountEl.appendChild(createErrorState({ message: t('source.error.settings') }));
     return;
   }
 
@@ -760,7 +1068,7 @@ async function _mountSettings() {
       onEnabledChange=${(enabled) => {
         _sourceEnabled = enabled;
         // Notify sidebar to re-fetch so the "Off" badge updates immediately
-        updateState('sourcesInvalidation', n => n + 1);
+        updateCacheState('sourcesInvalidation', n => n + 1);
         // Refresh popular/search panels immediately
         if (_popularPanelEl) {
           const inner = _popularPanelEl.querySelector('.flex.flex-col');
@@ -777,15 +1085,8 @@ async function _mountSettings() {
               inner.appendChild(paginEl);
               _fetch(gridEl, paginEl, false);
             } else {
-              inner.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-20 gap-4 text-center">
-                  <span class="[&_svg]:w-8 [&_svg]:h-8 text-warn">${iconWarning}</span>
-                  <div>
-                    <p class="text-sm font-medium text-text">This extension is disabled</p>
-                    <p class="text-xs text-text-muted mt-1">Enable it in the Settings tab to browse manga.</p>
-                  </div>
-                </div>
-              `;
+              inner.innerHTML = '';
+              inner.appendChild(_disabledStateEl());
             }
           }
         }
@@ -795,15 +1096,8 @@ async function _mountSettings() {
             // Clear grid content but keep search bar; show disabled message in grid area
             const gridEl = inner.querySelector('.js-search-grid');
             if (gridEl) {
-              gridEl.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-20 gap-4 text-center">
-                  <span class="[&_svg]:w-8 [&_svg]:h-8 text-warn">${iconWarning}</span>
-                  <div>
-                    <p class="text-sm font-medium text-text">This extension is disabled</p>
-                    <p class="text-xs text-text-muted mt-1">Enable it in the Settings tab to browse manga.</p>
-                  </div>
-                </div>
-              `;
+              gridEl.innerHTML = '';
+              gridEl.appendChild(_disabledStateEl());
             }
           }
         }
@@ -813,79 +1107,6 @@ async function _mountSettings() {
   );
 }
 
-// ── Library tab ───────────────────────────────────────────────────────────────
-
-let _libLoaded = false;
-
-/** @param {HTMLElement} gridEl @param {HTMLElement} paginEl */
-async function _fetchLibrary(gridEl, paginEl) {
-  if (_libLoaded) return; // don't re-fetch on re-switch to library tab (page changes clear this flag)
-  _libLoaded = true;
-
-  _libAbort?.abort();
-  _libAbort = new AbortController();
-  _destroyLibPagination?.();
-  _destroyLibPagination = null;
-  paginEl.innerHTML = '';
-  gridEl.innerHTML = skeletonGrid(_libPageSize);
-  gridEl.setAttribute('aria-busy', 'true');
-  startLoading();
-
-  let result;
-  try {
-    result = await api.getLibrary({
-      page: _libPage,
-      page_size: _libPageSize,
-      source_id: _sourceId,
-    }, _libAbort.signal);
-  } catch (e) {
-    if (e?.name === 'AbortError') return;
-    gridEl.innerHTML = '';
-    gridEl.setAttribute('aria-busy', 'false');
-    finishLoading();
-    gridEl.appendChild(createErrorState({ message: 'Failed to load library.' }));
-    return;
-  }
-
-  finishLoading();
-  gridEl.innerHTML = '';
-  gridEl.setAttribute('aria-busy', 'false');
-
-  const items = Array.isArray(result?.items) ? result.items
-    : Array.isArray(result?.manga)            ? result.manga
-    : Array.isArray(result)                   ? result
-    : [];
-
-  if (items.length === 0) {
-    gridEl.appendChild(createEmptyState({
-      icon: iconSearch,
-      title: 'No library manga from this source.',
-    }));
-    return;
-  }
-
-  const grid = document.createElement('div');
-  grid.className = 'manga-grid';
-  for (const m of items) {
-    grid.appendChild(createMangaCard({
-      manga: { id: m.id, title: m.title, cover_image_url: m.cover_url ?? null },
-      href: `/manga/${m.id}?from_source=${_sourceId}`,
-    }));
-  }
-  gridEl.appendChild(grid);
-
-  const hasNext = hasNextPage(result, items.length, _libPageSize);
-  if (_libPage > 1 || hasNext) {
-    const { destroy } = renderPagination(paginEl, {
-      page: _libPage,
-      hasNext,
-      onPageChange: (p) => { _libPage = p; _libLoaded = false; _fetchLibrary(gridEl, paginEl); window.scrollTo(0, 0); },
-    });
-    _destroyLibPagination = destroy;
-  }
-}
-
-// ── Fetch ─────────────────────────────────────────────────────────────────────
 
 /**
  * @param {HTMLElement} gridEl
@@ -893,7 +1114,8 @@ async function _fetchLibrary(gridEl, paginEl) {
  * @param {boolean} isSearch - true = search_manga (query+filters), false = get_popular_manga
  */
 async function _fetch(gridEl, paginEl, isSearch) {
-  const infinite = getLocal('kani_source_pagination') === 'infinite';
+  _syncPageSize(gridEl);
+  const infinite = _isInfinite();
   const isAppend = infinite && _page > 1;
 
   _abort?.abort();
@@ -910,15 +1132,6 @@ async function _fetch(gridEl, paginEl, isSearch) {
   }
   paginEl.innerHTML = '';
 
-  if (isAppend) {
-    paginEl.innerHTML = '<div class="h-14 mx-3 my-2 skeleton rounded-lg"></div>';
-  } else {
-    gridEl.innerHTML = skeletonGrid(_pageSize);
-    gridEl.setAttribute('aria-busy', 'true');
-    gridEl.classList.add('opacity-50', 'pointer-events-none');
-  }
-  startLoading();
-
   const filtersJson = Object.keys(_filters).length > 0
     ? JSON.stringify(
         Object.entries(_filters).map(([id, stateObj]) => ({
@@ -928,81 +1141,61 @@ async function _fetch(gridEl, paginEl, isSearch) {
     )
     : undefined;
 
-  let result;
-  try {
-    result = isSearch
-      ? await api.searchManga(_sourceId, _query, _page, _pageSize, filtersJson, _abort.signal)
-      : await api.getPopularManga(_sourceId, _page, _pageSize, undefined, _abort.signal);
-  } catch (e) {
-    if (e?.name === 'AbortError') return;
-    paginEl.innerHTML = '';
-    if (!isAppend) {
-      gridEl.innerHTML = '';
-      gridEl.setAttribute('aria-busy', 'false');
-      gridEl.classList.remove('opacity-50', 'pointer-events-none');
-      finishLoading();
-      gridEl.appendChild(createErrorState({ message: 'Failed to load manga.' }));
-    }
-    return;
-  }
+  const outcome = await fetchPagedGrid({
+    gridEl,
+    pageSize: _pageSize,
+    append: isAppend,
+    fetchPage: () => isSearch
+      ? api.searchManga(_sourceId, _query, _page, _pageSize, filtersJson, /** @type {AbortController} */ (_abort).signal)
+      : api.getPopularManga(_sourceId, _page, _pageSize, undefined, /** @type {AbortController} */ (_abort).signal),
+    mapItems: (result) => Array.isArray(result?.manga) ? result.manga
+      : Array.isArray(result)                          ? result
+      : [],
+    renderCard: (m) => createMangaCard({
+      manga: { id: m.db_id ?? m.id, title: m.title, cover_image_url: m.cover_url ?? null },
+      href: `/source/${_sourceId}/manga/${encodeURIComponent(m.source_manga_id ?? m.id)}`,
+    }),
+    emptyIcon: iconSearch,
+    emptyTitle: isSearch ? t('source.search.empty') : t('source.popular.empty'),
+    errorMessage: t('source.error.load_manga'),
+    onRetry: () => _fetch(gridEl, paginEl, isSearch),
+    onError: (e, gridEl) => {
+      const err = /** @type {any} */ (e);
+      if (err?.code === 'flaresolverr_required') {
+        gridEl.appendChild(createErrorState({
+          message: err?.hint ?? t('source.error.solver_required'),
+          onRetry: () => _fetch(gridEl, paginEl, isSearch),
+        }));
+        return true;
+      }
+      if (err?.code !== 'source_disabled') return false;
+      const panel = /** @type {HTMLElement | null} */ (gridEl.closest('[data-panel]'));
+      if (panel) _showDisabledPanel(panel);
+      else gridEl.appendChild(createErrorState({ message: t('source.disabled.title') }));
+      return true;
+    },
+  });
+  if (!outcome) return;
+  if ('error' in outcome) { paginEl.innerHTML = ''; return; }
 
-  finishLoading();
+  const { result, items } = outcome;
   paginEl.innerHTML = '';
-  if (!isAppend) {
-    gridEl.innerHTML = '';
-    gridEl.setAttribute('aria-busy', 'false');
-    gridEl.classList.remove('opacity-50', 'pointer-events-none');
-  }
-
-  const items = Array.isArray(result?.manga) ? result.manga
-    : Array.isArray(result)                  ? result
-    : [];
-
-  if (items.length === 0 && !isAppend) {
-    gridEl.appendChild(createEmptyState({
-      icon: iconSearch,
-      title: _query ? 'No results found.' : 'No manga available.',
-    }));
-  } else if (items.length > 0) {
-    if (infinite) {
-      let grid = /** @type {HTMLElement|null} */ (gridEl.querySelector('.manga-grid'));
-      if (!grid) {
-        grid = document.createElement('div');
-        grid.className = 'manga-grid';
-        gridEl.appendChild(grid);
-      }
-      for (const m of items) {
-        grid.appendChild(createMangaCard({
-          manga: { id: m.db_id ?? m.id, title: m.title, cover_image_url: m.cover_url ?? null },
-          href: `/source/${_sourceId}/manga/${encodeURIComponent(m.source_manga_id ?? m.id)}`,
-        }));
-      }
-    } else {
-      const grid = document.createElement('div');
-      grid.className = 'manga-grid';
-      for (const m of items) {
-        grid.appendChild(createMangaCard({
-          manga: { id: m.db_id ?? m.id, title: m.title, cover_image_url: m.cover_url ?? null },
-          href: `/source/${_sourceId}/manga/${encodeURIComponent(m.source_manga_id ?? m.id)}`,
-        }));
-      }
-      gridEl.appendChild(grid);
-    }
-  }
-
   const hasNext = hasNextPage(result, items.length, _pageSize);
   if (infinite) {
     _setupSourceSentinel(gridEl, paginEl, hasNext, isSearch);
-  } else if (_page > 1 || hasNext) {
-    const { destroy } = renderPagination(paginEl, {
-      page: _page,
-      hasNext,
-      onPageChange: (p) => { _page = p; _updateUrl(); _fetch(gridEl, paginEl, isSearch); window.scrollTo(0, 0); },
-    });
-    if (isSearch) {
-      _destroyPaginationSearch = destroy;
-    } else {
-      _destroyPaginationPopular = destroy;
+  } else {
+    if (_page > 1 || hasNext) {
+      const { destroy } = renderPagination(paginEl, {
+        page: _page,
+        hasNext,
+        total: result?.total_pages ?? undefined,
+        onPageChange: (p) => { _page = p; _updateUrl(); _fetch(gridEl, paginEl, isSearch); scrollPageTop(); },
+      });
+      if (isSearch) {
+        _destroyPaginationSearch = destroy;
+      } else {
+        _destroyPaginationPopular = destroy;
+      }
     }
   }
 }
@@ -1029,38 +1222,40 @@ function _setupSourceSentinel(gridEl, paginEl, hasNext, isSearch) {
   _sentinelObserver.observe(sentinel);
 }
 
-// ── Destroy ───────────────────────────────────────────────────────────────────
 
 /** @param {HTMLElement} container */
 export function destroy(container) {
+  for (const stop of _stopColumnWatches) stop();
+  _stopColumnWatches = [];
   _abort?.abort();
   _abort = null;
-  _libAbort?.abort();
-  _libAbort = null;
   _destroyPaginationSearch?.();
   _destroyPaginationSearch = null;
   _destroyPaginationPopular?.();
   _destroyPaginationPopular = null;
-  _destroyLibPagination?.();
-  _destroyLibPagination = null;
   _sentinelObserver?.disconnect();
   _sentinelObserver = null;
   if (_settingsMountEl) render(null, _settingsMountEl);
   _settingsMountEl = null;
   _settingsMounted = false;
-  _libLoaded = false;
-  _libPage = 1;
+  if (_prefsMountEl) render(null, _prefsMountEl);
+  _prefsMountEl = null;
+  _prefsMounted = false;
+  _hasPrefs = false;
   _popularPanelEl = null;
   _searchPanelEl = null;
   _tabsUpdateFn = null;
   if (_asideEl) render(null, _asideEl);
   _asideEl = null;
-  _breadcrumbEl = null;
   _filterModalDestroy?.();
   _filterModalDestroy = null;
   _unsubSourcesInvalidation?.();
   _unsubSourcesInvalidation = null;
-  const pendingId = consumePendingSourceId();
-  if (pendingId !== null) api.deleteSource(pendingId).catch(() => {});
+  _unsubPrefVersion?.();
+  _unsubPrefVersion = null;
+  mountIntoModalRoot(null);
+  _addSourceBtn = null;
+  _headerActions = null;
+  clearPageHeader();
   container.innerHTML = '';
 }

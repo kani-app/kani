@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT email_provider_config FROM settings WHERE id='singleton'",
+  "describe": {
+    "columns": [
+      {
+        "name": "email_provider_config",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "eb35c6e4e3ab0b9ff5092f9240692addbfe275788de53bbc046181ccda2d7273"
+}

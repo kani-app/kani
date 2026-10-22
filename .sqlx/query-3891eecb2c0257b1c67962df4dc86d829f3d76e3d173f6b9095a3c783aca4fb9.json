@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE sources SET deleted_at = datetime('now'), enabled = FALSE WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3891eecb2c0257b1c67962df4dc86d829f3d76e3d173f6b9095a3c783aca4fb9"
+}

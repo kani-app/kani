@@ -1,0 +1,45 @@
+codecov:
+  notify:
+    # Post the Codecov check only after other CI jobs finish.
+    wait_for_ci: true
+
+coverage:
+  status:
+    project:
+      default:
+        # Do not drop below the base branch; tolerate at most 1% drift.
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        # New and changed lines in a PR require at least 50% coverage.
+        target: 50%
+        # Tolerance for a refactor that moves covered lines around.
+        threshold: 2%
+
+component_management:
+  individual_components:
+    - component_id: evaluator
+      paths:
+        - kani-core/src/evaluator/**
+      statuses:
+        - type: project
+          target: 60%
+    - component_id: service
+      paths:
+        - kani-app/src/service/**
+      statuses:
+        - type: project
+          target: 50%
+
+ignore:
+  - "migrations/**"
+  - "static/**"
+  - "kani-extensions/kani-example/**"
+  - "kani-extensions/kani-test-abi/**"
+
+comment:
+  layout: "header, diff, components, files"
+  behavior: default
+  # Skip the report comment when coverage is unchanged.
+  require_changes: true

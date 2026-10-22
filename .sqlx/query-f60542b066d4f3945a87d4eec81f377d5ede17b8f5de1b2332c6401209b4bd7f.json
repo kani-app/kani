@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE user_chapter_tracking SET last_page_read = ? WHERE user_id = ? AND chapter_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "f60542b066d4f3945a87d4eec81f377d5ede17b8f5de1b2332c6401209b4bd7f"
+}

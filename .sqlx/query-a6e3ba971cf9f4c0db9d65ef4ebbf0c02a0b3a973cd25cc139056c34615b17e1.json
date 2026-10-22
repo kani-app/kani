@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE email_verification_tokens SET used_at = CURRENT_TIMESTAMP\n             WHERE token_hash = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "a6e3ba971cf9f4c0db9d65ef4ebbf0c02a0b3a973cd25cc139056c34615b17e1"
+}

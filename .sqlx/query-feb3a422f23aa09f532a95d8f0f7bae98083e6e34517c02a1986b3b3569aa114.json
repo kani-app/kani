@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM smart_collections WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "feb3a422f23aa09f532a95d8f0f7bae98083e6e34517c02a1986b3b3569aa114"
+}

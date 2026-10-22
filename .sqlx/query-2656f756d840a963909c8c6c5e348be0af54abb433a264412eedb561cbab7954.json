@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) FROM email_verification_tokens\n             WHERE user_id = ? AND created_at > datetime('now', '-1 hour')",
+  "describe": {
+    "columns": [
+      {
+        "name": "COUNT(*)",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2656f756d840a963909c8c6c5e348be0af54abb433a264412eedb561cbab7954"
+}

@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT source_id, state, failure_count, last_failure_at, next_retry_at FROM source_circuit_breakers",
+  "describe": {
+    "columns": [
+      {
+        "name": "source_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "state",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "failure_count",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_failure_at",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "next_retry_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "8d6fc177268520df3800143aba5aa64a91f963b2ae53e47b9b615c52c2ecfa3e"
+}

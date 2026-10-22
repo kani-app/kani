@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) FROM jobs WHERE job_type = 'thumbnail_generation' AND status IN ('pending', 'running') AND json_extract(params_json, '$.manga_id') = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "COUNT(*)",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aab59c8e10a44f045bbb0e0b7be37c3468325cdf4392239bbe6755173597d2cf"
+}

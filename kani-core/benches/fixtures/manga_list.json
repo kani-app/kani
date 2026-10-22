@@ -1,0 +1,2206 @@
+{
+ "data": {
+  "items": [
+   {
+    "id": "manga-1",
+    "title": "Series Number 1",
+    "cover": "https://cdn.example.com/1.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 1
+   },
+   {
+    "id": "manga-2",
+    "title": "Series Number 2",
+    "cover": "https://cdn.example.com/2.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 2
+   },
+   {
+    "id": "manga-3",
+    "title": "Series Number 3",
+    "cover": "https://cdn.example.com/3.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 3
+   },
+   {
+    "id": "manga-4",
+    "title": "Series Number 4",
+    "cover": "https://cdn.example.com/4.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 4
+   },
+   {
+    "id": "manga-5",
+    "title": "Series Number 5",
+    "cover": "https://cdn.example.com/5.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 5
+   },
+   {
+    "id": "manga-6",
+    "title": "Series Number 6",
+    "cover": "https://cdn.example.com/6.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 6
+   },
+   {
+    "id": "manga-7",
+    "title": "Series Number 7",
+    "cover": "https://cdn.example.com/7.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 7
+   },
+   {
+    "id": "manga-8",
+    "title": "Series Number 8",
+    "cover": "https://cdn.example.com/8.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 8
+   },
+   {
+    "id": "manga-9",
+    "title": "Series Number 9",
+    "cover": "https://cdn.example.com/9.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 9
+   },
+   {
+    "id": "manga-10",
+    "title": "Series Number 10",
+    "cover": "https://cdn.example.com/10.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 10
+   },
+   {
+    "id": "manga-11",
+    "title": "Series Number 11",
+    "cover": "https://cdn.example.com/11.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 11
+   },
+   {
+    "id": "manga-12",
+    "title": "Series Number 12",
+    "cover": "https://cdn.example.com/12.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 12
+   },
+   {
+    "id": "manga-13",
+    "title": "Series Number 13",
+    "cover": "https://cdn.example.com/13.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 13
+   },
+   {
+    "id": "manga-14",
+    "title": "Series Number 14",
+    "cover": "https://cdn.example.com/14.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 14
+   },
+   {
+    "id": "manga-15",
+    "title": "Series Number 15",
+    "cover": "https://cdn.example.com/15.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 15
+   },
+   {
+    "id": "manga-16",
+    "title": "Series Number 16",
+    "cover": "https://cdn.example.com/16.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 16
+   },
+   {
+    "id": "manga-17",
+    "title": "Series Number 17",
+    "cover": "https://cdn.example.com/17.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 17
+   },
+   {
+    "id": "manga-18",
+    "title": "Series Number 18",
+    "cover": "https://cdn.example.com/18.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 18
+   },
+   {
+    "id": "manga-19",
+    "title": "Series Number 19",
+    "cover": "https://cdn.example.com/19.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 19
+   },
+   {
+    "id": "manga-20",
+    "title": "Series Number 20",
+    "cover": "https://cdn.example.com/20.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 20
+   },
+   {
+    "id": "manga-21",
+    "title": "Series Number 21",
+    "cover": "https://cdn.example.com/21.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 21
+   },
+   {
+    "id": "manga-22",
+    "title": "Series Number 22",
+    "cover": "https://cdn.example.com/22.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 22
+   },
+   {
+    "id": "manga-23",
+    "title": "Series Number 23",
+    "cover": "https://cdn.example.com/23.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 23
+   },
+   {
+    "id": "manga-24",
+    "title": "Series Number 24",
+    "cover": "https://cdn.example.com/24.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 24
+   },
+   {
+    "id": "manga-25",
+    "title": "Series Number 25",
+    "cover": "https://cdn.example.com/25.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 25
+   },
+   {
+    "id": "manga-26",
+    "title": "Series Number 26",
+    "cover": "https://cdn.example.com/26.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 26
+   },
+   {
+    "id": "manga-27",
+    "title": "Series Number 27",
+    "cover": "https://cdn.example.com/27.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 27
+   },
+   {
+    "id": "manga-28",
+    "title": "Series Number 28",
+    "cover": "https://cdn.example.com/28.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 28
+   },
+   {
+    "id": "manga-29",
+    "title": "Series Number 29",
+    "cover": "https://cdn.example.com/29.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 29
+   },
+   {
+    "id": "manga-30",
+    "title": "Series Number 30",
+    "cover": "https://cdn.example.com/30.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 30
+   },
+   {
+    "id": "manga-31",
+    "title": "Series Number 31",
+    "cover": "https://cdn.example.com/31.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 31
+   },
+   {
+    "id": "manga-32",
+    "title": "Series Number 32",
+    "cover": "https://cdn.example.com/32.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 32
+   },
+   {
+    "id": "manga-33",
+    "title": "Series Number 33",
+    "cover": "https://cdn.example.com/33.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 33
+   },
+   {
+    "id": "manga-34",
+    "title": "Series Number 34",
+    "cover": "https://cdn.example.com/34.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 34
+   },
+   {
+    "id": "manga-35",
+    "title": "Series Number 35",
+    "cover": "https://cdn.example.com/35.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 35
+   },
+   {
+    "id": "manga-36",
+    "title": "Series Number 36",
+    "cover": "https://cdn.example.com/36.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 36
+   },
+   {
+    "id": "manga-37",
+    "title": "Series Number 37",
+    "cover": "https://cdn.example.com/37.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 37
+   },
+   {
+    "id": "manga-38",
+    "title": "Series Number 38",
+    "cover": "https://cdn.example.com/38.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 38
+   },
+   {
+    "id": "manga-39",
+    "title": "Series Number 39",
+    "cover": "https://cdn.example.com/39.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 39
+   },
+   {
+    "id": "manga-40",
+    "title": "Series Number 40",
+    "cover": "https://cdn.example.com/40.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 40
+   },
+   {
+    "id": "manga-41",
+    "title": "Series Number 41",
+    "cover": "https://cdn.example.com/41.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 41
+   },
+   {
+    "id": "manga-42",
+    "title": "Series Number 42",
+    "cover": "https://cdn.example.com/42.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 42
+   },
+   {
+    "id": "manga-43",
+    "title": "Series Number 43",
+    "cover": "https://cdn.example.com/43.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 43
+   },
+   {
+    "id": "manga-44",
+    "title": "Series Number 44",
+    "cover": "https://cdn.example.com/44.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 44
+   },
+   {
+    "id": "manga-45",
+    "title": "Series Number 45",
+    "cover": "https://cdn.example.com/45.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 45
+   },
+   {
+    "id": "manga-46",
+    "title": "Series Number 46",
+    "cover": "https://cdn.example.com/46.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 46
+   },
+   {
+    "id": "manga-47",
+    "title": "Series Number 47",
+    "cover": "https://cdn.example.com/47.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 47
+   },
+   {
+    "id": "manga-48",
+    "title": "Series Number 48",
+    "cover": "https://cdn.example.com/48.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 48
+   },
+   {
+    "id": "manga-49",
+    "title": "Series Number 49",
+    "cover": "https://cdn.example.com/49.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 49
+   },
+   {
+    "id": "manga-50",
+    "title": "Series Number 50",
+    "cover": "https://cdn.example.com/50.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 0
+   },
+   {
+    "id": "manga-51",
+    "title": "Series Number 51",
+    "cover": "https://cdn.example.com/51.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 1
+   },
+   {
+    "id": "manga-52",
+    "title": "Series Number 52",
+    "cover": "https://cdn.example.com/52.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 2
+   },
+   {
+    "id": "manga-53",
+    "title": "Series Number 53",
+    "cover": "https://cdn.example.com/53.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 3
+   },
+   {
+    "id": "manga-54",
+    "title": "Series Number 54",
+    "cover": "https://cdn.example.com/54.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 4
+   },
+   {
+    "id": "manga-55",
+    "title": "Series Number 55",
+    "cover": "https://cdn.example.com/55.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 5
+   },
+   {
+    "id": "manga-56",
+    "title": "Series Number 56",
+    "cover": "https://cdn.example.com/56.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 6
+   },
+   {
+    "id": "manga-57",
+    "title": "Series Number 57",
+    "cover": "https://cdn.example.com/57.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 7
+   },
+   {
+    "id": "manga-58",
+    "title": "Series Number 58",
+    "cover": "https://cdn.example.com/58.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 8
+   },
+   {
+    "id": "manga-59",
+    "title": "Series Number 59",
+    "cover": "https://cdn.example.com/59.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 9
+   },
+   {
+    "id": "manga-60",
+    "title": "Series Number 60",
+    "cover": "https://cdn.example.com/60.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 10
+   },
+   {
+    "id": "manga-61",
+    "title": "Series Number 61",
+    "cover": "https://cdn.example.com/61.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 11
+   },
+   {
+    "id": "manga-62",
+    "title": "Series Number 62",
+    "cover": "https://cdn.example.com/62.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 12
+   },
+   {
+    "id": "manga-63",
+    "title": "Series Number 63",
+    "cover": "https://cdn.example.com/63.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 13
+   },
+   {
+    "id": "manga-64",
+    "title": "Series Number 64",
+    "cover": "https://cdn.example.com/64.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 14
+   },
+   {
+    "id": "manga-65",
+    "title": "Series Number 65",
+    "cover": "https://cdn.example.com/65.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 15
+   },
+   {
+    "id": "manga-66",
+    "title": "Series Number 66",
+    "cover": "https://cdn.example.com/66.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 16
+   },
+   {
+    "id": "manga-67",
+    "title": "Series Number 67",
+    "cover": "https://cdn.example.com/67.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 17
+   },
+   {
+    "id": "manga-68",
+    "title": "Series Number 68",
+    "cover": "https://cdn.example.com/68.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 18
+   },
+   {
+    "id": "manga-69",
+    "title": "Series Number 69",
+    "cover": "https://cdn.example.com/69.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 19
+   },
+   {
+    "id": "manga-70",
+    "title": "Series Number 70",
+    "cover": "https://cdn.example.com/70.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 20
+   },
+   {
+    "id": "manga-71",
+    "title": "Series Number 71",
+    "cover": "https://cdn.example.com/71.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 21
+   },
+   {
+    "id": "manga-72",
+    "title": "Series Number 72",
+    "cover": "https://cdn.example.com/72.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 22
+   },
+   {
+    "id": "manga-73",
+    "title": "Series Number 73",
+    "cover": "https://cdn.example.com/73.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 23
+   },
+   {
+    "id": "manga-74",
+    "title": "Series Number 74",
+    "cover": "https://cdn.example.com/74.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 24
+   },
+   {
+    "id": "manga-75",
+    "title": "Series Number 75",
+    "cover": "https://cdn.example.com/75.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 25
+   },
+   {
+    "id": "manga-76",
+    "title": "Series Number 76",
+    "cover": "https://cdn.example.com/76.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 26
+   },
+   {
+    "id": "manga-77",
+    "title": "Series Number 77",
+    "cover": "https://cdn.example.com/77.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 27
+   },
+   {
+    "id": "manga-78",
+    "title": "Series Number 78",
+    "cover": "https://cdn.example.com/78.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 28
+   },
+   {
+    "id": "manga-79",
+    "title": "Series Number 79",
+    "cover": "https://cdn.example.com/79.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 29
+   },
+   {
+    "id": "manga-80",
+    "title": "Series Number 80",
+    "cover": "https://cdn.example.com/80.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 30
+   },
+   {
+    "id": "manga-81",
+    "title": "Series Number 81",
+    "cover": "https://cdn.example.com/81.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 31
+   },
+   {
+    "id": "manga-82",
+    "title": "Series Number 82",
+    "cover": "https://cdn.example.com/82.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 32
+   },
+   {
+    "id": "manga-83",
+    "title": "Series Number 83",
+    "cover": "https://cdn.example.com/83.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 33
+   },
+   {
+    "id": "manga-84",
+    "title": "Series Number 84",
+    "cover": "https://cdn.example.com/84.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 34
+   },
+   {
+    "id": "manga-85",
+    "title": "Series Number 85",
+    "cover": "https://cdn.example.com/85.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 35
+   },
+   {
+    "id": "manga-86",
+    "title": "Series Number 86",
+    "cover": "https://cdn.example.com/86.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 36
+   },
+   {
+    "id": "manga-87",
+    "title": "Series Number 87",
+    "cover": "https://cdn.example.com/87.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 37
+   },
+   {
+    "id": "manga-88",
+    "title": "Series Number 88",
+    "cover": "https://cdn.example.com/88.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 38
+   },
+   {
+    "id": "manga-89",
+    "title": "Series Number 89",
+    "cover": "https://cdn.example.com/89.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 39
+   },
+   {
+    "id": "manga-90",
+    "title": "Series Number 90",
+    "cover": "https://cdn.example.com/90.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 40
+   },
+   {
+    "id": "manga-91",
+    "title": "Series Number 91",
+    "cover": "https://cdn.example.com/91.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 41
+   },
+   {
+    "id": "manga-92",
+    "title": "Series Number 92",
+    "cover": "https://cdn.example.com/92.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 42
+   },
+   {
+    "id": "manga-93",
+    "title": "Series Number 93",
+    "cover": "https://cdn.example.com/93.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 43
+   },
+   {
+    "id": "manga-94",
+    "title": "Series Number 94",
+    "cover": "https://cdn.example.com/94.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 44
+   },
+   {
+    "id": "manga-95",
+    "title": "Series Number 95",
+    "cover": "https://cdn.example.com/95.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 45
+   },
+   {
+    "id": "manga-96",
+    "title": "Series Number 96",
+    "cover": "https://cdn.example.com/96.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 46
+   },
+   {
+    "id": "manga-97",
+    "title": "Series Number 97",
+    "cover": "https://cdn.example.com/97.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 47
+   },
+   {
+    "id": "manga-98",
+    "title": "Series Number 98",
+    "cover": "https://cdn.example.com/98.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 48
+   },
+   {
+    "id": "manga-99",
+    "title": "Series Number 99",
+    "cover": "https://cdn.example.com/99.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 49
+   },
+   {
+    "id": "manga-100",
+    "title": "Series Number 100",
+    "cover": "https://cdn.example.com/100.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 0
+   },
+   {
+    "id": "manga-101",
+    "title": "Series Number 101",
+    "cover": "https://cdn.example.com/101.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 1
+   },
+   {
+    "id": "manga-102",
+    "title": "Series Number 102",
+    "cover": "https://cdn.example.com/102.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 2
+   },
+   {
+    "id": "manga-103",
+    "title": "Series Number 103",
+    "cover": "https://cdn.example.com/103.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 3
+   },
+   {
+    "id": "manga-104",
+    "title": "Series Number 104",
+    "cover": "https://cdn.example.com/104.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 4
+   },
+   {
+    "id": "manga-105",
+    "title": "Series Number 105",
+    "cover": "https://cdn.example.com/105.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 5
+   },
+   {
+    "id": "manga-106",
+    "title": "Series Number 106",
+    "cover": "https://cdn.example.com/106.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 6
+   },
+   {
+    "id": "manga-107",
+    "title": "Series Number 107",
+    "cover": "https://cdn.example.com/107.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 7
+   },
+   {
+    "id": "manga-108",
+    "title": "Series Number 108",
+    "cover": "https://cdn.example.com/108.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 8
+   },
+   {
+    "id": "manga-109",
+    "title": "Series Number 109",
+    "cover": "https://cdn.example.com/109.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 9
+   },
+   {
+    "id": "manga-110",
+    "title": "Series Number 110",
+    "cover": "https://cdn.example.com/110.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 10
+   },
+   {
+    "id": "manga-111",
+    "title": "Series Number 111",
+    "cover": "https://cdn.example.com/111.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 11
+   },
+   {
+    "id": "manga-112",
+    "title": "Series Number 112",
+    "cover": "https://cdn.example.com/112.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 12
+   },
+   {
+    "id": "manga-113",
+    "title": "Series Number 113",
+    "cover": "https://cdn.example.com/113.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 13
+   },
+   {
+    "id": "manga-114",
+    "title": "Series Number 114",
+    "cover": "https://cdn.example.com/114.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 14
+   },
+   {
+    "id": "manga-115",
+    "title": "Series Number 115",
+    "cover": "https://cdn.example.com/115.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 15
+   },
+   {
+    "id": "manga-116",
+    "title": "Series Number 116",
+    "cover": "https://cdn.example.com/116.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 16
+   },
+   {
+    "id": "manga-117",
+    "title": "Series Number 117",
+    "cover": "https://cdn.example.com/117.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 17
+   },
+   {
+    "id": "manga-118",
+    "title": "Series Number 118",
+    "cover": "https://cdn.example.com/118.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 18
+   },
+   {
+    "id": "manga-119",
+    "title": "Series Number 119",
+    "cover": "https://cdn.example.com/119.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 19
+   },
+   {
+    "id": "manga-120",
+    "title": "Series Number 120",
+    "cover": "https://cdn.example.com/120.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 20
+   },
+   {
+    "id": "manga-121",
+    "title": "Series Number 121",
+    "cover": "https://cdn.example.com/121.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 21
+   },
+   {
+    "id": "manga-122",
+    "title": "Series Number 122",
+    "cover": "https://cdn.example.com/122.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 22
+   },
+   {
+    "id": "manga-123",
+    "title": "Series Number 123",
+    "cover": "https://cdn.example.com/123.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 23
+   },
+   {
+    "id": "manga-124",
+    "title": "Series Number 124",
+    "cover": "https://cdn.example.com/124.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 24
+   },
+   {
+    "id": "manga-125",
+    "title": "Series Number 125",
+    "cover": "https://cdn.example.com/125.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 25
+   },
+   {
+    "id": "manga-126",
+    "title": "Series Number 126",
+    "cover": "https://cdn.example.com/126.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 26
+   },
+   {
+    "id": "manga-127",
+    "title": "Series Number 127",
+    "cover": "https://cdn.example.com/127.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 27
+   },
+   {
+    "id": "manga-128",
+    "title": "Series Number 128",
+    "cover": "https://cdn.example.com/128.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 28
+   },
+   {
+    "id": "manga-129",
+    "title": "Series Number 129",
+    "cover": "https://cdn.example.com/129.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 29
+   },
+   {
+    "id": "manga-130",
+    "title": "Series Number 130",
+    "cover": "https://cdn.example.com/130.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 30
+   },
+   {
+    "id": "manga-131",
+    "title": "Series Number 131",
+    "cover": "https://cdn.example.com/131.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 31
+   },
+   {
+    "id": "manga-132",
+    "title": "Series Number 132",
+    "cover": "https://cdn.example.com/132.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 32
+   },
+   {
+    "id": "manga-133",
+    "title": "Series Number 133",
+    "cover": "https://cdn.example.com/133.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 33
+   },
+   {
+    "id": "manga-134",
+    "title": "Series Number 134",
+    "cover": "https://cdn.example.com/134.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 34
+   },
+   {
+    "id": "manga-135",
+    "title": "Series Number 135",
+    "cover": "https://cdn.example.com/135.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 35
+   },
+   {
+    "id": "manga-136",
+    "title": "Series Number 136",
+    "cover": "https://cdn.example.com/136.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 36
+   },
+   {
+    "id": "manga-137",
+    "title": "Series Number 137",
+    "cover": "https://cdn.example.com/137.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 37
+   },
+   {
+    "id": "manga-138",
+    "title": "Series Number 138",
+    "cover": "https://cdn.example.com/138.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 38
+   },
+   {
+    "id": "manga-139",
+    "title": "Series Number 139",
+    "cover": "https://cdn.example.com/139.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 39
+   },
+   {
+    "id": "manga-140",
+    "title": "Series Number 140",
+    "cover": "https://cdn.example.com/140.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 40
+   },
+   {
+    "id": "manga-141",
+    "title": "Series Number 141",
+    "cover": "https://cdn.example.com/141.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 41
+   },
+   {
+    "id": "manga-142",
+    "title": "Series Number 142",
+    "cover": "https://cdn.example.com/142.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 42
+   },
+   {
+    "id": "manga-143",
+    "title": "Series Number 143",
+    "cover": "https://cdn.example.com/143.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 43
+   },
+   {
+    "id": "manga-144",
+    "title": "Series Number 144",
+    "cover": "https://cdn.example.com/144.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 44
+   },
+   {
+    "id": "manga-145",
+    "title": "Series Number 145",
+    "cover": "https://cdn.example.com/145.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 45
+   },
+   {
+    "id": "manga-146",
+    "title": "Series Number 146",
+    "cover": "https://cdn.example.com/146.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 46
+   },
+   {
+    "id": "manga-147",
+    "title": "Series Number 147",
+    "cover": "https://cdn.example.com/147.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 47
+   },
+   {
+    "id": "manga-148",
+    "title": "Series Number 148",
+    "cover": "https://cdn.example.com/148.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 48
+   },
+   {
+    "id": "manga-149",
+    "title": "Series Number 149",
+    "cover": "https://cdn.example.com/149.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 49
+   },
+   {
+    "id": "manga-150",
+    "title": "Series Number 150",
+    "cover": "https://cdn.example.com/150.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 0
+   },
+   {
+    "id": "manga-151",
+    "title": "Series Number 151",
+    "cover": "https://cdn.example.com/151.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 1
+   },
+   {
+    "id": "manga-152",
+    "title": "Series Number 152",
+    "cover": "https://cdn.example.com/152.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 2
+   },
+   {
+    "id": "manga-153",
+    "title": "Series Number 153",
+    "cover": "https://cdn.example.com/153.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 3
+   },
+   {
+    "id": "manga-154",
+    "title": "Series Number 154",
+    "cover": "https://cdn.example.com/154.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 4
+   },
+   {
+    "id": "manga-155",
+    "title": "Series Number 155",
+    "cover": "https://cdn.example.com/155.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 5
+   },
+   {
+    "id": "manga-156",
+    "title": "Series Number 156",
+    "cover": "https://cdn.example.com/156.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 6
+   },
+   {
+    "id": "manga-157",
+    "title": "Series Number 157",
+    "cover": "https://cdn.example.com/157.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 7
+   },
+   {
+    "id": "manga-158",
+    "title": "Series Number 158",
+    "cover": "https://cdn.example.com/158.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 8
+   },
+   {
+    "id": "manga-159",
+    "title": "Series Number 159",
+    "cover": "https://cdn.example.com/159.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 9
+   },
+   {
+    "id": "manga-160",
+    "title": "Series Number 160",
+    "cover": "https://cdn.example.com/160.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 10
+   },
+   {
+    "id": "manga-161",
+    "title": "Series Number 161",
+    "cover": "https://cdn.example.com/161.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 11
+   },
+   {
+    "id": "manga-162",
+    "title": "Series Number 162",
+    "cover": "https://cdn.example.com/162.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 12
+   },
+   {
+    "id": "manga-163",
+    "title": "Series Number 163",
+    "cover": "https://cdn.example.com/163.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 13
+   },
+   {
+    "id": "manga-164",
+    "title": "Series Number 164",
+    "cover": "https://cdn.example.com/164.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 14
+   },
+   {
+    "id": "manga-165",
+    "title": "Series Number 165",
+    "cover": "https://cdn.example.com/165.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 15
+   },
+   {
+    "id": "manga-166",
+    "title": "Series Number 166",
+    "cover": "https://cdn.example.com/166.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 16
+   },
+   {
+    "id": "manga-167",
+    "title": "Series Number 167",
+    "cover": "https://cdn.example.com/167.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 17
+   },
+   {
+    "id": "manga-168",
+    "title": "Series Number 168",
+    "cover": "https://cdn.example.com/168.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 18
+   },
+   {
+    "id": "manga-169",
+    "title": "Series Number 169",
+    "cover": "https://cdn.example.com/169.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 19
+   },
+   {
+    "id": "manga-170",
+    "title": "Series Number 170",
+    "cover": "https://cdn.example.com/170.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 20
+   },
+   {
+    "id": "manga-171",
+    "title": "Series Number 171",
+    "cover": "https://cdn.example.com/171.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 21
+   },
+   {
+    "id": "manga-172",
+    "title": "Series Number 172",
+    "cover": "https://cdn.example.com/172.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 22
+   },
+   {
+    "id": "manga-173",
+    "title": "Series Number 173",
+    "cover": "https://cdn.example.com/173.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 23
+   },
+   {
+    "id": "manga-174",
+    "title": "Series Number 174",
+    "cover": "https://cdn.example.com/174.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 24
+   },
+   {
+    "id": "manga-175",
+    "title": "Series Number 175",
+    "cover": "https://cdn.example.com/175.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 25
+   },
+   {
+    "id": "manga-176",
+    "title": "Series Number 176",
+    "cover": "https://cdn.example.com/176.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 26
+   },
+   {
+    "id": "manga-177",
+    "title": "Series Number 177",
+    "cover": "https://cdn.example.com/177.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 27
+   },
+   {
+    "id": "manga-178",
+    "title": "Series Number 178",
+    "cover": "https://cdn.example.com/178.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 28
+   },
+   {
+    "id": "manga-179",
+    "title": "Series Number 179",
+    "cover": "https://cdn.example.com/179.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 29
+   },
+   {
+    "id": "manga-180",
+    "title": "Series Number 180",
+    "cover": "https://cdn.example.com/180.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 30
+   },
+   {
+    "id": "manga-181",
+    "title": "Series Number 181",
+    "cover": "https://cdn.example.com/181.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 31
+   },
+   {
+    "id": "manga-182",
+    "title": "Series Number 182",
+    "cover": "https://cdn.example.com/182.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 32
+   },
+   {
+    "id": "manga-183",
+    "title": "Series Number 183",
+    "cover": "https://cdn.example.com/183.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 33
+   },
+   {
+    "id": "manga-184",
+    "title": "Series Number 184",
+    "cover": "https://cdn.example.com/184.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 34
+   },
+   {
+    "id": "manga-185",
+    "title": "Series Number 185",
+    "cover": "https://cdn.example.com/185.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 35
+   },
+   {
+    "id": "manga-186",
+    "title": "Series Number 186",
+    "cover": "https://cdn.example.com/186.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 36
+   },
+   {
+    "id": "manga-187",
+    "title": "Series Number 187",
+    "cover": "https://cdn.example.com/187.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 37
+   },
+   {
+    "id": "manga-188",
+    "title": "Series Number 188",
+    "cover": "https://cdn.example.com/188.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 38
+   },
+   {
+    "id": "manga-189",
+    "title": "Series Number 189",
+    "cover": "https://cdn.example.com/189.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 39
+   },
+   {
+    "id": "manga-190",
+    "title": "Series Number 190",
+    "cover": "https://cdn.example.com/190.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 40
+   },
+   {
+    "id": "manga-191",
+    "title": "Series Number 191",
+    "cover": "https://cdn.example.com/191.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 41
+   },
+   {
+    "id": "manga-192",
+    "title": "Series Number 192",
+    "cover": "https://cdn.example.com/192.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 42
+   },
+   {
+    "id": "manga-193",
+    "title": "Series Number 193",
+    "cover": "https://cdn.example.com/193.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 43
+   },
+   {
+    "id": "manga-194",
+    "title": "Series Number 194",
+    "cover": "https://cdn.example.com/194.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 44
+   },
+   {
+    "id": "manga-195",
+    "title": "Series Number 195",
+    "cover": "https://cdn.example.com/195.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 45
+   },
+   {
+    "id": "manga-196",
+    "title": "Series Number 196",
+    "cover": "https://cdn.example.com/196.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 46
+   },
+   {
+    "id": "manga-197",
+    "title": "Series Number 197",
+    "cover": "https://cdn.example.com/197.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 47
+   },
+   {
+    "id": "manga-198",
+    "title": "Series Number 198",
+    "cover": "https://cdn.example.com/198.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 48
+   },
+   {
+    "id": "manga-199",
+    "title": "Series Number 199",
+    "cover": "https://cdn.example.com/199.jpg",
+    "status": "ongoing",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 49
+   },
+   {
+    "id": "manga-200",
+    "title": "Series Number 200",
+    "cover": "https://cdn.example.com/200.jpg",
+    "status": "completed",
+    "tags": [
+     "action",
+     "drama"
+    ],
+    "chapters": 0
+   }
+  ]
+ }
+}

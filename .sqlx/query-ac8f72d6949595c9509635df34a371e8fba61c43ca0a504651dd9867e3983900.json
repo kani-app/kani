@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE ui_themes SET name = ?, tokens_json = ?, custom_css = ?, updated_at = unixepoch() WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "ac8f72d6949595c9509635df34a371e8fba61c43ca0a504651dd9867e3983900"
+}

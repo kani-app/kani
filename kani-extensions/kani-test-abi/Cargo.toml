@@ -1,0 +1,17 @@
+[package]
+name = "kani-test-abi"
+version = "0.1.0"
+license.workspace = true
+edition = "2024"
+
+[lints]
+workspace = true
+
+[package.metadata]
+id = "test-abi"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kani-shared = { path = "../../kani-shared", features = ["builder"] }

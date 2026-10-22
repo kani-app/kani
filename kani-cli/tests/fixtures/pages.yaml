@@ -1,0 +1,13 @@
+id: test-pages
+name: TestPages
+version: "0.1.0"
+base_url: "https://example.com"
+language: en
+
+endpoints:
+  pages:
+    route: "/chapter/$chapter_id$"
+    container: "img.page"
+    fields:
+      index: "index()"
+      url: 'self.attr("src")'

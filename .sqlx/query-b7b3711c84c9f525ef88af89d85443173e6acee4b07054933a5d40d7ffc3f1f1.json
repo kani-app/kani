@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM volumes WHERE id = ? AND manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b7b3711c84c9f525ef88af89d85443173e6acee4b07054933a5d40d7ffc3f1f1"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT upgrade_available FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "upgrade_available",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "14fe2090e5d49f9777ce83de115b5264fd8890e73fd2803a1b2320d9d5261a95"
+}

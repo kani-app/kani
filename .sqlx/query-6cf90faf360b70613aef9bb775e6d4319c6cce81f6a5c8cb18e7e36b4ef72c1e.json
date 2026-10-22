@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT source_id, name, download_all_preferred_only FROM manga WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "source_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "download_all_preferred_only",
+        "ordinal": 2,
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6cf90faf360b70613aef9bb775e6d4319c6cce81f6a5c8cb18e7e36b4ef72c1e"
+}

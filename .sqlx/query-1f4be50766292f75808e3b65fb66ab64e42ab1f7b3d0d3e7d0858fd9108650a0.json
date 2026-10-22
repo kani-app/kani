@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.id, m.cover_url as \"cover_url!\", s.base_url\n               FROM manga m\n               JOIN sources s ON s.id = m.source_id\n               WHERE m.local_cover_path IS NULL\n                 AND m.cover_url IS NOT NULL\n                 AND m.cover_overridden = FALSE",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "cover_url!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "base_url",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "1f4be50766292f75808e3b65fb66ab64e42ab1f7b3d0d3e7d0858fd9108650a0"
+}

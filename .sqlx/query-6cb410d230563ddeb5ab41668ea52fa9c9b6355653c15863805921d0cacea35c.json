@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tracker_manga_id, last_synced_at FROM tracker_manga_mappings WHERE user_id = ? AND tracker_id = ? AND manga_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "tracker_manga_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_synced_at",
+        "ordinal": 1,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "6cb410d230563ddeb5ab41668ea52fa9c9b6355653c15863805921d0cacea35c"
+}

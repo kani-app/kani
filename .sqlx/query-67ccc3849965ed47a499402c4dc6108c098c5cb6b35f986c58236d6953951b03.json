@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE jobs SET status = 'cancelled', completed_at = ?, params_json = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "67ccc3849965ed47a499402c4dc6108c098c5cb6b35f986c58236d6953951b03"
+}

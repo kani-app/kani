@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT m.id, m.source_manga_id, m.name, m.status, m.auto_download, m.auto_scan,\n                    m.scanlator_mode, s.name AS source_name\n             FROM manga m\n             JOIN sources s ON s.id = m.source_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "source_manga_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "auto_download",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "auto_scan",
+        "ordinal": 5,
+        "type_info": "Bool"
+      },
+      {
+        "name": "scanlator_mode",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "source_name",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1811175614e8e5f6b5017359e67ec3d4d171d765982be3f838dad7d00f0b9d8a"
+}

@@ -1,0 +1,52 @@
+name: Extension failure
+description: Report an extension that cannot fetch manga, chapters, or pages
+labels: ["extension", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Extensions depend on external websites. Upstream changes may require an extension update rather than a Kani change.
+
+  - type: input
+    id: extension
+    attributes:
+      label: Extension name
+      placeholder: The extension name, as listed in the kani-extensions repository
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: Shown in Sources → source details.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: action
+    attributes:
+      label: Which action fails?
+      options:
+        - Browse / search
+        - Manga details
+        - Chapter list
+        - Page load
+        - All actions
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happens?
+      description: Describe the failure, including errors, empty results, or timeouts.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs (optional)
+      description: Paste relevant lines from Settings → Admin → Logs after removing sensitive data.
+      render: text

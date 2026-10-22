@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE tracker_manga_mappings SET last_synced_at = ? WHERE user_id = ? AND manga_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "afeb2ca745db5a970cfbae2362d5d5260f7adb9c9c584042b705383baccac8c9"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT OR IGNORE INTO manga_people (manga_id, role, person_id) SELECT ?, ?, id FROM people WHERE name = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "1f3f48ac0cf3866210b64b603b15ba07b1defb0de4feba06290a810964e91f68"
+}

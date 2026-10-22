@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM repo_trust WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3f1edc68d4ea88d02e1adbb4fd6340ac2d6ac5f405716ee1a94d0b47f50ba400"
+}

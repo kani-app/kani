@@ -1,0 +1,14 @@
+id: sort-source
+name: SortSource
+version: "0.1.0"
+base_url: "https://example.com"
+
+chapter_sort:
+  default: "number_desc"
+  options:
+    - id: "number_desc"
+      label: "Chapter (descending)"
+    - id: "number_asc"
+      label: "Chapter (ascending)"
+    - id: "date_desc"
+      label: "Date added"

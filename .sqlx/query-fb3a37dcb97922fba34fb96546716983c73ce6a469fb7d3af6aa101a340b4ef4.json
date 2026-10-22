@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO scanlator_preferences (manga_id, scanlator, priority, blocked) VALUES (NULL, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "fb3a37dcb97922fba34fb96546716983c73ce6a469fb7d3af6aa101a340b4ef4"
+}

@@ -1,0 +1,37 @@
+id: factory-template
+name: FactoryTemplate
+version: "0.1.0"
+base_url: "https://template.example.com"
+language: en
+
+endpoints:
+  popular:
+    route: "/popular"
+    container: ".item"
+    fields:
+      id:
+        expr: "dom(\".id\").text()"
+      title:
+        expr: "dom(\".title\").text()"
+  search:
+    route: "/search?q=$query$"
+    container: ".item"
+    fields:
+      id:
+        expr: "dom(\".id\").text()"
+      title:
+        expr: "dom(\".title\").text()"
+
+factory:
+  sources:
+    - id: factory-alpha
+      name: Alpha Source
+      base_url: "https://alpha.example.com"
+      language: en
+
+    - id: factory-beta
+      name: Beta Source
+      base_url: "https://beta.example.com"
+      language: ja
+      overrides:
+        endpoints.search.route: "/find?q=$query$"

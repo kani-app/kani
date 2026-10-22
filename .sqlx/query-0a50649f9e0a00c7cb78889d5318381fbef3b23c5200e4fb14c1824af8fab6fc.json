@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO sources (name, version, base_url, enabled, unrestricted_http, icon, description, languages, schema_version) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0a50649f9e0a00c7cb78889d5318381fbef3b23c5200e4fb14c1824af8fab6fc"
+}

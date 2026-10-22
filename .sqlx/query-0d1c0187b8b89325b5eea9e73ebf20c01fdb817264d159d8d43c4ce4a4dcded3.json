@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO repo_trust (url, name, maintainer_key, trusted_level, index_cache) VALUES (?, ?, ?, ?, ?) ON CONFLICT(url) DO UPDATE SET name = excluded.name, maintainer_key = excluded.maintainer_key, trusted_level = excluded.trusted_level, index_cache = excluded.index_cache",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "0d1c0187b8b89325b5eea9e73ebf20c01fdb817264d159d8d43c4ce4a4dcded3"
+}

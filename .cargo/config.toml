@@ -1,0 +1,10 @@
+[build]
+jobs = 8
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+rustflags = ["-C", "link-arg=/DEBUG:FASTLINK"]
+
+# Select the available Linux linker through the workspace wrapper; see the constraints register.
+[target.x86_64-unknown-linux-gnu]
+linker = "scripts/fast-linker.sh"

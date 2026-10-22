@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id FROM scanlator_preferences WHERE manga_id IS NULL AND scanlator = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d1e76f78c63e69b86084042dda1beaa03dc5eb8dd125ba8b555c128e56ae6602"
+}

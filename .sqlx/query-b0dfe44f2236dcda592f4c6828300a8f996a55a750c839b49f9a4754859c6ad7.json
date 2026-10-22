@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT download_concurrency FROM sources WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "download_concurrency",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b0dfe44f2236dcda592f4c6828300a8f996a55a750c839b49f9a4754859c6ad7"
+}

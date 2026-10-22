@@ -1,0 +1,12 @@
+hakari-package = "workspace-hack"
+dep-format-version = "4"
+resolver = "2"
+
+platforms = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+]
+
+[traversal-excludes]
+workspace-members = ["kani-example", "kani-fixture-gen", "kani-fixture-source", "kani-test-abi", "kani-shared"]

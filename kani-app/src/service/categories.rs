@@ -1,4 +1,5 @@
 use super::*;
+use crate::ids::MangaId;
 
 impl AppService {
     pub async fn list_categories(&self) -> Result<Vec<kani_shared::types::Category>> {
@@ -6,12 +7,11 @@ impl AppService {
             kani_shared::types::Category,
             "SELECT id, name, sort_order FROM categories ORDER BY sort_order ASC, name ASC"
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
     }
 
-    /// Creates a category and returns the new row id.
     pub async fn create_category(&self, name: &str, sort_order: i64) -> Result<i64> {
         let name = name.trim();
         if name.is_empty() {
@@ -63,7 +63,7 @@ impl AppService {
 
     pub async fn get_manga_categories(
         &self,
-        manga_id: i64,
+        manga_id: MangaId,
     ) -> Result<Vec<kani_shared::types::Category>> {
         sqlx::query_as!(
             kani_shared::types::Category,
@@ -72,12 +72,16 @@ impl AppService {
              WHERE mc.manga_id=? ORDER BY c.sort_order ASC, c.name ASC",
             manga_id
         )
-        .fetch_all(&self.db)
+        .fetch_all(&self.db_read)
         .await
         .map_err(Into::into)
     }
 
-    pub async fn set_manga_categories(&self, manga_id: i64, category_ids: Vec<i64>) -> Result<()> {
+    pub async fn set_manga_categories(
+        &self,
+        manga_id: MangaId,
+        category_ids: Vec<i64>,
+    ) -> Result<()> {
         let mut tx = self.db.begin().await?;
         sqlx::query!("DELETE FROM manga_categories WHERE manga_id=?", manga_id)
             .execute(&mut *tx)
@@ -92,6 +96,7 @@ impl AppService {
             .await?;
         }
         tx.commit().await?;
+        self.invalidate_library();
         Ok(())
     }
 }

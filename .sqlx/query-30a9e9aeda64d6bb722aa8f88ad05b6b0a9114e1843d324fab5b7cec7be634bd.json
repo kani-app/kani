@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, url, secret, events, enabled AS \"enabled: bool\", created_at\n               FROM webhooks\n               WHERE enabled = TRUE\n                 AND (\n                     events = '[\"*\"]'\n                     OR EXISTS (SELECT 1 FROM json_each(events) WHERE value = ?)\n                 )",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "url",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "secret",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "events",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "enabled: bool",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "30a9e9aeda64d6bb722aa8f88ad05b6b0a9114e1843d324fab5b7cec7be634bd"
+}

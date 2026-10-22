@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT page_count FROM chapters WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "page_count",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "428eed041747a2793707808896238870e6bbdd5cdb93b25801c4a0be3b4bca22"
+}

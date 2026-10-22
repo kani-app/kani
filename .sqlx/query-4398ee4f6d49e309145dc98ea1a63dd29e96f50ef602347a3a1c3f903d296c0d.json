@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE sources SET version = ?, base_url = ?, unrestricted_http = ?, icon = ?, description = ?, languages = ?, schema_version = ?, load_error = NULL, enabled = 1, deleted_at = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "4398ee4f6d49e309145dc98ea1a63dd29e96f50ef602347a3a1c3f903d296c0d"
+}
