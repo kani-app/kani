@@ -1,6 +1,6 @@
 [package]
 name = "kani-cli"
-version = "1.0.0-rc.5"
+version = "1.0.0"
 license.workspace = true
 repository.workspace = true
 edition = "2024"

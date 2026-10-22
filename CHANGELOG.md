@@ -6,6 +6,24 @@ Kani uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-22
+
+The first stable release. From here, the extension interface (WIT world, extraction DSL, YAML
+schema and host version gate) changes only additively within 1.x, as set out in
+[Extension ABI Stability](docs/docs/extension-authoring/stability.md). REST operations marked
+`stable` keep their shape within 1.x, as set out in
+[API Stability](docs/docs/developer/api-stability.md). Extensions built for rc.5 run unchanged.
+
+### Fixed
+
+- Finishing a chapter in paged mode by paging past the last page saved it as unread on page 0, so
+  the chapter showed as unread and reopened at its old position. It is now marked read, and the
+  manga page opens only after that is saved.
+- A repository added before rc.5 had no stored index signature, so listing or installing from it
+  failed with "refresh the repository", and the repository view offered no way to refresh. Kani
+  now fetches and verifies the signature itself. A repository whose index does not verify is
+  still refused.
+
 ## [1.0.0-rc.5] - 2026-09-29
 
 ### Changed
