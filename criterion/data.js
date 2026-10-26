@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792403549374,
+  "lastUpdate": 1793009061378,
   "repoUrl": "https://github.com/kani-app/kani",
   "entries": {
     "Benchmark": [
@@ -339,6 +339,40 @@ window.BENCHMARK_DATA = {
             "name": "blueprint_eval/json_200_rows",
             "value": 1194662,
             "range": "± 10327",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Arlo Burke",
+            "username": "ArloB",
+            "email": "arlo.burke2@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "15a769959d979bb25e6f7129904988de5f723f86",
+          "message": "Merge pull request #66 from kani-app/main\n\nRelease 1.0.0 (#64)",
+          "timestamp": "2026-10-22T07:07:35Z",
+          "url": "https://github.com/kani-app/kani/commit/15a769959d979bb25e6f7129904988de5f723f86"
+        },
+        "date": 1793009060448,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "blueprint_eval/html_200_rows",
+            "value": 3328626,
+            "range": "± 44796",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "blueprint_eval/json_200_rows",
+            "value": 1267983,
+            "range": "± 22605",
             "unit": "ns/iter"
           }
         ]
